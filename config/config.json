@@ -1,0 +1,45 @@
+{
+  "local_information_extraction": true,
+  "local_assessment": false,
+  "local_report": false,
+  "information_extraction_model": {
+    "local_ollama": {
+      "base_url": "http://localhost:11434/api/chat",
+      "model": "deepseek-r1:14b",
+      "description": "ollama格式的本地模型"
+    },
+    "remote_openai": {
+      "api_key": "sk-d534325018c54da88437272be63fdcb9",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "deepseek-r1-distill-llama-70b"
+    }
+  },
+  "assessment_model": {
+    "local_ollama": {
+      "base_url": "http://localhost:11434/api/chat",
+      "model": "deepseek-r1:14b",
+      "description": "ollama格式的本地模型"
+    },
+    "remote_openai": {
+      "api_key": "sk-d534325018c54da88437272be63fdcb9",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "deepseek-r1-distill-llama-70b"
+    }
+  },
+  "report_model": {
+    "local_ollama": {
+      "base_url": "http://localhost:11434/api/chat",
+      "model": "deepseek-r1:14b",
+      "description": "ollama格式的本地模型"
+    },
+    "remote_openai": {
+      "api_key": "sk-d534325018c54da88437272be63fdcb9",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "deepseek-r1-distill-llama-70b"
+    }
+  },
+  "retry": {
+    "max_retries": 5,
+    "retry_delay": 1
+  }
+}

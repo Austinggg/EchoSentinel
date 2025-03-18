@@ -1,0 +1,29 @@
+# Python相关
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# 配置文件
+# config/
+
+# 数据文件
+data/
+
+# 模型文件
+# models/
+
+# 脚本文件
+# scripts/
+
+# 日志文件
+*.log
+
+# 环境文件
+.env
+venv/
+env/
