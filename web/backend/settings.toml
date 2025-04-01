@@ -1,0 +1,8 @@
+[default]
+HOST = "rm-bp1qb26410y2q0le8ao.mysql.rds.aliyuncs.com"
+PORT = 3306
+USER = "root"
+PASSWORD = "CV3d!GXxZp4aApx"
+DB_NAME = "echo_sentinel_web"
+
+JWT_SECRET_KEY="ECHO-SENTINEL"
