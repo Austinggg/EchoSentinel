@@ -5,9 +5,9 @@ from api.auth import init_auth_routes
 from api.user import init_user_routes
 from utils.database import User, db, init_dataset
 
-app = Flask(__name__, static_folder="dist", static_url_path="")
+app = Flask(__name__)
 
-FlaskDynaconf(app, settings_files=["settings.toml"])
+FlaskDynaconf(app, settings_files=["settings.toml", ".secrets.toml"])
 init_dataset(app)
 
 
