@@ -1,25 +1,25 @@
-from typing import Any, Dict, TypeVar
+import json
+from typing import TypeVar
+
+from flask import Response
 
 T = TypeVar("T")
 
 
-class HttpResponse:
+class HttpResponse(Response):
     def __init__(self, code: int = 0, data: T = None, message: str = ""):
         """
         :param code: 0 means success, others means fail
         :param data: response data
         :param message: response message
         """
-        self.code = code
-        self.data = data
-        self.message = message
+        content = json.dumps({"code": code, "data": data, "message": message})
+        super().__init__(response=content, content_type="application/json")
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {"code": self.code, "data": self.data, "message": self.message}
+    @classmethod
+    def success(cls, data, message="success"):
+        return cls(code=0, data=data, message=message)
 
-
-class ErrorHttpResponse(HttpResponse):
-    def __init__(self, code=-1, message="error"):
-        self.code = code
-        self.data = None
-        self.message = message
+    @classmethod
+    def error(cls, data, message="error"):
+        return cls(code=-1, data=data, message=message)

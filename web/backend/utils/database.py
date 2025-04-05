@@ -1,17 +1,11 @@
 from typing import Optional
 from urllib.parse import quote_plus  # 用于密码编码
 
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 from werkzeug.security import check_password_hash, generate_password_hash
 
-
-class Base(DeclarativeBase):
-    pass
-
-
-db = SQLAlchemy(model_class=Base)
+from utils.extensions import db
 
 
 class User(db.Model):
