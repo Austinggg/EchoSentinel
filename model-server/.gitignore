@@ -1,0 +1,8 @@
+# 忽略 mod 文件夹
+/mod/
+
+# 忽略 .venv 文件夹
+/.venv/
+
+# Ignore egg-info files
+*.egg-info/
