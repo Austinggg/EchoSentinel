@@ -55,6 +55,13 @@ const routes: RouteRecordRaw[] = [
         name: 'KnowledgeGraph',
         path: '/demos/KnowledgeGraph',
         component: () => import('#/views/demos/KnowledgeGraph/index.vue'),
+      {
+        meta: {
+          title: $t('demos.userAnalyse'),
+        },
+        name: 'userAnalyse',
+        path: '/demos/userAnalyse',
+        component: () => import('#/views/demos/userAnalyse/index.vue'),
       },
     ],
   },

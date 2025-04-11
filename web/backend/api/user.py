@@ -1,16 +1,18 @@
-from flask import Blueprint, request
+from flask import Blueprint
+from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from utils.HttpResponse import HttpResponse
 
-user_bp = Blueprint("user", __name__)
+bp = Blueprint("user", __name__)
 
 
 # 获取用户信息
-@user_bp.route("/api/user/info", methods=["GET", "POST"])
+@bp.route("/api/user/info", methods=["GET", "POST"])
+@jwt_required()
 def user_info():
-    data = {
-        "user": "vben",
-        "age": 30,
-    }
-    print(request.headers)
-    return HttpResponse.success(data=data, message="Request successful")
+    return HttpResponse.success(
+        data={
+            "username": get_jwt_identity(),
+        },
+        message="Request successful",
+    )
