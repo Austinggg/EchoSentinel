@@ -2,6 +2,9 @@
   "title": "演示",
   "elementPlus": "Element Plus",
   "form": "表单演示",
+  "contentAnalysis": "文本处理",
+  "aigcDetection": "数字人检测",
+  "KnowledgeGraph": "知识图谱",
   "vben": {
     "title": "项目",
     "about": "关于",

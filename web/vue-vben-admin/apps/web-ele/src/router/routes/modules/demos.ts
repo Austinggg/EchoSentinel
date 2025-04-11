@@ -29,6 +29,33 @@ const routes: RouteRecordRaw[] = [
         path: '/demos/form',
         component: () => import('#/views/demos/form/basic.vue'),
       },
+      //数字人检测
+      {
+        meta: {
+          title: $t('demos.aigcDetection'),
+        },
+        name: 'AIGCdetection',
+        path: '/demos/AIGC-detection',
+        component: () => import('#/views/demos/AIGC-detection/index.vue'),
+      },
+      // 文本处理
+      {
+        meta: {
+          title: $t('demos.contentAnalysis'),
+        },
+        name: 'VideoUpload',
+        path: '/demos/video-upload',
+        component: () => import('#/views/demos/content-analysis/index.vue'),
+      },
+      // 知识图谱
+      {
+        meta: {
+          title: $t('demos.KnowledgeGraph'),
+        },
+        name: 'KnowledgeGraph',
+        path: '/demos/KnowledgeGraph',
+        component: () => import('#/views/demos/KnowledgeGraph/index.vue'),
+      },
     ],
   },
 ];

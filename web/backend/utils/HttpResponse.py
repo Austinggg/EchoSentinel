@@ -1,7 +1,7 @@
 import json
 from typing import TypeVar
 
-from flask import Response
+from flask import Response, jsonify
 
 T = TypeVar("T")
 
@@ -23,3 +23,33 @@ class HttpResponse(Response):
     @classmethod
     def error(cls, data, message="error"):
         return cls(code=-1, data=data, message=message)
+
+
+def success_response(data=None, message="操作成功", code=200):
+    """
+    生成成功响应
+    :param data: 响应数据
+    :param message: 响应消息
+    :param code: 响应状态码
+    :return: JSON响应
+    """
+    return jsonify({
+        "code": code,
+        "message": message,
+        "data": data
+    })
+
+
+def error_response(code=500, message="操作失败", data=None):
+    """
+    生成错误响应
+    :param code: 错误状态码
+    :param message: 错误消息
+    :param data: 响应数据
+    :return: JSON响应
+    """
+    return jsonify({
+        "code": code,
+        "message": message,
+        "data": data
+    }), code

@@ -2,6 +2,9 @@
   "title": "Demos",
   "elementPlus": "Element Plus",
   "form": "Form",
+  "contentAnalysis": "Content Analysis",
+  "aigcDetection": "Digital Human Detection",
+  "KnowledgeGraph": "Knowledge Graph",
   "vben": {
     "title": "Project",
     "about": "About",
