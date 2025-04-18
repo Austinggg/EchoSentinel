@@ -45,7 +45,7 @@ const routes: RouteRecordRaw[] = [
         },
         name: 'VideoUpload',
         path: '/demos/video-upload',
-        component: () => import('#/views/demos/content-analysis/index.vue'),
+        component: () => import('#/views/demos/KnowledgeGraph/index.vue'),
       },
       // 知识图谱
       {
