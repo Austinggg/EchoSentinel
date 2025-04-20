@@ -48,6 +48,7 @@ class UserProfile(db.Model):
     is_star: Mapped[Optional[bool]] = mapped_column(Boolean)
     is_series_user: Mapped[Optional[bool]] = mapped_column(Boolean)
     covers: Mapped[Dict] = mapped_column(JSON, default={})
+    avatar_medium: Mapped[Optional[str]] = mapped_column(String(255))
 
     def to_dict(self):
         covers_data = json.loads(self.covers) if self.covers else {}
