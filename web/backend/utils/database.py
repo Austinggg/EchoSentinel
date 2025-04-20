@@ -1,9 +1,10 @@
 import json
-from typing import Dict, Optional
+import datetime
+from typing import Dict, Optional, Any
 from urllib.parse import quote_plus  # 用于密码编码
 
-from sqlalchemy import JSON, BigInteger, Boolean, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import JSON, BigInteger, Boolean, String, ForeignKey, Integer, DateTime
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from utils.extensions import db
@@ -49,6 +50,9 @@ class UserProfile(db.Model):
     is_series_user: Mapped[Optional[bool]] = mapped_column(Boolean)
     covers: Mapped[Dict] = mapped_column(JSON, default={})
     avatar_medium: Mapped[Optional[str]] = mapped_column(String(255))
+    
+    # 添加与VideoFile的关系
+    videos = relationship("VideoFile", back_populates="user")
 
     def to_dict(self):
         covers_data = json.loads(self.covers) if self.covers else {}
@@ -77,6 +81,35 @@ class UserProfile(db.Model):
                 f"http://localhost:8000/api/userAnalyse/getCover/{x}.jpg"
                 for x in covers_data.values()
             ],
+        }
+
+
+# 新增视频文件表
+class VideoFile(db.Model):
+    __tablename__ = "video_files"
+    
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    path: Mapped[str] = mapped_column(String(255), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("user_profiles.id"))
+    upload_time: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, 
+                                                        default=datetime.datetime.utcnow)
+    analysis_result: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    
+    # 关联的用户
+    user = relationship("UserProfile", back_populates="videos")
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "filename": self.filename,
+            "size": self.size,
+            "mimeType": self.mime_type,
+            "uploadTime": self.upload_time.isoformat(),
+            "hasAnalysis": self.analysis_result is not None,
+            "url": f"/api/videos/{self.id}"
         }
 
 

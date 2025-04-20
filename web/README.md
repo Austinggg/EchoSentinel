@@ -25,7 +25,12 @@ target: 'http://localhost:8000/api',
 
 ### 运行调试
 
-```shell
-# web/backend
-python app.py
+后端启动
+``` shell
+cd web/backend/ && source .venv/bin/activate && python3 app.py
+```
+
+前端启动
+``` shell
+cd web/vue-vben-admin && pnpm dev:ele
 ```

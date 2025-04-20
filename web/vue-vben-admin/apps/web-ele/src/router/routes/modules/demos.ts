@@ -40,15 +40,43 @@ const routes: RouteRecordRaw[] = [
         path: '/demos/AIGC-detection',
         component: () => import('#/views/demos/AIGC-detection/index.vue'),
       },
-      // 文本处理
+      // 视频上传
+      {
+        meta: {
+          title: $t('demos.videoUpload'),
+        },
+        name: 'VideoUpload',
+        path: '/demos/video-upload',
+        component: () => import('#/views/demos/content-analysis/index.vue'),
+      },
+      // 文本分析
       {
         meta: {
           title: $t('demos.contentAnalysis'),
         },
-        name: 'VideoUpload',
-        path: '/demos/video-upload',
-        component: () => import('#/views/demos/KnowledgeGraph/index.vue'),
+        name: 'contentAnalysis',
+        path: '/demos/contentAnalysis',
+        component: () => import('#/views/demos/content-analysis/analysis.vue'),
       },
+      //分析记录
+      {
+        meta: {
+          title: $t('demos.analysisRecords'),
+        },
+        name: 'AnalysisRecords',
+        path: '/demos/analysis-records',
+        component: () => import('#/views/demos/content-analysis/analysisRecords.vue'),
+      },
+      //数字人检测
+      {
+        meta: {
+          title: $t('demos.aigcDetection'),
+        },
+        name: 'AIGCdetection',
+        path: '/demos/AIGC-detection',
+        component: () => import('#/views/demos/AIGC-detection/index.vue'),
+      },
+
       // 知识图谱
       {
         meta: {
@@ -56,7 +84,7 @@ const routes: RouteRecordRaw[] = [
         },
         name: 'KnowledgeGraph',
         path: '/demos/KnowledgeGraph',
-        component: () => import('#/views/demos/KnowledgeGraph/index.vue')
+        component: () => import('#/views/demos/KnowledgeGraph/index.vue'),
       },
       {
         meta: {
