@@ -42,8 +42,8 @@ def cal_loss(userProfile):
     df = df.drop(columns=["sec_uid"])
     df = df.astype(np.float32).values
     user_features = torch.tensor(df)
-    print(cover_features.shape, user_features.shape)
-    print(infer(user_features, cover_features))
+    # print(cover_features.shape, user_features.shape)
+    # print(infer(user_features, cover_features))
     return infer(user_features, cover_features)
 
 
@@ -67,3 +67,52 @@ def extract_cover_features(covers):
     cover_path = [f"data/userAnalyse/video_covers/{x}.jpg" for x in covers]
     cover_features = [extractor(extractor.preprocess(x)) for x in cover_path]
     return cover_features
+
+
+def get_anomaly_score(
+    test_loss: float,
+    stats: dict = {
+        "mean": np.float64(0.012980108857162363),
+        "std": np.float64(0.016118451871877056),
+        "q50": np.float64(0.005857843905687332),
+        "q99": np.float64(0.0701417756080627),
+        "max": np.float64(0.12325551360845566),
+    },
+    method: str = "hybrid",
+) -> float:
+    """
+    输入:
+        test_loss: 测试样本的重构损失
+        stats: 训练阶段保存的统计量字典
+    输出:
+        0-100的异常分数
+    """
+    if method == "zscore":
+        z = (test_loss - stats["mean"]) / stats["std"]
+        return 100 / (1 + np.exp(-(z - 3)))  # Sigmoid映射
+
+    elif method == "quantile":
+        if test_loss <= stats["q50"]:
+            return 0.0
+        elif test_loss >= stats["q99"]:
+            return 100.0
+        else:
+            return 100 * (test_loss - stats["q50"]) / (stats["q99"] - stats["q50"])
+
+    elif method == "dynamic":
+        normalized = (test_loss - stats["mean"]) / (stats["max"] - stats["mean"])
+        return 100 * np.clip(normalized, 0, 1) ** 2
+
+    elif method == "hybrid":  # 推荐方法
+        z = (test_loss - stats["mean"]) / stats["std"]
+        if z <= 0:
+            return 0.0
+        else:
+            linear_score = min(
+                100, 100 * (test_loss - stats["q50"]) / (stats["q99"] - stats["q50"])
+            )
+            sigmoid_score = 100 / (1 + np.exp(-(z - 3)))
+            return max(linear_score, sigmoid_score)
+
+    else:
+        raise ValueError("Method must be 'zscore', 'quantile', 'dynamic', or 'hybrid'")

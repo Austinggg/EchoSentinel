@@ -52,6 +52,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'logos:naiveui',
           link: VBEN_NAIVE_PREVIEW_URL,
           title: $t('demos.vben.naive-ui'),
+          hideInMenu:true
         },
       },
       {
@@ -63,6 +64,7 @@ const routes: RouteRecordRaw[] = [
           icon: SvgAntdvLogoIcon,
           link: VBEN_ANT_PREVIEW_URL,
           title: $t('demos.vben.antdv'),
+          hideInMenu:true
         },
       },
     ],

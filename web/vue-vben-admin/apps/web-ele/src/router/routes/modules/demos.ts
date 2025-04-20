@@ -16,6 +16,7 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           title: $t('demos.elementPlus'),
+          hideInMenu:true
         },
         name: 'NaiveDemos',
         path: '/demos/element',
@@ -24,6 +25,7 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           title: $t('demos.form'),
+          hideInMenu:true
         },
         name: 'BasicForm',
         path: '/demos/form',
