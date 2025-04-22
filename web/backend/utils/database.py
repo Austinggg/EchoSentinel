@@ -88,19 +88,18 @@ class UserProfile(db.Model):
 class VideoFile(db.Model):
     __tablename__ = "video_files"
     
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    path: Mapped[str] = mapped_column(String(255), nullable=False)
-    size: Mapped[int] = mapped_column(Integer, nullable=False)
-    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("user_profiles.id"))
-    upload_time: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, 
-                                                        default=datetime.datetime.utcnow)
-    analysis_result: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
-    
+    id = mapped_column(String(36), primary_key=True)
+    filename = mapped_column(String(255), nullable=False)
+    extension = mapped_column(String(10))  # 只存储文件扩展名
+    size = mapped_column(Integer)
+    mime_type = mapped_column(String(100))
+    upload_time = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    user_id = mapped_column(Integer, ForeignKey("user_profiles.id"))  # 改为Integer类型
+    analysis_result = mapped_column(JSON, default={})
+    status = mapped_column(String(50), default="processing")
+
     # 关联的用户
     user = relationship("UserProfile", back_populates="videos")
-    
     def to_dict(self):
         return {
             "id": self.id,

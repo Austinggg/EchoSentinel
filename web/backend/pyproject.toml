@@ -13,6 +13,7 @@ dependencies = [
     "joblib>=1.4.2",
     "numpy>=2.2.4",
     "openai>=1.72.0",
+    "opencv-python-headless>=4.11.0.86",
     "pandas>=2.2.3",
     "pillow>=11.2.1",
     "pymysql>=1.1.1",
