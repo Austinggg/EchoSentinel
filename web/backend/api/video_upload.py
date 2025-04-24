@@ -62,7 +62,10 @@ def upload_video():
             # 生成唯一ID
             file_id = str(uuid.uuid4())
             
-            # 获取原始文件的扩展名
+            # 保存原始文件名用于解析 (不经过secure_filename处理)
+            original_raw_filename = file.filename
+            
+            # 获取安全文件名用于存储
             original_filename = secure_filename(file.filename)
             file_ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else ''
             
@@ -77,17 +80,25 @@ def upload_video():
             file_size = os.path.getsize(file_path)
             file_mime = file.content_type
             
-            # 保存到数据库 - 修改为只存储ID和扩展名
+            # 解析文件名中的信息 - 使用原始未处理的文件名
+            publish_time, title, tags = parse_crawler_filename(original_raw_filename)
+            
+            # 打印调试信息
+            print(f"解析结果: 时间={publish_time}, 标题={title}, 标签={tags}")
+            
+            # 保存到数据库
             from utils.database import VideoFile
             
             new_video = VideoFile(
                 id=file_id,
-                filename=original_filename,
-                extension=file_ext,  # 只存储扩展名
+                filename=title if title else original_filename,  # 使用解析后的标题
+                extension=file_ext,
                 size=file_size,
                 mime_type=file_mime,
                 user_id=None,
                 upload_time=datetime.datetime.utcnow(),
+                publish_time=publish_time,  # 添加发布时间
+                tags=','.join(tags) if tags else None,  # 添加标签
                 status="processing"
             )
             
@@ -96,10 +107,12 @@ def upload_video():
             # 添加到上传文件列表
             uploaded_files.append({
                 "fileId": file_id,
-                "filename": original_filename,
+                "filename": new_video.filename,
                 "size": file_size,
                 "mimeType": file_mime,
-                "url": f"/api/videos/{file_id}"
+                "url": f"/api/videos/{file_id}",
+                "publishTime": publish_time.isoformat() if publish_time else None,
+                "tags": tags
             })
         # 上传成功后，立即尝试生成缩略图（异步生成，不影响上传响应）
             try:
@@ -197,24 +210,18 @@ def list_videos():
         }
         
         for video in videos:
-            # 获取威胁等级，分析结果中获取或默认为processing
-            threat_level = "processing"
-            if video.status == "completed" and video.analysis_result:
-                # 假设analysis_result中有threat_level字段
-                threat_level = video.analysis_result.get("threat_level", "low")
-            
-            # 从分析结果中提取摘要
-            summary = ""
-            if video.analysis_result:
-                summary = video.analysis_result.get("summary", "")
+            # 解析标签字符串为列表
+            tags_list = video.tags.split(',') if video.tags else []
             
             result["items"].append({
                 "id": video.id,
                 "title": video.filename,
-                "cover": f"/api/videos/{video.id}/thumbnail",  # 假设有获取缩略图的API
-                "summary": summary,
-                "threatLevel": threat_level,  # 转换为前端使用的命名
+                "cover": f"/api/videos/{video.id}/thumbnail",
+                "summary": video.summary,
+                "threatLevel": video.risk_level,
                 "createTime": video.upload_time.strftime("%Y-%m-%d"),
+                "publishTime": video.publish_time.strftime("%Y-%m-%d %H:%M:%S") if video.publish_time else None,
+                "tags": tags_list,
                 "status": video.status
             })
         
@@ -277,31 +284,6 @@ def store_video_by_url():
     except Exception as e:
         return HttpResponse.error(f"通过URL存储视频失败: {str(e)}", 500)
 
-@bp.route("/api/videos/<file_id>/analyze", methods=["POST"])
-def analyze_video(file_id):
-    """分析视频内容"""
-    try:
-        from utils.database import VideoFile
-        video = db.session.query(VideoFile).filter(VideoFile.id == file_id).first()
-        
-        if not video:
-            return HttpResponse.error("文件不存在", 404)
-        
-        # 调用userAnalyse模块分析视频
-        analysis_result = userAnalyse_main(video.path)
-        
-        # 更新数据库中的分析结果
-        video.analysis_result = analysis_result
-        db.session.commit()
-        
-        return HttpResponse.success({
-            "fileId": file_id,
-            "analysis": analysis_result
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        return HttpResponse.error(f"分析失败: {str(e)}", 500)
 
 
 # 添加生成缩略图的独立函数
@@ -369,3 +351,63 @@ def get_video_file_path(video_id, extension=None):
     
     # 如果找不到视频，返回None
     return None
+
+def parse_crawler_filename(filename):
+    """
+    解析爬虫爬取的视频文件名
+    格式: 2025-03-20 18-05-00_#俄罗斯海盐_#俄罗斯无碘盐_#无碘盐_#食用盐_video.mp4
+    
+    返回:
+        publish_time: 发布时间 (datetime对象)
+        title: 标题
+        tags: 标签列表
+    """
+    try:
+        # 打印原始文件名用于调试
+        print(f"解析原始文件名: {filename}")
+        
+        # 移除文件扩展名
+        base_filename = filename
+        if '.' in base_filename:
+            base_filename = base_filename.rsplit('.', 1)[0]
+            
+        # 移除末尾的_video (如果有)
+        if base_filename.endswith('_video'):
+            base_filename = base_filename[:-6]
+        
+        # 按下划线分割
+        parts = base_filename.split('_')
+        
+        # 提取发布时间 (第一部分)
+        datetime_str = parts[0]
+        try:
+            publish_time = datetime.datetime.strptime(datetime_str, '%Y-%m-%d %H-%M-%S')
+        except ValueError:
+            publish_time = None
+            
+        # 提取标签 (带#的部分)
+        tags = []
+        for part in parts:
+            if part.startswith('#'):
+                tags.append(part)
+        
+        # 提取标题 (除去时间和标签的所有部分)
+        title_parts = []
+        for i, part in enumerate(parts):
+            if i == 0 and publish_time:  # 跳过时间部分
+                continue
+            if part.startswith('#'):  # 跳过标签部分
+                continue
+            title_parts.append(part)
+        
+        # 将标题部分用空格连接，如果为空则设为"无"
+        title = ' '.join(title_parts)
+        if not title.strip():  # 检查是否为空或只有空格
+            title = "无"  # 设置默认标题
+        
+        print(f"解析结果 - 时间: {publish_time}, 标题: {title}, 标签: {tags}")
+        return publish_time, title, tags
+    
+    except Exception as e:
+        print(f"解析文件名失败: {str(e)}, 文件名: {filename}")
+        return None, filename, []

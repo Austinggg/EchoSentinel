@@ -85,6 +85,7 @@ class UserProfile(db.Model):
 
 
 # 新增视频文件表
+# 新增视频文件表
 class VideoFile(db.Model):
     __tablename__ = "video_files"
     
@@ -94,20 +95,33 @@ class VideoFile(db.Model):
     size = mapped_column(Integer)
     mime_type = mapped_column(String(100))
     upload_time = mapped_column(DateTime, default=datetime.datetime.utcnow)
-    user_id = mapped_column(Integer, ForeignKey("user_profiles.id"))  # 改为Integer类型
-    analysis_result = mapped_column(JSON, default={})
+    user_id = mapped_column(Integer, ForeignKey("user_profiles.id"), nullable=True)
+    
+    # 分析结果相关字段
+    summary = mapped_column(String(500), default="处理中")
+    risk_level = mapped_column(String(20), default="processing")
     status = mapped_column(String(50), default="processing")
-
+    
+    # 新增爬虫数据字段
+    publish_time = mapped_column(DateTime, nullable=True)  # 视频发布时间
+    tags = mapped_column(String(500), nullable=True)  # 视频标签，以逗号分隔
+    
     # 关联的用户
     user = relationship("UserProfile", back_populates="videos")
+    
     def to_dict(self):
+        tags_list = self.tags.split(',') if self.tags else []
         return {
             "id": self.id,
             "filename": self.filename,
             "size": self.size,
             "mimeType": self.mime_type,
             "uploadTime": self.upload_time.isoformat(),
-            "hasAnalysis": self.analysis_result is not None,
+            "publishTime": self.publish_time.isoformat() if self.publish_time else None,
+            "summary": self.summary,
+            "riskLevel": self.risk_level,
+            "status": self.status,
+            "tags": tags_list,
             "url": f"/api/videos/{self.id}"
         }
 
