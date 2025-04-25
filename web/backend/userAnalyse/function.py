@@ -1,12 +1,15 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.manifold import TSNE
 
 from userAnalyse.AEModel import infer
 from userAnalyse.CoverFeature import ImageFeatureExtractor
 from userAnalyse.data_processor import DataProcessor
+from userAnalyse.OLSH import OLsh
 from utils.database import UserProfile
 
 columns_order = [
@@ -116,3 +119,40 @@ def get_anomaly_score(
 
     else:
         raise ValueError("Method must be 'zscore', 'quantile', 'dynamic', or 'hybrid'")
+
+
+def plot_data():
+    csv_file = Path("userAnalyse/output8.csv")
+    output_path = csv_file.parent / "tsne_with_labels.txt"
+    index_file = Path("userAnalyse/olsh_index.joblib")
+
+    df = pd.read_csv(csv_file)
+    feature_columns = [f"feature_{i}" for i in range(8)]
+    hash_sec_uids = df["hash_sec_uid"].values
+    original_data = df[feature_columns].values
+
+    if output_path.exists():
+        combined_data = np.loadtxt(output_path, delimiter=",", dtype=object)
+        return combined_data
+
+    # --- Step 2: Get Cluster Labels using OLsh ---
+    olsh = OLsh()  # Initialize OLsh
+    olsh.load(index_file)
+
+    cluster_labels = olsh.labels  # Shape (n_samples,)
+
+    # --- Step 3: Perform t-SNE (if combined data wasn't loaded) ---
+    tsne = TSNE(n_components=2, random_state=42, perplexity=30)
+    reduced_data = tsne.fit_transform(original_data)
+
+    # --- Step 4: Combine t-SNE results and Labels ---
+    labels_column = cluster_labels.reshape(-1, 1)
+    uids_column = hash_sec_uids.reshape(-1, 1)
+    combined_data = np.hstack((reduced_data, labels_column, uids_column))
+
+    # --- Step 5: Save combined data ---
+    column_formats = ["%.4f", "%.4f", "%d", "%s"]
+    np.savetxt(output_path, combined_data, delimiter=",", fmt=column_formats)
+
+    # --- Step 6: Return combined data ---
+    return combined_data

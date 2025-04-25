@@ -38,9 +38,9 @@ const userProfile = reactive({
 });
 // 进度条
 const active = ref(0);
-const next = () => {
-  if (active.value++ > 2) active.value = 0;
-};
+// const next = () => {
+//   if (active.value++ > 2) active.value = 0;
+// };
 async function setActiveValue(value: number) {
   active.value = value;
 }
@@ -58,6 +58,7 @@ async function onSubmit(secUid: string) {
 }
 
 import ApiDemoTable from './ApiDemoTable.vue';
+import ClusterScatter from './ClusterScatter.vue';
 //加载状态
 const profileCardLoading = ref(false);
 const analyseCardLoading = ref(false);
@@ -86,13 +87,13 @@ async function handleAnalyse(sec_uid: string) {
 }
 const percentage = ref(0);
 const colors = [
-  { color: '#f56c6c', percentage: 20 },
-  { color: '#e6a23c', percentage: 40 },
-  { color: '#5cb87a', percentage: 60 },
-  { color: '#1989fa', percentage: 80 },
-  { color: '#6f7ad3', percentage: 100 },
+  { color: '#67c23a', percentage: 0 }, // 正常 - 绿色
+  { color: '#b3e19d', percentage: 20 }, // 较正常 - 浅绿
+  { color: '#409eff', percentage: 40 }, // 一般 - 蓝色
+  { color: '#e6a23c', percentage: 60 }, // 较异常 - 橙色
+  { color: '#f56c6c', percentage: 80 }, // 异常 - 红色
+  { color: '#c45656', percentage: 100 }, // 严重异常 - 深红
 ];
-
 const similarCluster = ref();
 async function getSimilarCluster() {
   let data = await requestClient.post('/userAnalyse/similarCluster', {
@@ -117,6 +118,11 @@ async function getSimilar() {
   let r2 = await getSimilarUser();
   if (r1 == 'finish' && r2 == 'finish') changeSimilarCardLoading(false);
 }
+const childRef = ref();
+const callChildMethod = () => {
+  childRef.value?.childMethod(); // 可选链避免未定义错误
+  childRef.value?.markPoint(userProfile.sec_uid);
+};
 </script>
 <template>
   <Page title="异常用户分析模块">
@@ -127,10 +133,8 @@ async function getSimilar() {
           <el-step title="Step 2 获取指标" />
           <el-step title="Step 3 分析结果" />
         </el-steps>
-        <el-button style="margin-top: 12px" @click="next"
-          >Next step</el-button
-        ></el-card
-      >
+        <!-- <el-button style="margin-top: 12px" @click="next">Next step</el-button> -->
+      </el-card>
     </el-affix>
     <div class="flex flex-wrap gap-5">
       <el-card class="flex-1">
@@ -231,11 +235,11 @@ async function getSimilar() {
 
         <template #footer>
           <el-button type="primary" @click="handleAnalyse(userProfile.sec_uid)"
-            >开始异常分析</el-button
+            >开始分析</el-button
           ></template
         >
       </el-card>
-      <el-card class="w-screen">
+      <el-card class="w-screen" v-show="false">
         <template #header>相似集群以及相似用户 </template>
 
         <div class="flex flex-nowrap gap-5" v-loading="similalCardLoading">
@@ -273,6 +277,15 @@ async function getSimilar() {
         <template #footer>
           <el-button @click="getSimilar" type="primary">相似分析</el-button>
         </template>
+      </el-card>
+      <el-card class="w-screen">
+        <template #header>用户集群展示</template>
+        <ClusterScatter ref="childRef"></ClusterScatter>
+        <template #footer>
+          <el-button type="primary" @click="callChildMethod()"
+            >显示分析用户位置</el-button
+          ></template
+        >
       </el-card>
     </div>
   </Page>
