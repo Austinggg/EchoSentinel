@@ -1,14 +1,13 @@
 import hashlib
 import json
 import os
-from itertools import islice
 from pathlib import Path
 
 import pandas as pd
 from flask import Blueprint, request, send_from_directory
 from sqlalchemy import select
 
-from userAnalyse.function import cal_loss, get_anomaly_score
+from userAnalyse.function import cal_loss, get_anomaly_score, plot_data
 from userAnalyse.OLSH import OLsh, find_most_similar_cluster, find_most_similar_user
 from utils.database import UserProfile, db
 from utils.HttpResponse import HttpResponse
@@ -88,21 +87,6 @@ def userAnalyse_getRank():
     )
 
 
-@bp.route("/api/userAnalyse/clusterDemo", methods=["GET"])
-def userAnalyse_clusterDemo():
-    """用户集群示例"""
-    with open("userAnalyse/olsh_index.json", "r", encoding="utf-8") as f:
-        clusters = json.load(f)
-    limited_clusters = {k: v[:10] for k, v in islice(clusters.items(), 5)}
-    all_hashes = [h for v in limited_clusters.values() for h in v]
-    stmt = select(UserProfile).where(UserProfile.hash_sec_uid.in_(all_hashes))
-    users = {u.hash_sec_uid: u for u in db.session.execute(stmt).scalars()}
-    result_clusters = {}
-    for cluster_id, hash_list in limited_clusters.items():
-        result_clusters[cluster_id] = [users[h].avatar_medium for h in hash_list]
-    return HttpResponse.success(data={"clusters": result_clusters})
-
-
 @bp.route("/api/userAnalyse/similarCluster", methods=["GET", "POST"])
 def userAnalyse_similarCluster():
     """相似集群"""
@@ -164,3 +148,24 @@ def userAnalyse_similarUser():
     ]
 
     return HttpResponse.success(data={"similarUser": return_users})
+
+
+@bp.route("/api/userAnalyse/clusterPlotData", methods=["GET"])
+def userAnalyse_clusterPlotData():
+    show_data = plot_data().tolist()
+    uids = [x[3] for x in show_data]
+
+    stmt = select(
+        UserProfile.hash_sec_uid,
+        UserProfile.nickname,
+        UserProfile.sec_uid,
+        UserProfile.avatar_medium,
+    ).where(UserProfile.hash_sec_uid.in_(uids))
+    results = db.session.execute(stmt).all()
+    uid_to_info = {
+        hash_uid: (sec_uid, nickname, avatar)
+        for hash_uid, nickname, sec_uid, avatar in results
+    }
+    show_date_withurl = [x[:3] + list(uid_to_info.get(x[3])) for x in show_data]
+
+    return HttpResponse.success(data={"data": show_date_withurl})
