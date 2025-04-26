@@ -3,6 +3,7 @@
   "local_assessment": false,
   "local_report": false,
   "information_extraction_model": {
+    "description": "信息提取模型",
     "local_ollama": {
       "base_url": "http://localhost:11434/api/chat",
       "model": "deepseek-r1:14b",
@@ -15,6 +16,7 @@
     }
   },
   "assessment_model": {
+    "description": "评估模型",
     "local_ollama": {
       "base_url": "http://localhost:11434/api/chat",
       "model": "deepseek-r1:14b",
@@ -27,6 +29,7 @@
     }
   },
   "report_model": {
+    "description": "报告生成模型",
     "local_ollama": {
       "base_url": "http://localhost:11434/api/chat",
       "model": "deepseek-r1:14b",

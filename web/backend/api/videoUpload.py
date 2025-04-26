@@ -279,8 +279,6 @@ def store_video_by_url():
     except Exception as e:
         return HttpResponse.error(f"通过URL存储视频失败: {str(e)}", 500)
 
-
-
 # 添加生成缩略图的独立函数
 def generate_video_thumbnail(video_path, file_id):
     """根据视频生成缩略图，并返回是否成功"""

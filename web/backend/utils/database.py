@@ -137,6 +137,21 @@ class VideoTranscript(db.Model):
     
     # 关联的视频
     video = db.relationship("VideoFile", backref=db.backref("transcript_data", uselist=False))
+
+class ContentAnalysis(db.Model):
+    __tablename__ = "content_analysis"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
+    intent = db.Column(db.JSON, default=[])  # 意图列表
+    statements = db.Column(db.JSON, default=[])  # 陈述内容列表
+    summary = db.Column(db.Text, nullable=True)  # 新增字段：内容摘要
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # 关联的视频
+    video = db.relationship("VideoFile", backref=db.backref("content_analysis", uselist=False))
+
 def init_dataset(app):
     # 对密码进行URL编码（处理特殊字符）
     encoded_password = quote_plus(app.config.PASSWORD)

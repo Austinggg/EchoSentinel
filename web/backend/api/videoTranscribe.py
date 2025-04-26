@@ -1,8 +1,7 @@
-# transcribe_api.py
 from flask import Blueprint, request, jsonify
 from api.videoUpload import get_video_file_path
 from werkzeug.utils import secure_filename
-from utils.database import UserProfile, db
+from utils.database import db
 from utils.HttpResponse import success_response, error_response
 import os
 import tempfile
