@@ -178,9 +178,7 @@ def list_videos():
     try:
         from utils.database import VideoFile
         
-        # 获取查询参数
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
+        # 获取查询参数（只保留筛选参数，移除分页参数）
         status = request.args.get('status', None)
         search = request.args.get('search', None)
         
@@ -197,15 +195,12 @@ def list_videos():
         # 按上传时间倒序排序
         query = query.order_by(VideoFile.upload_time.desc())
         
-        # 分页
-        total = query.count()
-        videos = query.offset((page - 1) * per_page).limit(per_page).all()
+        # 获取所有符合条件的视频（不分页）
+        videos = query.all()
         
-        # 构建响应
+        # 构建响应（简化结构，只保留total和items）
         result = {
-            "total": total,
-            "page": page,
-            "per_page": per_page,
+            "total": len(videos),
             "items": []
         }
         

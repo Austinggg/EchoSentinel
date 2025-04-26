@@ -84,8 +84,7 @@ class UserProfile(db.Model):
         }
 
 
-# 新增视频文件表
-# 新增视频文件表
+# 视频文件表(分析结果表)
 class VideoFile(db.Model):
     __tablename__ = "video_files"
     
@@ -125,7 +124,19 @@ class VideoFile(db.Model):
             "url": f"/api/videos/{self.id}"
         }
 
-
+# 视频转录表
+class VideoTranscript(db.Model):
+    __tablename__ = "video_transcripts"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
+    transcript = db.Column(db.Text, nullable=True)  # 完整转录文本
+    chunks = db.Column(db.JSON, default=[])  # 带时间戳的分段文本
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # 关联的视频
+    video = db.relationship("VideoFile", backref=db.backref("transcript_data", uselist=False))
 def init_dataset(app):
     # 对密码进行URL编码（处理特殊字符）
     encoded_password = quote_plus(app.config.PASSWORD)

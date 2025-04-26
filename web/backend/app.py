@@ -2,10 +2,11 @@ from flask import send_from_directory
 
 from api.services.extract_api import extract_api  # 导入提取API蓝图
 from api.services.assessment_api import assessment_api  # 导入评估API蓝图
-from api.services.transcribe_api import transcribe_api  # 导入转录API蓝图
-from api import auth, menu, test, user, userAnalyse,video_upload
+from api.videoTranscribe import transcribe_api  # 导入转录API蓝图
+from api import auth, menu, test, user, userAnalyse
 from utils.database import init_dataset
 from utils.extensions import app
+from api import videoUpload
 
 init_dataset(app)
 
@@ -24,6 +25,6 @@ app.register_blueprint(menu.bp)
 app.register_blueprint(test.bp)
 app.register_blueprint(user.bp)
 app.register_blueprint(userAnalyse.bp)
-app.register_blueprint(video_upload.bp)
+app.register_blueprint(videoUpload.bp)
 if __name__ == "__main__":
     app.run(debug=True, port=8000)  # 开启调试模式（包含热重载）

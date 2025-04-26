@@ -3,6 +3,7 @@ import os
 import ffmpeg
 import requests
 from pathlib import Path
+import logging
 
 class VideoTranscriber:
     def __init__(self, model_service_url="http://121.48.227.136:3000/transcribe"):
@@ -10,7 +11,10 @@ class VideoTranscriber:
 
     def extract_audio(self, video_path):
         """提取音频并返回临时路径"""
-        audio_path = f"{Path(video_path).stem}_audio.wav"
+        # 确保使用完整路径
+        video_path_obj = Path(video_path)
+        audio_path = str(video_path_obj.parent / f"{video_path_obj.stem}_audio.wav")
+        
         try:
             (
                 ffmpeg
@@ -19,31 +23,46 @@ class VideoTranscriber:
                 .overwrite_output()
                 .run(quiet=True)
             )
-            return audio_path
+            
+            # 验证音频文件是否成功创建
+            if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
+                return audio_path
+            else:
+                return None
         except ffmpeg.Error as e:
-            print(f"音频提取失败: {e}")
+            # 尝试使用子进程直接调用ffmpeg
+            try:
+                import subprocess
+                cmd = f"ffmpeg -i '{video_path}' -vn -acodec pcm_s16le -ar 16000 -ac 1 '{audio_path}' -y"
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                if result.returncode == 0:
+                    return audio_path
+            except Exception:
+                pass
             return None
 
     def transcribe_video(self, video_path):
+        """
+        转录视频内容，返回带时间戳的文本
+        处理无音频的视频文件
+        """
         # 提取音频
         audio_path = self.extract_audio(video_path)
         if not audio_path:
-            return None
-        
-        # 调用远程模型服务
-        with open(audio_path, "rb") as f:
+            # 检查视频是否有音频轨道
             try:
-                response = requests.post(
-                    self.model_service_url,
-                    files={"audio": f},
-                    timeout=300
-                )
-                response.raise_for_status()
-                result = response.json()
-                # 清理临时音频
-                os.remove(audio_path)
-                return result
-            except Exception as e:
-                os.remove(audio_path)
-                print(f"模型服务调用失败: {e}")
-                return None
+                import subprocess
+                cmd = f"ffprobe -i '{video_path}' -show_streams -select_streams a -loglevel error"
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                
+                if not result.stdout.strip():
+                    # 返回一个空的转录结果而不是None
+                    return {
+                        "text": "",
+                        "chunks": [],
+                        "duration": 0,
+                        "message": "视频不包含音频轨道"
+                    }
+            except Exception:
+                pass
+            return None
