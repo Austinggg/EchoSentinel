@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref } from 'vue';
 import { Loading } from '@element-plus/icons-vue';
 
 // 嵌入开源项目 OpenSPG KAG (Knowledge & AI Graph)
@@ -8,7 +8,7 @@ import { Loading } from '@element-plus/icons-vue';
 const targetUrl = ref('http://localhost:8887');
 const iframeLoaded = ref(false);
 const loadError = ref(false);
-
+import { ElIcon, ElAlert } from 'element-plus';
 // 处理iframe加载状态
 const handleIframeLoad = () => {
   iframeLoaded.value = true;
@@ -20,43 +20,47 @@ const handleIframeError = () => {
 </script>
 
 <template>
-    <div class="knowledge-graph-container">
-      <div class="iframe-wrapper">
-        <!-- 加载指示器 -->
-        <div v-if="!iframeLoaded && !loadError" class="loading-indicator">
-          <el-icon class="is-loading"><Loading /></el-icon>
-          <span>正在加载知识图谱应用...</span>
-        </div>
-        
-        <!-- 错误提示 -->
-        <div v-if="loadError" class="error-message">
-          <el-alert
-            title="无法加载知识图谱应用"
-            type="error"
-            description="请确保KAG应用(http://localhost:8887)已启动并且可以访问。"
-            show-icon
-            :closable="false"
-          />
-        </div>
-        
-        <!-- iframe嵌入应用 -->
-        <iframe
-          :src="targetUrl"
-          @load="handleIframeLoad"
-          @error="handleIframeError"
-          frameborder="0"
-          class="knowledge-graph-iframe"
-          allow="fullscreen"
-          title="Knowledge Graph Visualization"
-        ></iframe>
+  <div class="knowledge-graph-container">
+    <div class="iframe-wrapper">
+      <!-- 加载指示器 -->
+      <div v-if="!iframeLoaded && !loadError" class="loading-indicator">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>正在加载知识图谱应用...</span>
       </div>
-      
-      <!-- 底部小型归属信息 -->
-      <div class="footer-attribution">
-        基于 <a href="https://github.com/OpenSPG/openspg" target="_blank">OpenSPG/KAG</a> (Apache 2.0)
+
+      <!-- 错误提示 -->
+      <div v-if="loadError" class="error-message">
+        <el-alert
+          title="无法加载知识图谱应用"
+          type="error"
+          description="请确保KAG应用(http://localhost:8887)已启动并且可以访问。"
+          show-icon
+          :closable="false"
+        />
       </div>
+
+      <!-- iframe嵌入应用 -->
+      <iframe
+        :src="targetUrl"
+        @load="handleIframeLoad"
+        @error="handleIframeError"
+        frameborder="0"
+        class="knowledge-graph-iframe"
+        allow="fullscreen"
+        title="Knowledge Graph Visualization"
+      ></iframe>
     </div>
-  </template>
+
+    <!-- 底部小型归属信息 -->
+    <div class="footer-attribution">
+      基于
+      <a href="https://github.com/OpenSPG/openspg" target="_blank"
+        >OpenSPG/KAG</a
+      >
+      (Apache 2.0)
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .footer-attribution {

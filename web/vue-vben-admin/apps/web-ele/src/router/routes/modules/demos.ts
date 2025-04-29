@@ -67,16 +67,6 @@ const routes: RouteRecordRaw[] = [
         path: '/demos/analysis-records',
         component: () => import('#/views/demos/content-analysis/analysisRecords.vue'),
       },
-      //数字人检测
-      {
-        meta: {
-          title: $t('demos.aigcDetection'),
-        },
-        name: 'AIGCdetection',
-        path: '/demos/AIGC-detection',
-        component: () => import('#/views/demos/AIGC-detection/index.vue'),
-      },
-
       // 知识图谱
       {
         meta: {
