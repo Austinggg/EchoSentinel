@@ -235,6 +235,35 @@ class ContentAnalysis(db.Model):
             self.p8_score = score
             if reasoning: self.p8_reasoning = reasoning
 
+# 任务状态跟踪表
+class VideoProcessingTask(db.Model):
+    __tablename__ = "video_processing_tasks"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
+    task_type = db.Column(db.String(30), nullable=False)  # transcription, summary, assessment
+    status = db.Column(db.String(30), default="pending")  # pending, processing, completed, failed
+    progress = db.Column(db.Float, default=0.0)           # 0-100%
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    attempts = db.Column(db.Integer, default=0)           # 重试次数
+    
+    # 关联
+    video = db.relationship("VideoFile", backref=db.backref("processing_tasks", lazy=True))
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "video_id": self.video_id,
+            "task_type": self.task_type,
+            "status": self.status,
+            "progress": self.progress,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "error": self.error,
+            "attempts": self.attempts
+        }
 def init_dataset(app):
     # 对密码进行URL编码（处理特殊字符）
     encoded_password = quote_plus(app.config.PASSWORD)
