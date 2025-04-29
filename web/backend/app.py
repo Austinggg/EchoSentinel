@@ -1,7 +1,7 @@
 from flask import send_from_directory
 
 from api.extractAndSummary import extract_api  # 导入提取API蓝图
-from api.services.assessment_api import assessment_api  # 导入评估API蓝图
+from api.logicAssessment import assessment_api  # 导入评估API蓝图
 from api.videoTranscribe import transcribe_api  # 导入转录API蓝图
 from api import auth, menu, test, user, userAnalyse
 from utils.database import init_dataset

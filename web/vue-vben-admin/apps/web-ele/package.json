@@ -46,6 +46,7 @@
     "dayjs": "catalog:",
     "echarts": "catalog:",
     "element-plus": "catalog:",
+    "marked": "^15.0.11",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"

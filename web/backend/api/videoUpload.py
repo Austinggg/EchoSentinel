@@ -279,6 +279,77 @@ def store_video_by_url():
     except Exception as e:
         return HttpResponse.error(f"通过URL存储视频失败: {str(e)}", 500)
 
+"""获取单个视频的详细分析信息"""
+@bp.route("/api/videos/<file_id>/analysis", methods=["GET"])
+def get_video_analysis(file_id):
+    try:
+        from utils.database import VideoFile, VideoTranscript, ContentAnalysis
+        
+        # 查询视频基本信息
+        video = db.session.query(VideoFile).filter(VideoFile.id == file_id).first()
+        if not video:
+            return HttpResponse.error("视频不存在", 404)
+        
+        # 查询视频转录信息
+        transcript = db.session.query(VideoTranscript).filter(VideoTranscript.video_id == file_id).first()
+        
+        # 查询内容分析结果
+        analysis = db.session.query(ContentAnalysis).filter(ContentAnalysis.video_id == file_id).first()
+        
+        # 解析标签
+        tags_list = video.tags.split(',') if video.tags else []
+        
+        # 构建响应数据
+        result = {
+            "video": {
+                "id": video.id,
+                "title": video.filename,
+                "url": f"/api/videos/{video.id}",
+                "cover": f"/api/videos/{video.id}/thumbnail",
+                "size": video.size,
+                "mimeType": video.mime_type,
+                "uploadTime": video.upload_time.isoformat(),
+                "publishTime": video.publish_time.isoformat() if video.publish_time else None,
+                "status": video.status,
+                "tags": tags_list,
+                "summary": video.summary,
+                "riskLevel": video.risk_level
+            },
+            "transcript": None,
+            "analysis": None
+        }
+        
+        # 添加字幕信息（如果存在）
+        if transcript:
+            result["transcript"] = {
+                "text": transcript.transcript,
+                "chunks": transcript.chunks or []
+            }
+        
+        # 添加分析信息（如果存在）
+        if analysis:
+            result["analysis"] = {
+                "intent": analysis.intent or [],
+                "statements": analysis.statements or [],
+                "summary": analysis.summary,
+                "assessments": {
+                    "p1": {"score": analysis.p1_score, "reasoning": analysis.p1_reasoning},
+                    "p2": {"score": analysis.p2_score, "reasoning": analysis.p2_reasoning},
+                    "p3": {"score": analysis.p3_score, "reasoning": analysis.p3_reasoning},
+                    "p4": {"score": analysis.p4_score, "reasoning": analysis.p4_reasoning},
+                    "p5": {"score": analysis.p5_score, "reasoning": analysis.p5_reasoning},
+                    "p6": {"score": analysis.p6_score, "reasoning": analysis.p6_reasoning},
+                    "p7": {"score": analysis.p7_score, "reasoning": analysis.p7_reasoning},
+                    "p8": {"score": analysis.p8_score, "reasoning": analysis.p8_reasoning}
+                }
+            }
+        
+        return HttpResponse.success(result)
+        
+    except Exception as e:
+        print(f"获取视频分析失败: {str(e)}")
+        return HttpResponse.error(f"获取视频分析失败: {str(e)}", 500)
+
 # 添加生成缩略图的独立函数
 def generate_video_thumbnail(video_path, file_id):
     """根据视频生成缩略图，并返回是否成功"""

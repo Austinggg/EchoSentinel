@@ -145,12 +145,95 @@ class ContentAnalysis(db.Model):
     video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
     intent = db.Column(db.JSON, default=[])  # 意图列表
     statements = db.Column(db.JSON, default=[])  # 陈述内容列表
-    summary = db.Column(db.Text, nullable=True)  # 新增字段：内容摘要
+    summary = db.Column(db.Text, nullable=True)  # 内容摘要
+    
+    # P1: 背景信息充分性评估
+    p1_score = db.Column(db.Float, nullable=True)
+    p1_reasoning = db.Column(db.Text, nullable=True)
+    
+    # P2: 背景信息准确性评估
+    p2_score = db.Column(db.Float, nullable=True)
+    p2_reasoning = db.Column(db.Text, nullable=True)
+    
+    # P3: 内容完整性评估
+    p3_score = db.Column(db.Float, nullable=True)
+    p3_reasoning = db.Column(db.Text, nullable=True)
+    
+    # P4: 不当意图评估
+    p4_score = db.Column(db.Float, nullable=True)
+    p4_reasoning = db.Column(db.Text, nullable=True)
+    
+    # P5: 发布者历史评估
+    p5_score = db.Column(db.Float, nullable=True)
+    p5_reasoning = db.Column(db.Text, nullable=True)
+    
+    # P6: 情感煽动性评估
+    p6_score = db.Column(db.Float, nullable=True)
+    p6_reasoning = db.Column(db.Text, nullable=True)
+    
+    # P7: 诱导行为评估
+    p7_score = db.Column(db.Float, nullable=True)
+    p7_reasoning = db.Column(db.Text, nullable=True)
+    
+    # P8: 信息一致性评估
+    p8_score = db.Column(db.Float, nullable=True)
+    p8_reasoning = db.Column(db.Text, nullable=True)
+    
+    # 时间戳
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     # 关联的视频
     video = db.relationship("VideoFile", backref=db.backref("content_analysis", uselist=False))
+    
+    def to_dict(self):
+        """转换为字典，方便API返回"""
+        return {
+            "id": self.id,
+            "video_id": self.video_id,
+            "intent": self.intent,
+            "statements": self.statements,
+            "summary": self.summary,
+            "assessments": {
+                "p1": {"score": self.p1_score, "reasoning": self.p1_reasoning},
+                "p2": {"score": self.p2_score, "reasoning": self.p2_reasoning},
+                "p3": {"score": self.p3_score, "reasoning": self.p3_reasoning},
+                "p4": {"score": self.p4_score, "reasoning": self.p4_reasoning},
+                "p5": {"score": self.p5_score, "reasoning": self.p5_reasoning},
+                "p6": {"score": self.p6_score, "reasoning": self.p6_reasoning},
+                "p7": {"score": self.p7_score, "reasoning": self.p7_reasoning},
+                "p8": {"score": self.p8_score, "reasoning": self.p8_reasoning}
+            },
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def update_assessment(self, assessment_item, score, reasoning=None):
+        """更新特定评估项的得分和理由"""
+        if assessment_item == "p1":
+            self.p1_score = score
+            if reasoning: self.p1_reasoning = reasoning
+        elif assessment_item == "p2":
+            self.p2_score = score
+            if reasoning: self.p2_reasoning = reasoning
+        elif assessment_item == "p3":
+            self.p3_score = score
+            if reasoning: self.p3_reasoning = reasoning
+        elif assessment_item == "p4":
+            self.p4_score = score
+            if reasoning: self.p4_reasoning = reasoning
+        elif assessment_item == "p5":
+            self.p5_score = score
+            if reasoning: self.p5_reasoning = reasoning
+        elif assessment_item == "p6":
+            self.p6_score = score
+            if reasoning: self.p6_reasoning = reasoning
+        elif assessment_item == "p7":
+            self.p7_score = score
+            if reasoning: self.p7_reasoning = reasoning
+        elif assessment_item == "p8":
+            self.p8_score = score
+            if reasoning: self.p8_reasoning = reasoning
 
 def init_dataset(app):
     # 对密码进行URL编码（处理特殊字符）
