@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
 import datetime
+import time
 import uuid
+import requests
 from werkzeug.utils import secure_filename
 
 from flask import Blueprint, request, jsonify,send_from_directory,send_file
@@ -114,6 +116,19 @@ def upload_video():
                 "publishTime": publish_time.isoformat() if publish_time else None,
                 "tags": tags
             })
+            # 上传成功后，启动自动处理流程(与生成缩略图并行)
+            try:
+                # 使用线程异步调用处理API，避免阻塞上传响应
+                processing_thread = threading.Thread(
+                    target=auto_process_video,
+                    args=(file_id,)
+                )
+                processing_thread.daemon = True  # 设置为守护线程
+                processing_thread.start()
+                print(f"已为视频 {file_id} 启动自动处理")
+            except Exception as process_error:
+                # 处理启动失败不影响上传成功
+                print(f"启动自动处理失败: {str(process_error)}")
         # 上传成功后，立即尝试生成缩略图（异步生成，不影响上传响应）
             try:
                 # 仅对视频文件生成缩略图
@@ -241,9 +256,14 @@ def get_video_thumbnail(file_id):
         if os.path.exists(thumbnail_path):
             print(f"返回已存在的缩略图: {thumbnail_path}")
             return send_file(thumbnail_path, mimetype='image/jpeg')
+        
+        # 获取视频文件路径 - 修改这里，使用get_video_file_path函数
+        video_file_path = get_video_file_path(file_id, video.extension)
+        if not video_file_path or not video_file_path.exists():
+            return HttpResponse.error("视频文件不存在", 404)
             
         # 如果缩略图不存在，尝试生成
-        if generate_video_thumbnail(video.path, file_id):
+        if generate_video_thumbnail(str(video_file_path), file_id):  # 使用正确的文件路径
             print(f"返回新生成的缩略图: {thumbnail_path}")
             return send_file(thumbnail_path, mimetype='image/jpeg')
         
@@ -475,3 +495,19 @@ def parse_crawler_filename(filename):
     except Exception as e:
         print(f"解析文件名失败: {str(e)}, 文件名: {filename}")
         return None, filename, []
+
+# 在文件末尾添加这个函数
+def auto_process_video(video_id):
+    """上传完成后自动处理视频"""
+    try:
+        # 等待1秒确保数据库事务已提交
+        time.sleep(1)
+        
+        # 调用处理API
+        response = requests.post(
+            url=f"http://localhost:8000/api/videos/{video_id}/process",
+            json={"steps": ["transcription", "extract", "summary", "assessment"]}
+        )
+        print(f"视频 {video_id} 自动处理启动：{response.status_code}")
+    except Exception as e:
+        print(f"启动自动处理失败: {str(e)}")
