@@ -46,12 +46,16 @@
     "dayjs": "catalog:",
     "echarts": "catalog:",
     "element-plus": "catalog:",
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0",
+    "markdown-it-toc-done-right": "^4.2.0",
     "marked": "^15.0.11",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "unplugin-element-plus": "catalog:"
   }
 }

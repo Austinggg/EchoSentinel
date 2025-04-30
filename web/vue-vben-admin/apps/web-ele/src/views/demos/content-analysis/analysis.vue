@@ -1,8 +1,9 @@
 <script lang="ts" setup>
-import { ref, onMounted,computed } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
+import { Refresh } from '@element-plus/icons-vue';
 import { useRoute } from 'vue-router';
-import { marked } from 'marked'; // 使用命名导入
+import MarkdownIt from 'markdown-it';
 
 import {
   ElButton,
@@ -23,6 +24,16 @@ import {
   ElProgress,
 } from 'element-plus';
 // 定义评估项的语义映射
+// 创建markdown-it实例
+const md = new MarkdownIt({
+  html: true, // 启用HTML标签
+  breaks: true, // 将换行符转换为<br>
+  linkify: true, // 自动将URL转换为链接
+  typographer: true, // 启用一些语言中性的替换+引号美化
+});
+const components = {
+  Refresh
+};
 const assessmentNames = {
   p1: '背景信息充分性',
   p2: '背景信息准确性',
@@ -41,6 +52,39 @@ const subtitlesData = ref({ chunks: [], text: '' });
 const route = useRoute();
 const summary = ref(''); // 存储解析后的摘要HTML
 const assessmentData = ref({}); // 新增：专门存储评估数据
+// 添加重新生成摘要函数
+const summaryLoading = ref(false);
+
+const regenerateSummary = async () => {
+  try {
+    const videoId = route.query.id;
+    if (!videoId) {
+      ElMessage.error('未提供视频ID');
+      return;
+    }
+
+    summaryLoading.value = true;
+    ElMessage.info('开始重新生成摘要...');
+
+    // 调用后端重新生成摘要的API
+    const response = await axios.post(`/api/summary/video/${videoId}`, {
+      force: true, // 强制重新生成
+    });
+
+    if (response.data.code === 0) {
+      // 重新获取视频数据以更新摘要
+      await loadVideoData();
+      ElMessage.success('摘要已重新生成');
+    } else {
+      throw new Error(response.data.message || '生成失败');
+    }
+  } catch (error) {
+    console.error('重新生成摘要失败:', error);
+    ElMessage.error('重新生成摘要失败: ' + (error.message || '未知错误'));
+  } finally {
+    summaryLoading.value = false;
+  }
+};
 // 添加评估数据可用性检查的计算属性
 const hasAssessments = computed(() => {
   return assessmentData.value && Object.keys(assessmentData.value).length > 0;
@@ -49,14 +93,16 @@ const hasAssessments = computed(() => {
 // 添加格式化评估项的计算属性
 const assessmentItems = computed(() => {
   if (!hasAssessments.value) return [];
-  
+
   return Object.entries(assessmentData.value)
-    .filter(([_, item]) => item && item.score !== null && item.score !== undefined)
+    .filter(
+      ([_, item]) => item && item.score !== null && item.score !== undefined,
+    )
     .map(([key, item]) => ({
       key,
       name: assessmentNames[key] || key,
       score: item.score,
-      reasoning: item.reasoning
+      reasoning: item.reasoning,
     }));
 });
 // 根据ID加载视频数据
@@ -83,7 +129,7 @@ const loadVideoData = async () => {
 
     // 解析Markdown摘要
     if (videoData.value.analysis && videoData.value.analysis.summary) {
-      summary.value = marked(videoData.value.analysis.summary);
+      summary.value = md.render(videoData.value.analysis.summary);
     }
 
     // 保存评估数据到专门的变量
@@ -187,6 +233,19 @@ const formatScore = (score: number): string => {
             <!-- 使用v-html渲染Markdown转换后的HTML -->
             <div v-if="summary" class="markdown-body" v-html="summary"></div>
             <p v-else class="text-gray-500">暂无摘要内容</p>
+
+            <!-- 添加重新生成按钮 -->
+            <div class="mt-4 flex justify-end">
+              <el-button
+                type="primary"
+                :loading="summaryLoading"
+                @click="regenerateSummary"
+                size="small"
+                icon="Refresh"
+              >
+                重新生成摘要
+              </el-button>
+            </div>
           </div>
 
           <!-- 字幕列表内容 -->

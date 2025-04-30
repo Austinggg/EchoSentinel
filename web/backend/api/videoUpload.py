@@ -8,7 +8,7 @@ from werkzeug.utils import secure_filename
 
 from flask import Blueprint, request, jsonify,send_from_directory,send_file
 from sqlalchemy import select
-
+import threading  # 添加这一行
 from userAnalyse.function import cal_loss as userAnalyse_main
 from utils.database import UserProfile, db
 from utils.HttpResponse import HttpResponse
@@ -134,7 +134,6 @@ def upload_video():
                 # 仅对视频文件生成缩略图
                 if file_mime.startswith('video/'):
                     # 生成缩略图（在后台执行，不阻塞响应）
-                    import threading
                     thumbnail_thread = threading.Thread(
                         target=generate_video_thumbnail,
                         args=(str(file_path), file_id)
@@ -142,7 +141,7 @@ def upload_video():
                     thumbnail_thread.daemon = True
                     thumbnail_thread.start()
             except Exception as thumb_error:
-            # 缩略图生成失败不影响上传成功
+                # 缩略图生成失败不影响上传成功
                 print(f"上传后自动生成缩略图失败: {str(thumb_error)}")
         # 提交所有文件到数据库
         db.session.commit()

@@ -153,7 +153,7 @@ def process_video_workflow(video_id, steps_to_run, app):
                 
                 # 构建API请求URL
                 endpoint = step_def['endpoint'].format(video_id=video_id)
-                url = f"http://localhost:5000{endpoint}"  # 使用本地地址调用自身API
+                url = f"http://localhost:8000{endpoint}"  # 使用本地地址调用自身API
                 
                 # 发送请求
                 logger.info(f"执行步骤 {step_id}: {url}")
@@ -233,7 +233,7 @@ def auto_process_after_upload(file_id):
     """上传完成后自动开始处理视频"""
     try:
         requests.post(
-            url=f"http://localhost:5000/api/videos/{file_id}/process",
+            url=f"http://localhost:8000/api/videos/{file_id}/process",
             json={"steps": ["transcription", "extract", "summary", "assessment"]}
         )
         logger.info(f"已为视频 {file_id} 启动自动处理")
