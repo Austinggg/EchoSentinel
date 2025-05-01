@@ -370,3 +370,80 @@ def assess_video_item(video_id, item):
     except Exception as e:
         logging.exception(f"处理视频评估请求时发生错误: {str(e)}")
         return error_response(500, f"服务器内部错误: {str(e)}")
+    
+# 添加查询单个评估项的路由
+@assessment_api.route('/api/videos/<video_id>/assessment/<item>', methods=['GET'])
+def get_video_assessment_item(video_id, item):
+    """获取视频特定评估项的详细信息
+    
+    Args:
+        video_id: 视频ID
+        item: 评估项代码，如p1, p2等
+        
+    Returns:
+        评估项的详细信息，包括分数和评估理由
+    """
+    try:
+        # 检查评估项是否有效
+        if item not in ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"]:
+            return error_response(400, f"无效的评估项: {item}")
+            
+        # 查询数据库获取视频内容分析
+        content_analysis = ContentAnalysis.query.filter_by(video_id=video_id).first()
+        if not content_analysis:
+            return error_response(404, f"未找到视频ID为 {video_id} 的内容分析")
+            
+        # 定义评估项名称映射
+        item_names = {
+            "p1": "背景信息充分性",
+            "p2": "背景信息准确性",
+            "p3": "内容完整性",
+            "p4": "意图正当性",
+            "p5": "发布者信誉",
+            "p6": "情感中立性",
+            "p7": "行为自主性",
+            "p8": "信息一致性"
+        }
+        
+        # 获取评估分数和理由
+        score = None
+        reasoning = None
+        
+        if item == "p1":
+            score = content_analysis.p1_score
+            reasoning = content_analysis.p1_reasoning
+        elif item == "p2":
+            score = content_analysis.p2_score
+            reasoning = content_analysis.p2_reasoning
+        elif item == "p3":
+            score = content_analysis.p3_score
+            reasoning = content_analysis.p3_reasoning
+        elif item == "p4":
+            score = content_analysis.p4_score
+            reasoning = content_analysis.p4_reasoning
+        elif item == "p5":
+            score = content_analysis.p5_score
+            reasoning = content_analysis.p5_reasoning
+        elif item == "p6":
+            score = content_analysis.p6_score
+            reasoning = content_analysis.p6_reasoning
+        elif item == "p7":
+            score = content_analysis.p7_score
+            reasoning = content_analysis.p7_reasoning
+        elif item == "p8":
+            score = content_analysis.p8_score
+            reasoning = content_analysis.p8_reasoning
+            
+        # 构造响应
+        result = {
+            "item": item,
+            "name": item_names.get(item, item),
+            "score": score,
+            "reasoning": reasoning
+        }
+        
+        return success_response(result)
+        
+    except Exception as e:
+        logging.exception(f"获取视频评估项时发生错误: {str(e)}")
+        return error_response(500, f"服务器内部错误: {str(e)}")

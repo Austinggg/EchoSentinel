@@ -25,7 +25,7 @@ import {
 } from '@element-plus/icons-vue';
 import { getVideoList, deleteVideo, batchDeleteVideos } from '#/api/videoApi';
 import type { VideoAnalysisRecord } from '#/api/videoApi';
-import { useRouter } from 'vue-router';
+import { useRouter, RouterView } from 'vue-router';
 // 定义分析结果数据类型
 interface AnalysisRecord {
   id: string;
@@ -118,10 +118,10 @@ async function loadData() {
   loading.value = true;
   try {
     const response = await getVideoList();
-    
+
     analysisData.value = response.items;
     total.value = response.total;
-    
+
     console.log('加载数据成功:', analysisData.value);
   } catch (error) {
     ElMessage.error('加载视频分析数据失败');
@@ -186,8 +186,6 @@ const filterByThreatLevel = (level: AnalysisRecord['threatLevel']) => {
   }
 };
 
-
-
 // 修改搜索筛选逻辑，加入威胁等级筛选
 const searchFilteredData = computed(() =>
   analysisData.value.filter(
@@ -216,7 +214,7 @@ const handleCurrentChange = (val: number) => {
   currentPage.value = val;
   // 页码变化时重新从API加载数据
   loadData();
-  
+
   // 改变页码时清除选择
   if (multipleTableRef.value) {
     multipleTableRef.value.clearSelection();
@@ -243,7 +241,6 @@ const toggleSelection = (rows?: AnalysisRecord[]) => {
     multipleTableRef.value!.clearSelection();
   }
 };
-
 
 // 根据威胁等级设置行类名
 const tableRowClassName = ({ row }: { row: AnalysisRecord }) => {
@@ -298,12 +295,10 @@ const getThreatLevelText = (level: AnalysisRecord['threatLevel']) => {
   return textMap[level];
 };
 
-
 // 初始加载
 onMounted(() => {
   loadData();
 });
-
 
 const router = useRouter();
 
@@ -311,214 +306,228 @@ const router = useRouter();
 const handleRowClick = (row) => {
   // 跳转到分析页面，并传递id参数
   router.push({
-    path: '/demos/contentAnalysis',
-    query: { id: row.id }
+    name: 'contentAnalysis',
+    query: { id: row.id },
   });
 };
-
 </script>
 
 <template>
-  <el-card class="card" shadow="always">
-    <!-- 表格顶部操作区 -->
-    <div class="table-operations">
-      <!-- 搜索框 -->
-      <el-input
-        v-model="search"
-        placeholder="搜索标题或摘要"
-        class="search-input"
-        clearable
-      >
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-      </el-input>
-      <!-- 已选择计数 -->
-      <div>
-        <span v-if="multipleSelection.length > 0" class="selected-count">
-          已选择 {{ multipleSelection.length }} 项
-        </span>
-      </div>
-      <!-- 右侧操作区 -->
-      <div class="right-operations">
-        <!-- 徽章区域 -->
-        <div class="badge-group">
-          <!-- 高风险徽章 -->
-          <el-badge
-            :value="threatLevelCounts.high"
-            class="badge-item"
-            type="danger"
+  <div>
+    <!-- 只有在访问父路由首页时显示分析记录列表 -->
+    <div v-if="$route.path === '/demos/analysis-records'">
+      <!-- 现有的分析记录列表内容 -->
+      <el-card class="card" shadow="always">
+        <!-- 表格顶部操作区 -->
+        <div class="table-operations">
+          <!-- 搜索框 -->
+          <el-input
+            v-model="search"
+            placeholder="搜索标题或摘要"
+            class="search-input"
+            clearable
           >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <!-- 已选择计数 -->
+          <div>
+            <span v-if="multipleSelection.length > 0" class="selected-count">
+              已选择 {{ multipleSelection.length }} 项
+            </span>
+          </div>
+          <!-- 右侧操作区 -->
+          <div class="right-operations">
+            <!-- 徽章区域 -->
+            <div class="badge-group">
+              <!-- 高风险徽章 -->
+              <el-badge
+                :value="threatLevelCounts.high"
+                class="badge-item"
+                type="danger"
+              >
+                <el-button
+                  size="small"
+                  :type="activeFilter === 'high' ? 'danger' : ''"
+                  @click="filterByThreatLevel('high')"
+                >
+                  高风险
+                </el-button>
+              </el-badge>
+
+              <!-- 中风险徽章 -->
+              <el-badge
+                :value="threatLevelCounts.medium"
+                class="badge-item"
+                type="warning"
+              >
+                <el-button
+                  size="small"
+                  :type="activeFilter === 'medium' ? 'warning' : ''"
+                  @click="filterByThreatLevel('medium')"
+                >
+                  中风险
+                </el-button>
+              </el-badge>
+
+              <!-- 低风险徽章 -->
+              <el-badge
+                :value="threatLevelCounts.low"
+                class="badge-item"
+                type="success"
+              >
+                <el-button
+                  size="small"
+                  :type="activeFilter === 'low' ? 'success' : ''"
+                  @click="filterByThreatLevel('low')"
+                >
+                  低风险
+                </el-button>
+              </el-badge>
+
+              <!-- 处理中徽章 -->
+              <el-badge
+                :value="threatLevelCounts.processing"
+                class="badge-item"
+                type="info"
+              >
+                <el-button
+                  size="small"
+                  :type="activeFilter === 'processing' ? 'info' : ''"
+                  @click="filterByThreatLevel('processing')"
+                >
+                  处理中
+                </el-button>
+              </el-badge>
+            </div>
+
+            <!-- 操作按钮区域 - 两个按钮都只在有选择时显示 -->
             <el-button
+              v-if="multipleSelection.length > 0"
+              type="danger"
+              @click="handleBatchDelete"
               size="small"
-              :type="activeFilter === 'high' ? 'danger' : ''"
-              @click="filterByThreatLevel('high')"
             >
-              高风险
+              <el-icon><Delete /></el-icon>
+              批量删除
             </el-button>
-          </el-badge>
-
-          <!-- 中风险徽章 -->
-          <el-badge
-            :value="threatLevelCounts.medium"
-            class="badge-item"
-            type="warning"
-          >
             <el-button
+              v-if="multipleSelection.length > 0"
+              @click="toggleSelection()"
               size="small"
-              :type="activeFilter === 'medium' ? 'warning' : ''"
-              @click="filterByThreatLevel('medium')"
             >
-              中风险
-            </el-button>
-          </el-badge>
-
-          <!-- 低风险徽章 -->
-          <el-badge
-            :value="threatLevelCounts.low"
-            class="badge-item"
-            type="success"
-          >
-            <el-button
-              size="small"
-              :type="activeFilter === 'low' ? 'success' : ''"
-              @click="filterByThreatLevel('low')"
-            >
-              低风险
-            </el-button>
-          </el-badge>
-
-          <!-- 处理中徽章 -->
-          <el-badge
-            :value="threatLevelCounts.processing"
-            class="badge-item"
-            type="info"
-          >
-            <el-button
-              size="small"
-              :type="activeFilter === 'processing' ? 'info' : ''"
-              @click="filterByThreatLevel('processing')"
-            >
-              处理中
-            </el-button>
-          </el-badge>
-        </div>
-
-        <!-- 操作按钮区域 - 两个按钮都只在有选择时显示 -->
-        <el-button
-          v-if="multipleSelection.length > 0"
-          type="danger"
-          @click="handleBatchDelete"
-          size="small"
-        >
-          <el-icon><Delete /></el-icon>
-          批量删除
-        </el-button>
-        <el-button
-          v-if="multipleSelection.length > 0"
-          @click="toggleSelection()"
-          size="small"
-        >
-          清除选择
-        </el-button>
-      </div>
-    </div>
-    <!-- 表格主体 -->
-
-    <el-table
-      ref="multipleTableRef"
-      :data="filteredAnalysisData"
-      :row-class-name="tableRowClassName"
-      style="width: 100%; height: 100%"
-      border
-      stripe
-      @selection-change="handleSelectionChange"
-      @row-click="handleRowClick"
-    >
-      <!-- 多选列 -->
-      <el-table-column type="selection" width="55" />
-      <!-- 封面列 -->
-      <el-table-column label="封面" min-width="200" align="center">
-        <template #default="{ row }">
-          <el-image
-            :src="row.cover"
-            fit="cover"
-            style="width: 180px; height: 100px; border-radius: 4px"
-            :preview="false"
-          />
-        </template>
-      </el-table-column>
-
-      <!-- 标题列 -->
-      <el-table-column prop="title" label="标题" min-width="150" />
-
-      <!-- 摘要列 -->
-      <el-table-column label="摘要" min-width="300">
-        <template #default="{ row }">
-          <el-tooltip :content="row.summary" placement="top" effect="light">
-            <span class="truncate">{{ row.summary }}</span>
-          </el-tooltip>
-        </template>
-      </el-table-column>
-
-      <!-- 威胁等级列 -->
-      <el-table-column label="威胁等级" min-width="120" align="center">
-        <template #default="{ row }">
-          <el-tag :type="getThreatLevelType(row.threatLevel)" effect="dark">
-            <el-icon class="mr-1">
-              <component :is="getThreatLevelIcon(row.threatLevel)" />
-            </el-icon>
-            {{ getThreatLevelText(row.threatLevel) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-
-      <!-- 创建时间列 -->
-      <el-table-column label="创建时间" min-width="120" align="center">
-        <template #default="{ row }">
-          <span class="flex items-center">
-            <el-icon class="mr-1"><Timer /></el-icon>
-            {{ row.createTime }}
-          </span>
-        </template>
-      </el-table-column>
-
-      <!-- 操作列 -->
-      <el-table-column
-        label="操作"
-        min-width="150"
-        align="center"
-        fixed="right"
-      >
-        <template #default="{ row }">
-          <div class="space-x-2">
-            <el-button size="small" type="primary" @click="handleEdit(row.id)">
-              编辑
-            </el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row.id)">
-              删除
+              清除选择
             </el-button>
           </div>
-        </template>
-      </el-table-column>
-    </el-table>
-    <!-- 空数据提示 -->
-    <div v-if="filteredAnalysisData.length === 0" class="empty-data">
-      <p>没有找到匹配的记录</p>
+        </div>
+        <!-- 表格主体 -->
+
+        <el-table
+          ref="multipleTableRef"
+          :data="filteredAnalysisData"
+          :row-class-name="tableRowClassName"
+          style="width: 100%; height: 100%"
+          border
+          stripe
+          @selection-change="handleSelectionChange"
+          @row-click="handleRowClick"
+        >
+          <!-- 多选列 -->
+          <el-table-column type="selection" width="55" />
+          <!-- 封面列 -->
+          <el-table-column label="封面" min-width="200" align="center">
+            <template #default="{ row }">
+              <el-image
+                :src="row.cover"
+                fit="cover"
+                style="width: 180px; height: 100px; border-radius: 4px"
+                :preview="false"
+              />
+            </template>
+          </el-table-column>
+
+          <!-- 标题列 -->
+          <el-table-column prop="title" label="标题" min-width="150" />
+
+          <!-- 摘要列 -->
+          <el-table-column label="摘要" min-width="300">
+            <template #default="{ row }">
+              <el-tooltip :content="row.summary" placement="top" effect="light">
+                <span class="truncate">{{ row.summary }}</span>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+
+          <!-- 威胁等级列 -->
+          <el-table-column label="威胁等级" min-width="120" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getThreatLevelType(row.threatLevel)" effect="dark">
+                <el-icon class="mr-1">
+                  <component :is="getThreatLevelIcon(row.threatLevel)" />
+                </el-icon>
+                {{ getThreatLevelText(row.threatLevel) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+
+          <!-- 创建时间列 -->
+          <el-table-column label="创建时间" min-width="120" align="center">
+            <template #default="{ row }">
+              <span class="flex items-center">
+                <el-icon class="mr-1"><Timer /></el-icon>
+                {{ row.createTime }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <!-- 操作列 -->
+          <el-table-column
+            label="操作"
+            min-width="150"
+            align="center"
+            fixed="right"
+          >
+            <template #default="{ row }">
+              <div class="space-x-2">
+                <el-button
+                  size="small"
+                  type="primary"
+                  @click="handleEdit(row.id)"
+                >
+                  编辑
+                </el-button>
+                <el-button
+                  size="small"
+                  type="danger"
+                  @click="handleDelete(row.id)"
+                >
+                  删除
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+        <!-- 空数据提示 -->
+        <div v-if="filteredAnalysisData.length === 0" class="empty-data">
+          <p>没有找到匹配的记录</p>
+        </div>
+        <!-- 分页组件 -->
+        <div class="pagination-container" v-if="searchFilteredData.length > 0">
+          <el-pagination
+            v-model:current-page="currentPage"
+            :page-size="pageSize"
+            :small="true"
+            background
+            layout="prev, pager, next, jumper"
+            :total="totalItems"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+      </el-card>
     </div>
-    <!-- 分页组件 -->
-    <div class="pagination-container" v-if="searchFilteredData.length > 0">
-      <el-pagination
-        v-model:current-page="currentPage"
-        :page-size="pageSize"
-        :small="true"
-        background
-        layout="prev, pager, next, jumper"
-        :total="totalItems"
-        @current-change="handleCurrentChange"
-      />
-    </div>
-  </el-card>
+    <router-view v-else />
+  </div>
 </template>
 
 <style scoped>

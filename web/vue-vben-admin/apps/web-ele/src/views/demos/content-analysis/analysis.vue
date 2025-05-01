@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { Refresh } from '@element-plus/icons-vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import MarkdownIt from 'markdown-it';
 
 import {
@@ -35,14 +35,29 @@ const components = {
   Refresh
 };
 const assessmentNames = {
-  p1: '背景信息充分性',
-  p2: '背景信息准确性',
-  p3: '内容完整性',
-  p4: '不当意图',
-  p5: '发布者历史',
-  p6: '情感煽动性',
-  p7: '诱导行为',
-  p8: '信息一致性',
+  p1: '背景信息充分性',  
+  p2: '背景信息准确性',  
+  p3: '内容完整性',   
+  p4: '意图正当性',     
+  p5: '发布者信誉',    
+  p6: '情感中立性',    
+  p7: '行为自主性',    
+  p8: '信息一致性',     
+};
+
+// 添加到script部分
+const router = useRouter(); // 别忘了导入useRouter
+
+// 添加跳转到评估理由详情页的方法
+const goToReasoning = (itemKey) => {
+  const videoId = route.query.id;
+  router.push({
+    name: 'AssessmentReason',
+    query: { 
+      id: videoId,
+      item: itemKey 
+    }
+  });
 };
 // 添加数据加载状态
 const loading = ref(true);
@@ -188,7 +203,9 @@ const formatScore = (score: number): string => {
       <div>加载数据中...</div>
     </div>
   </div>
-
+  <!-- 如果有子路由被激活，显示子路由内容 -->
+  <router-view v-else-if="$route.path.includes('/reason')" />
+  
   <!-- 视频分析内容，仅在数据加载后显示 -->
   <div v-else class="flex h-full gap-4">
     <!-- 左侧卡片 - 占35%且高度100% -->
@@ -298,7 +315,7 @@ const formatScore = (score: number): string => {
           <!-- 分析过程内容 -->
           <div v-else-if="activeTab === 'process'">
             <h3 class="mb-4 text-lg font-medium">视频分析过程</h3>
-
+          
             <!-- 使用hasAssessments和assessmentItems计算属性 -->
             <div v-if="hasAssessments" class="space-y-4">
               <div
@@ -317,20 +334,26 @@ const formatScore = (score: number): string => {
                     {{ formatScore(item.score) }}
                   </div>
                 </div>
-
+          
                 <el-progress
                   :percentage="item.score * 100"
                   :color="getScoreColor(item.score)"
                   :stroke-width="10"
                   :show-text="false"
                 />
-
-                <div class="mt-2 text-gray-600">
-                  {{ item.reasoning ? '点击查看详细评估理由' : '无评估理由' }}
+          
+                <!-- 修改这里，添加点击事件和鼠标悬停样式 -->
+                <div 
+                  v-if="item.reasoning" 
+                  class="mt-2 text-gray-600 cursor-pointer hover:text-blue-500"
+                  @click="goToReasoning(item.key)"
+                >
+                  点击查看详细评估理由
                 </div>
+                <div v-else class="mt-2 text-gray-600">无评估理由</div>
               </div>
             </div>
-
+          
             <!-- 没有评估数据时显示提示 -->
             <div v-else class="py-8 text-center text-gray-500">
               <div class="mb-2 text-2xl">📊</div>

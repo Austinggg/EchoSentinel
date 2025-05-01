@@ -16,7 +16,7 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           title: $t('demos.elementPlus'),
-          hideInMenu:true
+          hideInMenu: true,
         },
         name: 'NaiveDemos',
         path: '/demos/element',
@@ -25,13 +25,13 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           title: $t('demos.form'),
-          hideInMenu:true
+          hideInMenu: true,
         },
         name: 'BasicForm',
         path: '/demos/form',
         component: () => import('#/views/demos/form/basic.vue'),
       },
-      //数字人检测
+      // 数字人检测
       {
         meta: {
           title: $t('demos.aigcDetection'),
@@ -49,23 +49,42 @@ const routes: RouteRecordRaw[] = [
         path: '/demos/video-upload',
         component: () => import('#/views/demos/content-analysis/index.vue'),
       },
-      // 文本分析
-      {
-        meta: {
-          title: $t('demos.contentAnalysis'),
-        },
-        name: 'contentAnalysis',
-        path: '/demos/contentAnalysis',
-        component: () => import('#/views/demos/content-analysis/analysis.vue'),
-      },
-      //分析记录
+      // 分析记录 - 现在作为父路由
+      // 分析记录路由
       {
         meta: {
           title: $t('demos.analysisRecords'),
         },
         name: 'AnalysisRecords',
         path: '/demos/analysis-records',
-        component: () => import('#/views/demos/content-analysis/analysisRecords.vue'),
+        component: () =>
+          import('#/views/demos/content-analysis/analysisRecords.vue'),
+        children: [
+          // 文本分析作为分析记录的子路由
+          {
+            meta: {
+              title: $t('demos.contentAnalysis'),
+              hideInMenu: true,
+            },
+            name: 'contentAnalysis',
+            path: 'analysis',
+            component: () =>
+              import('#/views/demos/content-analysis/analysis.vue'),
+            // 添加评估理由作为文本分析的子路由
+            children: [
+              {
+                meta: {
+                  title: '评估理由详情',
+                  hideInMenu: true,
+                },
+                name: 'AssessmentReason',
+                path: 'reason', // 相对路径，实际为/demos/analysis-records/analysis/reason
+                component: () =>
+                  import('#/views/demos/content-analysis/reason.vue'),
+              },
+            ],
+          },
+        ],
       },
       // 知识图谱
       {
