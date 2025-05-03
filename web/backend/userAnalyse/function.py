@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -156,3 +157,12 @@ def plot_data():
 
     # --- Step 6: Return combined data ---
     return combined_data
+
+
+def get_feature_by_uid(sec_uid: str):
+    """根据id获取特征向量"""
+    hash_sec_uid = hashlib.md5(sec_uid.encode()).hexdigest()
+    df = pd.read_csv("userAnalyse/output8.csv")
+    row = df[df["hash_sec_uid"] == hash_sec_uid]
+    features = row[[f"feature_{i}" for i in range(8)]].values[0]
+    return features
