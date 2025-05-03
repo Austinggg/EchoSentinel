@@ -309,10 +309,15 @@ class OLsh:
         return neighbors[:k]
 
 
+def get_olsh_instance():
+    olsh = OLsh(min_samples=20)
+    olsh.load("userAnalyse/olsh_index.joblib")
+    return olsh
+
+
 # --- 独立函数：查找最近的聚类中心 ---
-# ... (find_most_similar_cluster 函数不变) ...
 def find_most_similar_cluster(
-    target_vector: np.ndarray, olsh_instance: OLsh
+    target_vector: np.ndarray, olsh_instance: OLsh = get_olsh_instance()
 ) -> int | None:
     if not olsh_instance._index_built or not olsh_instance.cluster_centers:
         return None
@@ -324,7 +329,9 @@ def find_most_similar_cluster(
     return [int(idx) for idx in top5_indices]
 
 
-def find_most_similar_user(target_user_vector: np.ndarray, olsh_instance: OLsh):
+def find_most_similar_user(
+    target_user_vector: np.ndarray, olsh_instance: OLsh = get_olsh_instance()
+):
     if not olsh_instance._index_built or not olsh_instance.cluster_centers:
         return None
 

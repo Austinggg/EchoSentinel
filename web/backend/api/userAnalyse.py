@@ -1,14 +1,17 @@
-import hashlib
 import json
 import os
 from pathlib import Path
 
-import pandas as pd
 from flask import Blueprint, request, send_from_directory
 from sqlalchemy import select
 
-from userAnalyse.function import cal_loss, get_anomaly_score, plot_data
-from userAnalyse.OLSH import OLsh, find_most_similar_cluster, find_most_similar_user
+from userAnalyse.function import (
+    cal_loss,
+    get_anomaly_score,
+    get_feature_by_uid,
+    plot_data,
+)
+from userAnalyse.OLSH import find_most_similar_cluster, find_most_similar_user
 from utils.database import UserProfile, db
 from utils.HttpResponse import HttpResponse
 
@@ -91,15 +94,9 @@ def userAnalyse_getRank():
 def userAnalyse_similarCluster():
     """相似集群"""
     sec_uid = request.get_json().get("sec_uid")
-    hash_sec_uid = hashlib.md5(sec_uid.encode()).hexdigest()
-    print(hash_sec_uid)
-    olsh = OLsh(min_samples=20)
-    olsh.load("userAnalyse/olsh_index.joblib")
-    df = pd.read_csv("userAnalyse/output8.csv")
-    row = df[df["hash_sec_uid"] == hash_sec_uid]
-    features = row[[f"feature_{i}" for i in range(8)]].values[0]
+    features = get_feature_by_uid(sec_uid)
 
-    similarClusterIndex = find_most_similar_cluster(features, olsh)
+    similarClusterIndex = find_most_similar_cluster(features)
     with open("userAnalyse/olsh_index.json", "r", encoding="utf-8") as f:
         clusters = json.load(f)
     similarCluster = {
@@ -124,15 +121,9 @@ def userAnalyse_similarCluster():
 def userAnalyse_similarUser():
     """相似用户"""
     sec_uid = request.get_json().get("sec_uid")
-    hash_sec_uid = hashlib.md5(sec_uid.encode()).hexdigest()
-    print(hash_sec_uid)
-    olsh = OLsh(min_samples=20)
-    olsh.load("userAnalyse/olsh_index.joblib")
-    df = pd.read_csv("userAnalyse/output8.csv")
-    row = df[df["hash_sec_uid"] == hash_sec_uid]
-    features = row[[f"feature_{i}" for i in range(8)]].values[0]
+    features = get_feature_by_uid(sec_uid)
 
-    similarUsers = find_most_similar_user(features, olsh)
+    similarUsers = find_most_similar_user(features)
     all_hashes = [item[0] for item in similarUsers]
     stmt = select(UserProfile).where(UserProfile.hash_sec_uid.in_(all_hashes))
     users = {u.hash_sec_uid: u for u in db.session.execute(stmt).scalars()}
@@ -152,8 +143,15 @@ def userAnalyse_similarUser():
 
 @bp.route("/api/userAnalyse/clusterPlotData", methods=["GET"])
 def userAnalyse_clusterPlotData():
+    sec_uid = request.args.get("sec_uid")
+    if not sec_uid:
+        return HttpResponse.error("sec_uid is required")
+
+    features = get_feature_by_uid(sec_uid=sec_uid)
+
+    similarClusterIndex = find_most_similar_cluster(features)
     show_data = plot_data().tolist()
-    uids = [x[3] for x in show_data]
+    uids = [x[3] for x in show_data if len(x) > 3]  # 确保有第4个元素
 
     stmt = select(
         UserProfile.hash_sec_uid,
@@ -161,11 +159,20 @@ def userAnalyse_clusterPlotData():
         UserProfile.sec_uid,
         UserProfile.avatar_medium,
     ).where(UserProfile.hash_sec_uid.in_(uids))
+
     results = db.session.execute(stmt).all()
     uid_to_info = {
         hash_uid: (sec_uid, nickname, avatar)
         for hash_uid, nickname, sec_uid, avatar in results
     }
-    show_date_withurl = [x[:3] + list(uid_to_info.get(x[3])) for x in show_data]
 
-    return HttpResponse.success(data={"data": show_date_withurl})
+    show_date_withurl = []
+    for x in show_data:
+        if len(x) > 3:  # 确保有足够元素
+            user_info = uid_to_info.get(x[3])
+            show_date_withurl.append(x[:3] + list(user_info))
+
+    show_data_filtered = [
+        x for x in show_date_withurl if int(x[2]) in similarClusterIndex
+    ]
+    return HttpResponse.success(data={"data": show_data_filtered})

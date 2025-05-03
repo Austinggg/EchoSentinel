@@ -1,25 +1,31 @@
 <script setup lang="ts">
-import { reactive } from 'vue';
-import { requestClient } from '#/api/request';
-import { ref } from 'vue';
+import { reactive, ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
 import {
-  ElCard,
-  ElForm,
-  ElFormItem,
-  ElInput,
-  ElButton,
-  ElSteps,
-  ElStep,
-  ElImage,
   ElAffix,
-  ElProgress,
   ElAvatar,
-  ElTable,
-  ElTableColumn,
+  ElButton,
+  ElCard,
   ElDescriptions,
   ElDescriptionsItem,
+  ElForm,
+  ElFormItem,
+  ElImage,
+  ElInput,
+  ElProgress,
+  ElStep,
+  ElSteps,
+  ElTable,
+  ElTableColumn,
 } from 'element-plus';
+
+import { requestClient } from '#/api/request';
+
+import ApiDemoTable from './ApiDemoTable.vue';
+import ClusterScatter from './ClusterScatter.vue';
+
 const userProfile = reactive({
   sec_uid: 'MS4wLjABAAAALxPAZM7qgk5yrE_L-Qu4eZW_L2MJ-ApSH6yXNdoOShU',
   nickname: '',
@@ -46,20 +52,32 @@ async function setActiveValue(value: number) {
 }
 
 async function onSubmit(secUid: string) {
-  console.log('submit!');
-  let data = await requestClient.post('/userAnalyse/getProfile', {
+  const data = await requestClient.post('/userAnalyse/getProfile', {
     sec_uid: secUid,
   });
+
+  const getGenderText = (gender: number): string => {
+    switch (gender) {
+      case 1: {
+        return '男';
+      }
+      case 2: {
+        return '女';
+      }
+      default: {
+        return '未知';
+      }
+    }
+  };
+
   Object.assign(userProfile, {
     ...data,
-    gender: data.gender === 1 ? '男' : data.gender === 2 ? '女' : '未知', // 三元运算符处理性别
+    gender: getGenderText(data.gender),
   });
+
   changeProfileCardLoading();
 }
-
-import ApiDemoTable from './ApiDemoTable.vue';
-import ClusterScatter from './ClusterScatter.vue';
-//加载状态
+// 加载状态
 const profileCardLoading = ref(false);
 const analyseCardLoading = ref(false);
 const similalCardLoading = ref(false);
@@ -76,10 +94,10 @@ const lossInfo = ref();
 async function handleAnalyse(sec_uid: string) {
   setActiveValue(2);
   changeAnalyseCardLoading(true);
-  let data = await requestClient.post('/userAnalyse/getRank', {
-    sec_uid: sec_uid,
+  const data = await requestClient.post('/userAnalyse/getRank', {
+    sec_uid,
   });
-  console.log(data);
+
   changeAnalyseCardLoading(false);
   percentage.value = data.anomaly_score;
   lossInfo.value = data.loss;
@@ -96,7 +114,7 @@ const colors = [
 ];
 const similarCluster = ref();
 async function getSimilarCluster() {
-  let data = await requestClient.post('/userAnalyse/similarCluster', {
+  const data = await requestClient.post('/userAnalyse/similarCluster', {
     sec_uid: userProfile.sec_uid,
   });
   // console.log(data);
@@ -105,7 +123,7 @@ async function getSimilarCluster() {
 }
 const similarUser = ref();
 async function getSimilarUser() {
-  let data = await requestClient.post('/userAnalyse/similarUser', {
+  const data = await requestClient.post('/userAnalyse/similarUser', {
     sec_uid: userProfile.sec_uid,
   });
   // console.log(data);
@@ -114,179 +132,186 @@ async function getSimilarUser() {
 }
 async function getSimilar() {
   changeSimilarCardLoading(true);
-  let r1 = await getSimilarCluster();
-  let r2 = await getSimilarUser();
-  if (r1 == 'finish' && r2 == 'finish') changeSimilarCardLoading(false);
+  const r1 = await getSimilarCluster();
+  const r2 = await getSimilarUser();
+  if (r1 === 'finish' && r2 === 'finish') changeSimilarCardLoading(false);
 }
 const childRef = ref();
-const callChildMethod = () => {
-  childRef.value?.childMethod(); // 可选链避免未定义错误
+const callChildMethodMarkPoint = () => {
   childRef.value?.markPoint(userProfile.sec_uid);
+};
+const callChildMethodMReDraw = () => {
+  childRef.value?.reDraw();
 };
 </script>
 <template>
   <Page title="异常用户分析模块">
-    <el-affix :offset="100">
-      <el-card class="mb-5">
-        <el-steps :active="active" finish-status="success">
-          <el-step title="Step 1 选择用户" />
-          <el-step title="Step 2 获取指标" />
-          <el-step title="Step 3 分析结果" />
-        </el-steps>
+    <ElAffix :offset="100">
+      <ElCard class="mb-5">
+        <ElSteps :active="active" finish-status="success">
+          <ElStep title="Step 1 选择用户" />
+          <ElStep title="Step 2 获取指标" />
+          <ElStep title="Step 3 分析结果" />
+        </ElSteps>
         <!-- <el-button style="margin-top: 12px" @click="next">Next step</el-button> -->
-      </el-card>
-    </el-affix>
+      </ElCard>
+    </ElAffix>
     <div class="flex flex-wrap gap-5">
-      <el-card class="flex-1">
+      <ElCard class="flex-1">
         <template #header>用户示例</template>
         <ApiDemoTable
-          @updateProfile="onSubmit"
-          @changeProfileCardLoading="changeProfileCardLoading"
-          @setActiveValue="setActiveValue"
-        ></ApiDemoTable>
-      </el-card>
-      <el-card class=""
-        ><template #header> 用户信息 </template>
-        <el-form
+          @update-profile="onSubmit"
+          @change-profile-card-loading="changeProfileCardLoading"
+          @set-active-value="setActiveValue"
+        />
+      </ElCard>
+      <ElCard class="">
+        <template #header> 用户信息 </template>
+        <ElForm
           :model="userProfile"
           label-width="auto"
           inline
           style="max-width: 600px"
           v-loading="profileCardLoading"
         >
-          <el-form-item label="用户名">
-            <el-input v-model="userProfile.nickname" readonly />
-            <!-- <el-text>{{ form.username }}</el-text> -->
-          </el-form-item>
-          <el-form-item label="性别">
-            <el-input v-model="userProfile.gender" readonly />
-          </el-form-item>
-          <el-form-item label="城市">
-            <el-input v-model="userProfile.city" readonly />
-          </el-form-item>
-          <el-form-item label="省">
-            <el-input v-model="userProfile.province" readonly />
-          </el-form-item>
-          <el-form-item label="地区">
-            <el-input v-model="userProfile.country" readonly />
-          </el-form-item>
-          <el-form-item label="作品数量">
-            <el-input v-model="userProfile.aweme_count" readonly />
-          </el-form-item>
-          <el-form-item label="粉丝数量">
-            <el-input v-model="userProfile.follower_count" readonly />
-          </el-form-item>
-          <el-form-item label="关注数量">
-            <el-input v-model="userProfile.following_count" readonly />
-          </el-form-item>
-          <el-form-item label="喜欢的作品">
-            <el-input v-model="userProfile.favoriting_count" readonly />
-          </el-form-item>
-          <el-form-item label="关注数量">
-            <el-input v-model="userProfile.following_count" readonly />
-          </el-form-item>
-          <el-form-item label="年龄">
-            <el-input v-model="userProfile.user_age" readonly />
-          </el-form-item>
-          <el-form-item label="IP属地">
-            <el-input v-model="userProfile.ip_location" readonly />
-          </el-form-item>
-          <el-form-item label="封面">
+          <ElFormItem label="用户名">
+            <ElInput v-model="userProfile.nickname" readonly />
+          </ElFormItem>
+          <ElFormItem label="性别">
+            <ElInput v-model="userProfile.gender" readonly />
+          </ElFormItem>
+          <ElFormItem label="城市">
+            <ElInput v-model="userProfile.city" readonly />
+          </ElFormItem>
+          <ElFormItem label="省">
+            <ElInput v-model="userProfile.province" readonly />
+          </ElFormItem>
+          <ElFormItem label="地区">
+            <ElInput v-model="userProfile.country" readonly />
+          </ElFormItem>
+          <ElFormItem label="作品数量">
+            <ElInput v-model="userProfile.aweme_count" readonly />
+          </ElFormItem>
+          <ElFormItem label="粉丝数量">
+            <ElInput v-model="userProfile.follower_count" readonly />
+          </ElFormItem>
+          <ElFormItem label="关注数量">
+            <ElInput v-model="userProfile.following_count" readonly />
+          </ElFormItem>
+          <ElFormItem label="喜欢的作品">
+            <ElInput v-model="userProfile.favoriting_count" readonly />
+          </ElFormItem>
+          <ElFormItem label="关注数量">
+            <ElInput v-model="userProfile.following_count" readonly />
+          </ElFormItem>
+          <ElFormItem label="年龄">
+            <ElInput v-model="userProfile.user_age" readonly />
+          </ElFormItem>
+          <ElFormItem label="IP属地">
+            <ElInput v-model="userProfile.ip_location" readonly />
+          </ElFormItem>
+          <ElFormItem label="封面">
             <div class="flex flex-nowrap gap-5">
               <div v-for="url in userProfile.covers" :key="url" class="block">
-                <el-image
+                <ElImage
                   style="width: 100px; height: 100px"
                   :src="url"
                   fit="contain"
                 >
-                  <template #error> <div class="image-slot"></div> </template
-                ></el-image>
+                  <template #error> <div class="image-slot"></div> </template>
+                </ElImage>
               </div>
             </div>
-          </el-form-item> </el-form></el-card
-      ><el-card class="w-screen"
-        ><template #header> 异常检测 </template>
+          </ElFormItem>
+        </ElForm>
+      </ElCard>
+      <ElCard class="w-screen">
+        <template #header> 异常检测 </template>
         <div v-loading="analyseCardLoading" class="flex flex-nowrap gap-5">
           <div class="flex flex-1 items-center justify-center">
-            <el-descriptions title="" :border="true" :column="1">
-              <el-descriptions-item label="本次样本重构误差">{{
-                lossInfo
-              }}</el-descriptions-item>
-              <el-descriptions-item label="异常分数说明"
-                >重构损失越大，异常分数越大，越有可能是异常用户</el-descriptions-item
-              >
-            </el-descriptions>
+            <ElDescriptions title="" :border="true" :column="1">
+              <ElDescriptionsItem label="本次样本重构误差">
+                {{ lossInfo }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="异常分数说明">
+                重构损失越大，异常分数越大，越有可能是异常用户
+              </ElDescriptionsItem>
+            </ElDescriptions>
           </div>
           <div class="flex flex-1 items-center justify-center">
-            <el-progress
+            <ElProgress
               type="dashboard"
               :percentage="percentage"
               :color="colors"
             >
-              <template #default="{ percentage }">
-                <span class="percentage-value block text-xl font-bold"
-                  >{{ percentage }}%</span
-                >
+              <template #default="{ percentage: progressPercentage }">
+                <span class="percentage-value block text-xl font-bold">
+                  {{ progressPercentage }}%
+                </span>
                 <span class="percentage-label mt-2 block">异常分数</span>
-              </template></el-progress
-            >
+              </template>
+            </ElProgress>
           </div>
         </div>
 
         <template #footer>
-          <el-button type="primary" @click="handleAnalyse(userProfile.sec_uid)"
-            >开始分析</el-button
-          ></template
-        >
-      </el-card>
-      <el-card class="w-screen" v-show="false">
+          <ElButton type="primary" @click="handleAnalyse(userProfile.sec_uid)">
+            开始分析
+          </ElButton>
+        </template>
+      </ElCard>
+      <ElCard class="w-screen" v-show="false">
         <template #header>相似集群以及相似用户 </template>
 
         <div class="flex flex-nowrap gap-5" v-loading="similalCardLoading">
           <div class="flex-1">
-            <el-table :data="similarCluster">
-              <el-table-column prop="cluster_id" label="集群" width="120px" />
+            <ElTable :data="similarCluster">
+              <ElTableColumn prop="cluster_id" label="集群" width="120px" />
 
-              <el-table-column prop="avatar_list" label="包括用户">
+              <ElTableColumn prop="avatar_list" label="包括用户">
                 <template #default="scope">
                   <div class="-space-x-2">
-                    <el-avatar
-                      v-for="item in scope.row.avatar_list"
+                    <ElAvatar
+                      v-for="(item, index) in scope.row.avatar_list"
+                      :key="index"
                       :src="item"
-                    ></el-avatar>
+                    />
                   </div>
                 </template>
-              </el-table-column>
-            </el-table>
+              </ElTableColumn>
+            </ElTable>
           </div>
           <div class="relative">
             <div class="absolute inset-y-0 left-0 w-px bg-gray-200"></div>
           </div>
           <div class="flex-1">
-            <el-table :data="similarUser">
-              <el-table-column prop="avatar_medium" label="用户头像">
+            <ElTable :data="similarUser">
+              <ElTableColumn prop="avatar_medium" label="用户头像">
                 <template #default="scope">
-                  <el-avatar :src="scope.row.avatar_medium"></el-avatar>
+                  <ElAvatar :src="scope.row.avatar_medium" />
                 </template>
-              </el-table-column>
-              <el-table-column prop="nickname" label="昵称" />
-              <el-table-column prop="similarity" label="相似性" />
-            </el-table>
+              </ElTableColumn>
+              <ElTableColumn prop="nickname" label="昵称" />
+              <ElTableColumn prop="similarity" label="相似性" />
+            </ElTable>
           </div>
         </div>
         <template #footer>
-          <el-button @click="getSimilar" type="primary">相似分析</el-button>
+          <ElButton @click="getSimilar" type="primary">相似分析</ElButton>
         </template>
-      </el-card>
-      <el-card class="w-screen">
+      </ElCard>
+      <ElCard class="w-screen">
         <template #header>用户集群展示</template>
-        <ClusterScatter ref="childRef"></ClusterScatter>
+        <ClusterScatter ref="childRef" :sec-uid="userProfile.sec_uid" />
         <template #footer>
-          <el-button type="primary" @click="callChildMethod()"
-            >显示分析用户位置</el-button
-          ></template
-        >
-      </el-card>
+          <ElButton type="primary" @click="callChildMethodMarkPoint()">
+            显示分析用户位置
+          </ElButton>
+          <ElButton type="primary" @click="callChildMethodMReDraw()">
+            恢复初始
+          </ElButton>
+        </template>
+      </ElCard>
     </div>
   </Page>
 </template>
