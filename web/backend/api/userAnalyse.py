@@ -43,13 +43,8 @@ def userAnalyse_demo():
                 "nickname": "潮绘师王大",
                 "tag": "正常",
             },
-            # {
-            #     "sec_uid": "MS4wLjABAAAAK_HOplkAQxvmihLndIRCpHv1FAWn7vuidIoHEkhDaiMfjgt87ELed3ZzKlRhkXu_",
-            #     "nickname": "空帆🎶",
-            #     "tag": "正常",
-            # },
             {
-                "sec_uid": "MS4wLjABAAAAK_HOplkAQxvmihLndIRCpHv1FAWn7vuidIoHEkhDaiMfjgt87ELed3ZzKlRhkXu_",
+                "sec_uid": "MS4wLjABAAAAVJqVteB7yimW-8uYb28B4pOC2Jtvfbs2pR42NhJyQtkOIs_KULxHm37vqsEV5UFQ",
                 "nickname": "风险用户示例",
                 "tag": "风险",
             },
@@ -84,8 +79,8 @@ def userAnalyse_getRank():
     loss = cal_loss(userProfiles)
     return HttpResponse.success(
         data={
-            "loss": round(loss, 4),
-            "anomaly_score": round(get_anomaly_score(loss), 2),
+            "lossValue": round(loss, 4),
+            "anomalyScore": round(get_anomaly_score(loss), 0),
         }
     )
 
@@ -130,7 +125,7 @@ def userAnalyse_similarUser():
     return_users = [
         {
             "hash_sec_uid": item[0],
-            "similarity": item[1],
+            "similarity": round(item[1],2),
             "avatar_medium": users[item[0]].avatar_medium,
             "nickname": users[item[0]].nickname,
             "sec_uid": users[item[0]].sec_uid,

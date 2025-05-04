@@ -82,44 +82,28 @@ def get_anomaly_score(
         "q99": np.float64(0.0701417756080627),
         "max": np.float64(0.12325551360845566),
     },
-    method: str = "hybrid",
 ) -> float:
     """
     输入:
         test_loss: 测试样本的重构损失
-        stats: 训练阶段保存的统计量字典
+        stats: 训练阶段计算的统计量
     输出:
-        0-100的异常分数
+        异常分数（范围10-80），变化平缓，仅明显异常时高分
     """
-    if method == "zscore":
-        z = (test_loss - stats["mean"]) / stats["std"]
-        return 100 / (1 + np.exp(-(z - 3)))  # Sigmoid映射
+    # 1. 计算标准化损失（基于均值+标准差）
+    normalized_loss = (test_loss - stats["mean"]) / stats["std"]
 
-    elif method == "quantile":
-        if test_loss <= stats["q50"]:
-            return 0.0
-        elif test_loss >= stats["q99"]:
-            return 100.0
-        else:
-            return 100 * (test_loss - stats["q50"]) / (stats["q99"] - stats["q50"])
+    # 2. 使用Sigmoid函数（调整参数使曲线更平缓）
+    # 参数说明：
+    # - 除以3降低敏感度（原z-3改为z/3-1）
+    # - 分子用70保证最大值≈80
+    sigmoid_score = 70 / (1 + np.exp(-(normalized_loss / 2 - 1)))
 
-    elif method == "dynamic":
-        normalized = (test_loss - stats["mean"]) / (stats["max"] - stats["mean"])
-        return 100 * np.clip(normalized, 0, 1) ** 2
+    # 3. 映射到10-80分范围
+    final_score = 10 + sigmoid_score
 
-    elif method == "hybrid":  # 推荐方法
-        z = (test_loss - stats["mean"]) / stats["std"]
-        if z <= 0:
-            return 0.0
-        else:
-            linear_score = min(
-                100, 100 * (test_loss - stats["q50"]) / (stats["q99"] - stats["q50"])
-            )
-            sigmoid_score = 100 / (1 + np.exp(-(z - 3)))
-            return max(linear_score, sigmoid_score)
-
-    else:
-        raise ValueError("Method must be 'zscore', 'quantile', 'dynamic', or 'hybrid'")
+    # 4. 确保分数不超出范围（理论上不需要，但防止极端情况）
+    return np.clip(final_score, 10, 80)
 
 
 def plot_data():
