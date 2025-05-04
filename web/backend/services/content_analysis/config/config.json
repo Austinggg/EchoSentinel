@@ -3,6 +3,7 @@
   "local_assessment": false,
   "local_report": false,
   "information_extraction_model": {
+    "description": "信息提取模型",
     "local_ollama": {
       "base_url": "http://localhost:11434/api/chat",
       "model": "deepseek-r1:14b",
@@ -15,6 +16,7 @@
     }
   },
   "assessment_model": {
+    "description": "评估模型",
     "local_ollama": {
       "base_url": "http://localhost:11434/api/chat",
       "model": "deepseek-r1:14b",
@@ -27,6 +29,7 @@
     }
   },
   "report_model": {
+    "description": "报告生成模型",
     "local_ollama": {
       "base_url": "http://localhost:11434/api/chat",
       "model": "deepseek-r1:14b",
@@ -38,8 +41,8 @@
       "model": "deepseek-r1-distill-llama-70b"
     }
   },
-  "transcription_model":{
-    "path":"/home/wangl/EchoSentinel/mod/whisper-large-v3-turbo"
+  "KAG_API": {
+    "cookie": "OPEN_SPG_TOKEN=9rh2KRIbSE7K7dtcMZBDqSVfPKprlmWx2R1B6I+ZLVU5pe6I7XUPcMFNScdXfkkKrO/7WJoElGz2aUvL+td5uNYSf+h4cU4l; ctoken=bigfish_ctoken_19hk17a050; x-hng=lang=zh-CN; _CHIPS-x-hng=lang=zh-CN"
   },
   "retry": {
     "max_retries": 5,

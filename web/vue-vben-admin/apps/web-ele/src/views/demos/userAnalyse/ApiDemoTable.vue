@@ -1,16 +1,20 @@
 <script lang="ts" setup>
-import { requestClient } from '#/api/request';
 import { ApiComponent } from '@vben/common-ui';
 
 import { ElTable, ElTableColumn, ElTag } from 'element-plus';
 
+import { requestClient } from '#/api/request';
+
+const emit = defineEmits([
+  'updateProfile',
+  'changeProfileCardLoading',
+  'setActiveValue',
+]);
 async function getAllDemosApi() {
   return requestClient.get('/userAnalyse/demo');
 }
-const emit = defineEmits(['updateProfile', 'changeProfileCardLoading','setActiveValue']);
 function handleRowClick(row: Record<string, any>) {
   emit('changeProfileCardLoading');
-  console.log('Clicked row:', row.sec_uid);
   emit('updateProfile', row.sec_uid);
   emit('setActiveValue', 1);
 }
@@ -23,15 +27,16 @@ function handleRowClick(row: Record<string, any>) {
     options-prop-name="data"
     @row-click="handleRowClick"
   >
-    <el-table-column prop="nickname" label="NickName" />
-    <el-table-column label="Tag">
+    <ElTableColumn prop="nickname" label="NickName" />
+    <ElTableColumn label="Tag">
       <template #default="scope">
-        <el-tag
+        <ElTag
           :type="scope.row.tag === '正常' ? 'primary' : 'warning'"
           disable-transitions
-          >{{ scope.row.tag }}</el-tag
         >
-      </template></el-table-column
-    ></ApiComponent
-  >
+          {{ scope.row.tag }}
+        </ElTag>
+      </template>
+    </ElTableColumn>
+  </ApiComponent>
 </template>

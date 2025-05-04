@@ -1,10 +1,17 @@
+import json
 import os
 from pathlib import Path
 
 from flask import Blueprint, request, send_from_directory
 from sqlalchemy import select
 
-from userAnalyse.function import cal_loss as userAnalyse_main
+from userAnalyse.function import (
+    cal_loss,
+    get_anomaly_score,
+    get_feature_by_uid,
+    plot_data,
+)
+from userAnalyse.OLSH import find_most_similar_cluster, find_most_similar_user
 from utils.database import UserProfile, db
 from utils.HttpResponse import HttpResponse
 
@@ -36,11 +43,11 @@ def userAnalyse_demo():
                 "nickname": "潮绘师王大",
                 "tag": "正常",
             },
-            {
-                "sec_uid": "MS4wLjABAAAAK_HOplkAQxvmihLndIRCpHv1FAWn7vuidIoHEkhDaiMfjgt87ELed3ZzKlRhkXu_",
-                "nickname": "空帆🎶",
-                "tag": "正常",
-            },
+            # {
+            #     "sec_uid": "MS4wLjABAAAAK_HOplkAQxvmihLndIRCpHv1FAWn7vuidIoHEkhDaiMfjgt87ELed3ZzKlRhkXu_",
+            #     "nickname": "空帆🎶",
+            #     "tag": "正常",
+            # },
             {
                 "sec_uid": "MS4wLjABAAAAK_HOplkAQxvmihLndIRCpHv1FAWn7vuidIoHEkhDaiMfjgt87ELed3ZzKlRhkXu_",
                 "nickname": "风险用户示例",
@@ -74,5 +81,98 @@ def userAnalyse_getRank():
     sec_uid = request.get_json().get("sec_uid")
     stmt = select(UserProfile).where(UserProfile.sec_uid == sec_uid)
     userProfiles = db.session.execute(stmt).scalars().first()
-    loss = userAnalyse_main(userProfiles)
-    return HttpResponse.success(data={"loss": loss})
+    loss = cal_loss(userProfiles)
+    return HttpResponse.success(
+        data={
+            "loss": round(loss, 4),
+            "anomaly_score": round(get_anomaly_score(loss), 2),
+        }
+    )
+
+
+@bp.route("/api/userAnalyse/similarCluster", methods=["GET", "POST"])
+def userAnalyse_similarCluster():
+    """相似集群"""
+    sec_uid = request.get_json().get("sec_uid")
+    features = get_feature_by_uid(sec_uid)
+
+    similarClusterIndex = find_most_similar_cluster(features)
+    with open("userAnalyse/olsh_index.json", "r", encoding="utf-8") as f:
+        clusters = json.load(f)
+    similarCluster = {
+        f"cluster_{i}": clusters.get(f"cluster_{i}")[:10] for i in similarClusterIndex
+    }
+
+    all_hashes = [h for v in similarCluster.values() for h in v]
+    stmt = select(UserProfile).where(UserProfile.hash_sec_uid.in_(all_hashes))
+    users = {u.hash_sec_uid: u for u in db.session.execute(stmt).scalars()}
+
+    result_clusters = [
+        {
+            "cluster_id": cluster_id,
+            "avatar_list": [users[h].avatar_medium for h in hash_list],
+        }
+        for cluster_id, hash_list in similarCluster.items()
+    ]
+    return HttpResponse.success(data={"similarCluster": result_clusters})
+
+
+@bp.route("/api/userAnalyse/similarUser", methods=["GET", "POST"])
+def userAnalyse_similarUser():
+    """相似用户"""
+    sec_uid = request.get_json().get("sec_uid")
+    features = get_feature_by_uid(sec_uid)
+
+    similarUsers = find_most_similar_user(features)
+    all_hashes = [item[0] for item in similarUsers]
+    stmt = select(UserProfile).where(UserProfile.hash_sec_uid.in_(all_hashes))
+    users = {u.hash_sec_uid: u for u in db.session.execute(stmt).scalars()}
+    return_users = [
+        {
+            "hash_sec_uid": item[0],
+            "similarity": item[1],
+            "avatar_medium": users[item[0]].avatar_medium,
+            "nickname": users[item[0]].nickname,
+            "sec_uid": users[item[0]].sec_uid,
+        }
+        for item in similarUsers
+    ]
+
+    return HttpResponse.success(data={"similarUser": return_users})
+
+
+@bp.route("/api/userAnalyse/clusterPlotData", methods=["GET"])
+def userAnalyse_clusterPlotData():
+    sec_uid = request.args.get("sec_uid")
+    if not sec_uid:
+        return HttpResponse.error("sec_uid is required")
+
+    features = get_feature_by_uid(sec_uid=sec_uid)
+
+    similarClusterIndex = find_most_similar_cluster(features)
+    show_data = plot_data().tolist()
+    uids = [x[3] for x in show_data if len(x) > 3]  # 确保有第4个元素
+
+    stmt = select(
+        UserProfile.hash_sec_uid,
+        UserProfile.nickname,
+        UserProfile.sec_uid,
+        UserProfile.avatar_medium,
+    ).where(UserProfile.hash_sec_uid.in_(uids))
+
+    results = db.session.execute(stmt).all()
+    uid_to_info = {
+        hash_uid: (sec_uid, nickname, avatar)
+        for hash_uid, nickname, sec_uid, avatar in results
+    }
+
+    show_date_withurl = []
+    for x in show_data:
+        if len(x) > 3:  # 确保有足够元素
+            user_info = uid_to_info.get(x[3])
+            show_date_withurl.append(x[:3] + list(user_info))
+
+    show_data_filtered = [
+        x for x in show_date_withurl if int(x[2]) in similarClusterIndex
+    ]
+    return HttpResponse.success(data={"data": show_data_filtered})
