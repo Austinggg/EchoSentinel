@@ -71,7 +71,9 @@ async function clusterPlotData(sec_uid: string = props.secUid) {
 }
 
 onMounted(async () => {
-  rawDataRef.value = await clusterPlotData(props.secUid);
+  if (props.secUid) {
+    rawDataRef.value = await clusterPlotData(props.secUid);
+  }
 
   const option = createOption(rawDataRef.value);
   if (chartRef.value) {
@@ -253,13 +255,13 @@ function createOption(data: any) {
       bottom: 20,
     },
     xAxis: {
-      // axisLabel: { show: false },
-      // axisLine: { show: false },
+      axisLabel: { show: false },
+      axisLine: { show: false },
       // splitLine: { show: false },
     },
     yAxis: {
-      // axisLabel: { show: false },
-      // axisLine: { show: false },
+      axisLabel: { show: false },
+      axisLine: { show: false },
       // splitLine: { show: false },
     },
     dataZoom: [
