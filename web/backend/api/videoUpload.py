@@ -1,16 +1,15 @@
-import os
-from pathlib import Path
 import datetime
+import os
+import threading  # 添加这一行
 import time
 import uuid
+from pathlib import Path
+
 import requests
+from flask import Blueprint, request, send_file
 from werkzeug.utils import secure_filename
 
-from flask import Blueprint, request, jsonify,send_from_directory,send_file
-from sqlalchemy import select
-import threading  # 添加这一行
-from userAnalyse.function import cal_loss as userAnalyse_main
-from utils.database import UserProfile, db
+from utils.database import db
 from utils.HttpResponse import HttpResponse
 
 bp = Blueprint("video", __name__)
@@ -302,7 +301,7 @@ def store_video_by_url():
 @bp.route("/api/videos/<file_id>/analysis", methods=["GET"])
 def get_video_analysis(file_id):
     try:
-        from utils.database import VideoFile, VideoTranscript, ContentAnalysis
+        from utils.database import ContentAnalysis, VideoFile, VideoTranscript
         
         # 查询视频基本信息
         video = db.session.query(VideoFile).filter(VideoFile.id == file_id).first()
