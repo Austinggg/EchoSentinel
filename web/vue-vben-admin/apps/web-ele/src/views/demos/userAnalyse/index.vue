@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { RankInfo, UserProfile } from './types/main';
+
 import { reactive, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
@@ -23,11 +25,12 @@ import {
 
 import { requestClient } from '#/api/request';
 
-import ApiDemoTable from './ApiDemoTable.vue';
+import AnalyseReport from './AnalyseReport.vue';
 import ClusterScatter from './ClusterScatter.vue';
+import UserDemo from './UserDemo.vue';
 
-const userProfile = reactive({
-  sec_uid: 'MS4wLjABAAAALxPAZM7qgk5yrE_L-Qu4eZW_L2MJ-ApSH6yXNdoOShU',
+const userProfile = reactive<UserProfile>({
+  sec_uid: '',
   nickname: '',
   gender: '',
   city: '',
@@ -52,16 +55,19 @@ async function setActiveValue(value: number) {
 }
 
 async function onSubmit(secUid: string) {
-  const data = await requestClient.post('/userAnalyse/getProfile', {
-    sec_uid: secUid,
-  });
+  const data = await requestClient.post<UserProfile>(
+    '/userAnalyse/getProfile',
+    {
+      sec_uid: secUid,
+    },
+  );
 
-  const getGenderText = (gender: number): string => {
+  const getGenderText = (gender: string): string => {
     switch (gender) {
-      case 1: {
+      case '1': {
         return '男';
       }
-      case 2: {
+      case '2': {
         return '女';
       }
       default: {
@@ -90,20 +96,21 @@ function changeAnalyseCardLoading(value = !analyseCardLoading.value) {
 function changeSimilarCardLoading(value = !similalCardLoading.value) {
   similalCardLoading.value = value;
 }
-const lossInfo = ref();
-async function handleAnalyse(sec_uid: string) {
+
+const rankInfo = reactive<RankInfo>({ lossValue: 0, anomalyScore: 0 });
+async function handleAnalyse(sec_uid: null | string) {
   setActiveValue(2);
   changeAnalyseCardLoading(true);
-  const data = await requestClient.post('/userAnalyse/getRank', {
+  const data = await requestClient.post<RankInfo>('/userAnalyse/getRank', {
     sec_uid,
   });
 
   changeAnalyseCardLoading(false);
-  percentage.value = data.anomaly_score;
-  lossInfo.value = data.loss;
+  rankInfo.lossValue = data.lossValue;
+  rankInfo.anomalyScore = data.anomalyScore;
   setActiveValue(3);
 }
-const percentage = ref(0);
+
 const colors = [
   { color: '#67c23a', percentage: 0 }, // 正常 - 绿色
   { color: '#b3e19d', percentage: 20 }, // 较正常 - 浅绿
@@ -159,7 +166,7 @@ const callChildMethodMReDraw = () => {
     <div class="flex flex-wrap gap-5">
       <ElCard class="flex-1">
         <template #header>用户示例</template>
-        <ApiDemoTable
+        <UserDemo
           @update-profile="onSubmit"
           @change-profile-card-loading="changeProfileCardLoading"
           @set-active-value="setActiveValue"
@@ -231,7 +238,7 @@ const callChildMethodMReDraw = () => {
           <div class="flex flex-1 items-center justify-center">
             <ElDescriptions title="" :border="true" :column="1">
               <ElDescriptionsItem label="本次样本重构误差">
-                {{ lossInfo }}
+                {{ rankInfo.lossValue }}
               </ElDescriptionsItem>
               <ElDescriptionsItem label="异常分数说明">
                 重构损失越大，异常分数越大，越有可能是异常用户
@@ -241,7 +248,7 @@ const callChildMethodMReDraw = () => {
           <div class="flex flex-1 items-center justify-center">
             <ElProgress
               type="dashboard"
-              :percentage="percentage"
+              :percentage="rankInfo.anomalyScore"
               :color="colors"
             >
               <template #default="{ percentage: progressPercentage }">
@@ -311,6 +318,14 @@ const callChildMethodMReDraw = () => {
             恢复初始
           </ElButton>
         </template>
+      </ElCard>
+      <ElCard class="w-screen">
+        <template #header>分析报告</template>
+        <AnalyseReport
+          :nickname="userProfile.nickname"
+          :sec-uid="userProfile.sec_uid"
+          :anomaly-score="rankInfo.anomalyScore"
+        />
       </ElCard>
     </div>
   </Page>

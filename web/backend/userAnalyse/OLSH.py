@@ -336,7 +336,7 @@ def find_most_similar_user(
         return None
 
     results = olsh_instance.query(
-        target_user_vector, k=5, theta=3.0
+        target_user_vector, k=5, theta=20.0
     )  # theta 可能需调整
     return results
 

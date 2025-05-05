@@ -10,9 +10,9 @@
       "description": "ollama格式的本地模型"
     },
     "remote_openai": {
-      "api_key": "sk-d534325018c54da88437272be63fdcb9",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "model": "deepseek-r1-distill-llama-70b"
+      "api_key": "sk-lqdncjtdqqaxrvgurqffyzcvsslqvrpczbmbiamxchewamgt",
+      "base_url": "https://api.siliconflow.cn/v1",
+      "model": "Qwen/Qwen3-8B"
     }
   },
   "assessment_model": {
@@ -23,9 +23,9 @@
       "description": "ollama格式的本地模型"
     },
     "remote_openai": {
-      "api_key": "sk-d534325018c54da88437272be63fdcb9",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "model": "deepseek-r1-distill-llama-70b"
+      "api_key": "sk-lqdncjtdqqaxrvgurqffyzcvsslqvrpczbmbiamxchewamgt",
+      "base_url": "https://api.siliconflow.cn/v1",
+      "model": "Qwen/Qwen3-30B-A3B"
     }
   },
   "report_model": {
@@ -36,9 +36,9 @@
       "description": "ollama格式的本地模型"
     },
     "remote_openai": {
-      "api_key": "sk-d534325018c54da88437272be63fdcb9",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "model": "deepseek-r1-distill-llama-70b"
+      "api_key": "sk-lqdncjtdqqaxrvgurqffyzcvsslqvrpczbmbiamxchewamgt",
+      "base_url": "https://api.siliconflow.cn/v1",
+      "model": "Qwen/Qwen3-30B-A3B"
     }
   },
   "KAG_API": {
