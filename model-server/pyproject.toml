@@ -5,28 +5,23 @@ description = "A model server for EchoSentinel"
 authors = [
     { name = "Wangl", email = "1770221228@qq.com" },
 ]
-requires-python = ">=3.11"  # 根据你的项目需求调整版本范围
+requires-python = ">=3.11"
 dependencies = [
     "flask>=3.1.0",
     "transformers>=4.51.2",
     "torch>=2.6.0",
     "torchaudio>=2.6.0",
     "torchvision>=0.21.0",
+    "ipykernel>=6.29.5",
+    "ipython>=9.2.0",
+    "pymongo>=4.12.1",
+    "matplotlib>=3.10.1",
+    "scikit-learn>=1.6.1",
 ]
 
 [build-system]
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cu118", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-]
-torchvision = [
-    { index = "pytorch-cu118", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cu118"
-url = "https://download.pytorch.org/whl/cu118"
-explicit = true
+[tool.setuptools.packages]
+find = { include = ["mod", "modules"] }

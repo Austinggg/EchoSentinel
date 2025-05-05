@@ -3,7 +3,13 @@ import torch
 import torch.nn as nn
 import numpy as np
 import os
-from modules.dnf import DNF
+import logging
+from config import MONGODB, MODEL, FEATURE_MAP
+from models.dnf import DNF
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class DNFClassifier(nn.Module):
     def __init__(self, num_preds, num_conjuncts, n_out, delta=0.01, weight_init_type="normal"):
@@ -15,24 +21,24 @@ class DNFClassifier(nn.Module):
         return self.sigmoid(self.dnf(x))
 
 class ContentClassifier:
-    def __init__(self, model_path=None, num_features=8, num_conjuncts=10, feature_map=None):
-        self.num_features = num_features
-        self.num_conjuncts = num_conjuncts
+    def __init__(self, model_path=None, num_features=None, num_conjuncts=None, n_out=2, feature_map=None):
+        # 使用配置文件中的参数
+        self.num_features = num_features or len(FEATURE_MAP)
+        self.num_conjuncts = num_conjuncts or MODEL["training"]["num_conjuncts"]
+        self.delta = MODEL["training"]["delta"]
+        self.n_out = n_out
         
-        # 初始化模型
-        self.model = DNFClassifier(num_features, num_conjuncts, 1)
+        # 初始化模型 - 使用n_out=2支持独热编码
+        self.model = DNFClassifier(
+            self.num_features, 
+            self.num_conjuncts, 
+            self.n_out,
+            self.delta
+        )
         self.model_loaded = False
         
-        # 设置默认特征映射
-        if feature_map is None:
-            self.feature_map = {
-                1: "信息充分性", 2: "信息准确性", 
-                3: "内容完整性", 4: "意图正当性",
-                5: "发布者信誉", 6: "情感中立性",
-                7: "无诱导行为", 8: "信息一致性"
-            }
-        else:
-            self.feature_map = feature_map
+        # 使用配置文件中的特征映射
+        self.feature_map = feature_map or FEATURE_MAP
         
         # 如果提供了模型路径，则加载模型
         if model_path:
@@ -40,13 +46,18 @@ class ContentClassifier:
     
     def load_model(self, model_path):
         try:
+            # 检查路径是否存在
+            if not os.path.exists(model_path):
+                logger.error(f"模型文件不存在: {model_path}")
+                return False
+                
             # 使用strict=False忽略额外参数
             self.model.load_state_dict(torch.load(model_path, map_location="cpu"), strict=False)
             self.model.eval()
-            print(f"微博分类模型成功加载自: {model_path}")
+            logger.info(f"微博分类模型成功加载自: {model_path}")
             return True
         except Exception as e:
-            print(f"微博分类模型加载失败: {str(e)}")
+            logger.error(f"微博分类模型加载失败: {str(e)}")
             return False
     
     def predict(self, features):
@@ -60,12 +71,19 @@ class ContentClassifier:
                 features = torch.FloatTensor(features).reshape(1, -1)
             
             output = self.model(features)
-            prob = output.item()
-            pred_label = 1 if prob > 0.5 else 0
+            
+            # 处理不同输出维度的情况
+            if output.shape[1] == 2:  # 独热编码模型 (n_out=2)
+                _, pred_label = torch.max(output, 1)
+                pred_label = pred_label.item()
+                probability = output[0][pred_label].item()
+            else:  # 单输出模型 (n_out=1)
+                probability = output.item()
+                pred_label = 1 if probability > 0.5 else 0
             
             return {
                 "label": pred_label,
-                "probability": prob,
+                "probability": probability,
                 "class_name": "真实信息" if pred_label == 1 else "虚假信息"
             }
     
@@ -238,18 +256,23 @@ class ContentClassifier:
 
 def init_decision(app):
     """初始化决策模型并设置应用上下文"""
-    model_path = "mod/Desision-mod/best_model.pth"
+    model_path = os.path.join(MODEL["save_dir"], "best_model.pth")  # 使用配置中的路径
     
     try:
-        app.content_classifier = ContentClassifier(model_path=model_path)
+        app.content_classifier = ContentClassifier(
+            model_path=model_path,
+            num_features=len(FEATURE_MAP),
+            num_conjuncts=MODEL["training"]["num_conjuncts"],
+            n_out=2,  # 设置为2以匹配训练模型的输出维度
+            feature_map=FEATURE_MAP
+        )
         app.decision_ready = app.content_classifier.model_loaded
+        logger.info(f"决策模型初始化{'成功' if app.decision_ready else '失败'}")
         return app.decision_ready
     except Exception as e:
-        print(f"决策模型初始化失败: {e}")
+        logger.error(f"决策模型初始化失败: {e}")
         app.decision_ready = False
         return False
-
-
 
 def register_decision_routes(app):
     """注册微博分类服务相关的API路由"""
@@ -309,3 +332,65 @@ def register_decision_routes(app):
                 
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+                # 在register_decision_routes函数中添加以下路由
+    
+    # 新增: 规则编辑API
+    @app.route('/rules/edit', methods=['POST'])
+    def edit_rule():
+        """编辑模型规则"""
+        if not getattr(app, "decision_ready", False):
+            return jsonify({"error": "决策模型服务未就绪"}), 503
+            
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "无效的请求数据"}), 400
+                
+            # 初始化规则编辑器
+            from models.rule_editor import RuleEditor
+            editor = RuleEditor(
+                model_path=os.path.join(MODEL["save_dir"], "best_model.pth"),
+                num_features=len(FEATURE_MAP),
+                num_conjuncts=MODEL["training"]["num_conjuncts"],
+                n_out=2,
+                feature_map=FEATURE_MAP
+            )
+            
+            # 处理不同类型的编辑
+            if "conjunct" in data:
+                # 编辑合取规则
+                conj_id = data["conjunct"]["id"]
+                new_expr = data["conjunct"]["expression"]
+                success, message = editor.edit_conjunct(conj_id, new_expr)
+            elif "disjunct" in data:
+                # 编辑析取规则
+                class_id = data["disjunct"]["class_id"]
+                new_expr = data["disjunct"]["expression"]
+                success, message = editor.edit_disjunct(class_id, new_expr)
+            else:
+                return jsonify({"error": "未指定要编辑的规则类型"}), 400
+                
+            if not success:
+                return jsonify({"error": message}), 400
+                
+            # 如果需要保存或转换规则
+            if data.get("save", False):
+                save_path = os.path.join(MODEL["save_dir"], "edited_rules.json")
+                editor.save_rules(save_path)
+                
+            if data.get("convert", False):
+                success, result = editor.convert_rules_to_weights()
+                if not success:
+                    return jsonify({"error": result}), 400
+                    
+            # 获取编辑后的规则
+            rules = editor.get_rules()
+            return jsonify({
+                "message": message,
+                "rules": rules
+            })
+            
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+            
+    
