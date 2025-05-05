@@ -4,6 +4,7 @@ import axios from 'axios';
 import { Refresh } from '@element-plus/icons-vue';
 import { useRoute, useRouter } from 'vue-router';
 import MarkdownIt from 'markdown-it';
+import { CopyDocument } from '@element-plus/icons-vue'; // 添加复制图标
 
 import {
   ElButton,
@@ -22,6 +23,7 @@ import {
   ElInfiniteScroll,
   ElScrollbar,
   ElProgress,
+  ElResult,
 } from 'element-plus';
 // 定义评估项的语义映射
 // 创建markdown-it实例
@@ -32,17 +34,17 @@ const md = new MarkdownIt({
   typographer: true, // 启用一些语言中性的替换+引号美化
 });
 const components = {
-  Refresh
+  Refresh,
 };
 const assessmentNames = {
-  p1: '背景信息充分性',  
-  p2: '背景信息准确性',  
-  p3: '内容完整性',   
-  p4: '意图正当性',     
-  p5: '发布者信誉',    
-  p6: '情感中立性',    
-  p7: '行为自主性',    
-  p8: '信息一致性',     
+  p1: '背景信息充分性',
+  p2: '背景信息准确性',
+  p3: '内容完整性',
+  p4: '意图正当性',
+  p5: '发布者信誉',
+  p6: '情感中立性',
+  p7: '行为自主性',
+  p8: '信息一致性',
 };
 
 // 添加到script部分
@@ -53,10 +55,10 @@ const goToReasoning = (itemKey) => {
   const videoId = route.query.id;
   router.push({
     name: 'AssessmentReason',
-    query: { 
+    query: {
       id: videoId,
-      item: itemKey 
-    }
+      item: itemKey,
+    },
   });
 };
 // 添加数据加载状态
@@ -191,6 +193,22 @@ const getScoreColor = (score: number): string => {
 const formatScore = (score: number): string => {
   return score ? score.toFixed(1) : 'N/A';
 };
+
+// 添加复制功能
+const copySubtitleText = () => {
+  if (subtitlesData.value && subtitlesData.value.text) {
+    navigator.clipboard
+      .writeText(subtitlesData.value.text)
+      .then(() => {
+        ElMessage.success('文本已复制到剪贴板');
+      })
+      .catch(() => {
+        ElMessage.error('复制失败，请手动复制');
+      });
+  } else {
+    ElMessage.warning('没有可复制的文本');
+  }
+};
 </script>
 
 <template>
@@ -205,15 +223,17 @@ const formatScore = (score: number): string => {
   </div>
   <!-- 如果有子路由被激活，显示子路由内容 -->
   <router-view v-else-if="$route.path.includes('/reason')" />
-  
+
   <!-- 视频分析内容，仅在数据加载后显示 -->
   <div v-else class="flex h-full gap-4">
     <!-- 左侧卡片 - 占35%且高度100% -->
     <el-card class="h-full w-[35%] overflow-hidden shadow-md">
-      <div class="flex h-full flex-col">
-        <video controls :src="videoSrc" class="w-full flex-1"></video>
+      <div class="flex h-full flex-col p-2">
+        <div class="video-container overflow-hidden rounded-lg">
+          <video controls :src="videoSrc" class="w-full flex-1"></video>
+        </div>
         <!-- 添加视频标题和标签 -->
-        <div class="mt-4 p-2">
+        <div class="mt-4 px-1">
           <h3 class="text-lg font-medium">{{ videoData.video.title }}</h3>
           <div class="mt-2 flex flex-wrap gap-1">
             <el-tag
@@ -270,7 +290,18 @@ const formatScore = (score: number): string => {
             <!-- 整体布局容器 -->
             <div class="flex h-[calc(100%-2rem)] flex-col">
               <!-- 完整文本区域 -->
-              <h4 class="font-medium">完整文本:</h4>
+              <div class="mb-2 flex items-center justify-between">
+                <h4 class="font-medium">完整文本:</h4>
+                <el-button
+                  size="small"
+                  type="primary"
+                  @click="copySubtitleText"
+                  :icon="CopyDocument"
+                  text
+                >
+                  复制文本
+                </el-button>
+              </div>
               <div
                 class="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4"
                 style="height: 120px"
@@ -315,7 +346,7 @@ const formatScore = (score: number): string => {
           <!-- 分析过程内容 -->
           <div v-else-if="activeTab === 'process'">
             <h3 class="mb-4 text-lg font-medium">视频分析过程</h3>
-          
+
             <!-- 使用hasAssessments和assessmentItems计算属性 -->
             <div v-if="hasAssessments" class="space-y-4">
               <div
@@ -334,18 +365,18 @@ const formatScore = (score: number): string => {
                     {{ formatScore(item.score) }}
                   </div>
                 </div>
-          
+
                 <el-progress
                   :percentage="item.score * 100"
                   :color="getScoreColor(item.score)"
                   :stroke-width="10"
                   :show-text="false"
                 />
-          
+
                 <!-- 修改这里，添加点击事件和鼠标悬停样式 -->
-                <div 
-                  v-if="item.reasoning" 
-                  class="mt-2 text-gray-600 cursor-pointer hover:text-blue-500"
+                <div
+                  v-if="item.reasoning"
+                  class="mt-2 cursor-pointer text-gray-600 hover:text-blue-500"
                   @click="goToReasoning(item.key)"
                 >
                   点击查看详细评估理由
@@ -353,7 +384,7 @@ const formatScore = (score: number): string => {
                 <div v-else class="mt-2 text-gray-600">无评估理由</div>
               </div>
             </div>
-          
+
             <!-- 没有评估数据时显示提示 -->
             <div v-else class="py-8 text-center text-gray-500">
               <div class="mb-2 text-2xl">📊</div>
@@ -365,52 +396,54 @@ const formatScore = (score: number): string => {
           <div v-else-if="activeTab === 'threat'">
             <h3 class="mb-4 text-lg font-medium">内容威胁分析报告</h3>
 
-            <!-- 根据风险等级展示不同状态 -->
-            <div
-              v-if="videoData.video.riskLevel === 'safe'"
-              class="mb-4 rounded-lg bg-green-50 p-4"
-            >
-              <div class="flex items-center">
-                <el-tag type="success" class="mr-2">安全</el-tag>
-                <span class="font-medium">未检测到明显威胁</span>
-              </div>
-              <p class="mt-2 text-gray-600">
-                此视频内容未发现违规或敏感内容，可以安全发布。
-              </p>
+            <!-- 使用el-result组件展示不同风险等级 -->
+            <div v-if="videoData.video.riskLevel === 'safe'">
+              <el-result
+                icon="success"
+                title="内容安全"
+                sub-title="未检测到明显威胁，此视频内容未发现违规或敏感内容，可以安全发布。"
+              >
+                <template #extra>
+                  <el-button type="success">安全发布</el-button>
+                </template>
+              </el-result>
             </div>
 
-            <div
-              v-else-if="videoData.video.riskLevel === 'warning'"
-              class="mb-4 rounded-lg bg-yellow-50 p-4"
-            >
-              <div class="flex items-center">
-                <el-tag type="warning" class="mr-2">警告</el-tag>
-                <span class="font-medium">检测到潜在风险</span>
-              </div>
-              <p class="mt-2 text-gray-600">
-                此视频可能含有敏感内容或误导信息，建议谨慎发布。
-              </p>
+            <div v-else-if="videoData.video.riskLevel === 'warning'">
+              <el-result
+                icon="warning"
+                title="潜在风险"
+                sub-title="此视频可能含有敏感内容或误导信息，建议谨慎发布。"
+              >
+                <template #extra>
+                  <el-button type="warning">谨慎发布</el-button>
+                </template>
+              </el-result>
             </div>
 
-            <div
-              v-else-if="videoData.video.riskLevel === 'danger'"
-              class="mb-4 rounded-lg bg-red-50 p-4"
-            >
-              <div class="flex items-center">
-                <el-tag type="danger" class="mr-2">危险</el-tag>
-                <span class="font-medium">检测到高风险内容</span>
-              </div>
-              <p class="mt-2 text-gray-600">此视频含有违规内容，不建议发布。</p>
+            <div v-else-if="videoData.video.riskLevel === 'danger'">
+              <el-result
+                icon="error"
+                title="高风险内容"
+                sub-title="此视频含有违规内容，不建议发布。"
+              >
+                <template #extra>
+                  <el-button type="danger">重新审核</el-button>
+                </template>
+              </el-result>
             </div>
 
-            <div v-else class="mb-4 rounded-lg bg-gray-50 p-4">
-              <div class="flex items-center">
-                <el-tag type="info" class="mr-2">处理中</el-tag>
-                <span class="font-medium">风险评估进行中</span>
-              </div>
-              <p class="mt-2 text-gray-600">
-                系统正在评估此视频的风险等级，请稍后查看。
-              </p>
+            <div v-else>
+              <el-result icon="info" title="风险评估中">
+                <template #sub-title>
+                  <p>系统正在评估此视频的风险等级，请稍后查看。</p>
+                </template>
+                <template #extra>
+                  <el-button type="primary" @click="loadVideoData"
+                    >刷新</el-button
+                  >
+                </template>
+              </el-result>
             </div>
           </div>
         </div>

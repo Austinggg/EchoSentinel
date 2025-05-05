@@ -1,0 +1,70 @@
+namespace TestKAG1
+
+# 核心实体类型定义
+PlatformRuleDocument(平台规范文档): EntityType
+    desc: 平台规范的完整文档实体
+    properties:
+        issuedDate(发布日期): STD.Date
+            constraint: NotNull
+        versionNumber(版本号): Text
+            constraint: Regular="^\\d+\\.\\d+\\.\\d+$"
+    relations:
+        supersedes(替代版本): PlatformRuleDocument
+
+RuleChapter(规范章节): EntityType
+    desc: 平台规范的章节单元
+    properties:
+        chapterNumber(章节号): Integer
+            constraint: NotNull
+        title(章节标题): Text
+
+RuleSection(规范条款): EntityType
+    desc: 平台规范的具体条文
+    properties:
+        sectionNumber(条款编号): Text
+            constraint: Regular="^\\d+\\.\\d+(\\.\\d+)*$"
+        content(条款内容): Text
+            index: TextAndVector
+    relations:
+        prohibitedBehavior(禁止行为): ViolationType
+        penalty(处罚措施): PenaltyMeasure
+        legalBasis(法律依据): LegalBasis
+        appliesTo(适用对象): TargetEntity
+            properties:
+                confidence(适用置信度): Float
+                scope(适用范围): Text
+
+# 辅助实体类型
+ViolationType(违规类型): ConceptType
+    hypernymPredicate: isA
+    autoRelate: ViolationType
+    desc: 平台规范中定义的违规行为分类
+
+PenaltyMeasure(处罚措施): ConceptType
+    hypernymPredicate: isA
+    autoRelate: PenaltyMeasure
+    desc: 针对违规行为的处罚手段
+
+LegalBasis(法律依据): EntityType
+    desc: 规范引用的法律法规
+    properties:
+        lawName(法律名称): Text
+            constraint: NotNull
+        lawCode(法律条文编号): Text
+
+TargetEntity(适用对象): EntityType
+    desc: 规范条款的适用目标实体类型
+    properties:
+        entityType(对象类型): Text
+            constraint: Enum="创作者,商品,内容,账号,交易"
+        scope(适用范围): Text
+    relations:
+        referenceToDocument(关联文档): PlatformRuleDocument
+        referenceToChapter(关联章节): RuleChapter
+        referenceToSection(关联条款): RuleSection
+
+# 版本控制扩展
+VersionControl(版本控制): ConceptType
+    autoRelate: VersionControl
+    desc: 文档版本状态标识
+    constraint: Enum="草案,生效,废止"
