@@ -134,9 +134,11 @@ class VideoTranscript(db.Model):
     chunks = db.Column(db.JSON, default=[])  # 带时间戳的分段文本
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-    
+
+
     # 关联的视频
     video = db.relationship("VideoFile", backref=db.backref("transcript_data", uselist=False))
+
 
 class ContentAnalysis(db.Model):
     __tablename__ = "content_analysis"
@@ -178,7 +180,10 @@ class ContentAnalysis(db.Model):
     # P8: 信息一致性评估
     p8_score = db.Column(db.Float, nullable=True)
     p8_reasoning = db.Column(db.Text, nullable=True)
-    
+
+    risk_level = db.Column(db.String(20), nullable=True)  # 风险等级：low, medium, high
+    risk_probability = db.Column(db.Float, nullable=True)  # 风险概率值
+    analysis_report = db.Column(db.Text, nullable=True)  # 存储生成的分析报告
     # 时间戳
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -188,12 +193,8 @@ class ContentAnalysis(db.Model):
     
     def to_dict(self):
         """转换为字典，方便API返回"""
-        return {
-            "id": self.id,
-            "video_id": self.video_id,
-            "intent": self.intent,
-            "statements": self.statements,
-            "summary": self.summary,
+        result = {
+            # 现有字段...
             "assessments": {
                 "p1": {"score": self.p1_score, "reasoning": self.p1_reasoning},
                 "p2": {"score": self.p2_score, "reasoning": self.p2_reasoning},
@@ -204,9 +205,19 @@ class ContentAnalysis(db.Model):
                 "p7": {"score": self.p7_score, "reasoning": self.p7_reasoning},
                 "p8": {"score": self.p8_score, "reasoning": self.p8_reasoning}
             },
+            "risk": {
+                "level": self.risk_level,
+                "probability": self.risk_probability
+            },
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
+        
+        # 添加报告字段（如果存在）
+        if self.analysis_report:
+            result["analysis_report"] = self.analysis_report
+            
+        return result
     
     def update_assessment(self, assessment_item, score, reasoning=None):
         """更新特定评估项的得分和理由"""

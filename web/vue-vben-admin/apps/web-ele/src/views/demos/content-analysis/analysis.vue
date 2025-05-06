@@ -71,7 +71,6 @@ const summary = ref(''); // 存储解析后的摘要HTML
 const assessmentData = ref({}); // 新增：专门存储评估数据
 // 添加重新生成摘要函数
 const summaryLoading = ref(false);
-
 const regenerateSummary = async () => {
   try {
     const videoId = route.query.id;
@@ -178,10 +177,67 @@ const formatTimestamp = (seconds: number | undefined): string => {
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
-// 菜单选择处理函数
+const reportLoading = ref(false);
+const reportData = ref(null);
+const reportError = ref(null);
+
+// 添加获取分析报告的函数
+const loadAnalysisReport = async () => {
+  const videoId = route.query.id;
+  if (!videoId) {
+    reportError.value = '未提供视频ID';
+    return;
+  }
+
+  try {
+    reportLoading.value = true;
+    reportError.value = null;
+
+    // 尝试获取现有报告，如果不存在则自动生成
+    const response = await axios.get(
+      `/api/videos/${videoId}/report?auto_generate=true`,
+    );
+
+    if (response.data.code === 200) {
+      reportData.value = response.data.data;
+      console.log('加载了分析报告:', reportData.value);
+    } else {
+      throw new Error(response.data.message || '获取报告失败');
+    }
+  } catch (error) {
+    console.error('加载分析报告失败:', error);
+    reportError.value = error.message || '加载分析报告失败';
+    ElMessage.error('加载分析报告失败');
+  } finally {
+    reportLoading.value = false;
+  }
+};
+
+// 修改菜单选择处理函数，在选择威胁报告标签时自动加载报告
 const handleTabChange = (key: string) => {
   activeTab.value = key;
+
+  // 当切换到威胁报告标签时，加载报告数据
+  if (key === 'threat' && !reportData.value) {
+    loadAnalysisReport();
+  }
 };
+const riskLevelInfo = computed(() => {
+  if (!reportData.value || !reportData.value.risk_level)
+    return { class: 'info', color: '#909399', text: '未评估' };
+
+  const level = reportData.value.risk_level.toLowerCase();
+  switch (level) {
+    case 'low':
+      return { class: 'success', color: '#67C23A', text: '低风险' };
+    case 'medium':
+      return { class: 'warning', color: '#E6A23C', text: '中等风险' };
+    case 'high':
+      return { class: 'danger', color: '#F56C6C', text: '高风险' };
+    default:
+      return { class: 'info', color: '#909399', text: '未评估' };
+  }
+});
 // 根据评分获取进度条颜色
 const getScoreColor = (score: number): string => {
   if (score >= 0.8) return '#67C23A'; // 绿色
@@ -396,52 +452,118 @@ const copySubtitleText = () => {
           <div v-else-if="activeTab === 'threat'">
             <h3 class="mb-4 text-lg font-medium">内容威胁分析报告</h3>
 
-            <!-- 使用el-result组件展示不同风险等级 -->
-            <div v-if="videoData.video.riskLevel === 'safe'">
-              <el-result
-                icon="success"
-                title="内容安全"
-                sub-title="未检测到明显威胁，此视频内容未发现违规或敏感内容，可以安全发布。"
-              >
-                <template #extra>
-                  <el-button type="success">安全发布</el-button>
-                </template>
-              </el-result>
+            <!-- 加载状态 -->
+            <div
+              v-if="reportLoading"
+              class="flex items-center justify-center py-12"
+            >
+              <el-skeleton :rows="10" animated />
             </div>
 
-            <div v-else-if="videoData.video.riskLevel === 'warning'">
-              <el-result
-                icon="warning"
-                title="潜在风险"
-                sub-title="此视频可能含有敏感内容或误导信息，建议谨慎发布。"
-              >
-                <template #extra>
-                  <el-button type="warning">谨慎发布</el-button>
-                </template>
-              </el-result>
-            </div>
+            <!-- 错误状态 -->
+            <el-result
+              v-else-if="reportError"
+              icon="error"
+              :title="reportError"
+              sub-title="无法获取分析报告数据"
+            >
+              <template #extra>
+                <el-button type="primary" @click="loadAnalysisReport"
+                  >重试</el-button
+                >
+              </template>
+            </el-result>
 
-            <div v-else-if="videoData.video.riskLevel === 'danger'">
-              <el-result
-                icon="error"
-                title="高风险内容"
-                sub-title="此视频含有违规内容，不建议发布。"
+            <!-- 报告数据显示 -->
+            <div v-else-if="reportData" class="analysis-report">
+              <!-- 风险等级信息 -->
+              <el-card
+                class="mb-4 border-t-4"
+                :class="`border-${riskLevelInfo.class}`"
               >
-                <template #extra>
-                  <el-button type="danger">重新审核</el-button>
-                </template>
-              </el-result>
-            </div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center">
+                    <el-tag
+                      :type="riskLevelInfo.class"
+                      size="large"
+                      effect="dark"
+                      class="mr-3"
+                    >
+                      {{ riskLevelInfo.text }}
+                    </el-tag>
+                    <div class="text-lg font-medium">
+                      风险概率:
+                      <span :style="{ color: riskLevelInfo.color }"
+                        >{{
+                          (reportData.risk_probability * 100).toFixed(1)
+                        }}%</span
+                      >
+                    </div>
+                  </div>
+                  <div>
+                    <el-button
+                      type="primary"
+                      @click="loadAnalysisReport"
+                      :icon="Refresh"
+                      size="small"
+                    >
+                      重新生成
+                    </el-button>
+                  </div>
+                </div>
+              </el-card>
 
-            <div v-else>
-              <el-result icon="info" title="风险评估中">
-                <template #sub-title>
-                  <p>系统正在评估此视频的风险等级，请稍后查看。</p>
+              <!-- 分析报告内容 -->
+              <el-card class="report-content">
+                <div
+                  class="markdown-body"
+                  v-html="md.render(reportData.report)"
+                ></div>
+              </el-card>
+
+              <!-- 评分摘要 -->
+              <el-card class="mt-4">
+                <template #header>
+                  <div class="font-medium">评估指标摘要</div>
                 </template>
-                <template #extra>
-                  <el-button type="primary" @click="loadVideoData"
-                    >刷新</el-button
+                <div class="grid grid-cols-2 gap-4">
+                  <div
+                    v-for="(score, key) in reportData.scores"
+                    :key="key"
+                    class="score-item"
                   >
+                    <div class="mb-1 flex items-center justify-between">
+                      <div class="text-sm">
+                        {{ assessmentNames[key.replace('_', '')] || key }}
+                      </div>
+                      <div
+                        :style="{ color: getScoreColor(score) }"
+                        class="font-bold"
+                      >
+                        {{ score ? score.toFixed(1) : 'N/A' }}
+                      </div>
+                    </div>
+                    <el-progress
+                      :percentage="score * 100"
+                      :color="getScoreColor(score)"
+                      :stroke-width="8"
+                      :show-text="false"
+                    />
+                  </div>
+                </div>
+              </el-card>
+            </div>
+
+            <!-- 没有报告时显示 -->
+            <div v-else>
+              <el-result icon="info" title="暂无分析报告">
+                <template #sub-title>
+                  <p>系统尚未对此视频生成分析报告，点击下方按钮生成。</p>
+                </template>
+                <template #extra>
+                  <el-button type="primary" @click="loadAnalysisReport">
+                    生成分析报告
+                  </el-button>
                 </template>
               </el-result>
             </div>
@@ -521,5 +643,48 @@ const copySubtitleText = () => {
   font-size: 85%;
   background-color: rgba(27, 31, 35, 0.05);
   border-radius: 3px;
+}
+.report-content {
+  margin-bottom: 1rem;
+}
+
+.border-success {
+  border-top-color: #67C23A;
+}
+
+.border-warning {
+  border-top-color: #E6A23C;
+}
+
+.border-danger {
+  border-top-color: #F56C6C;
+}
+
+.border-info {
+  border-top-color: #909399;
+}
+/* 增强markdown样式，特别是对报告中的重要标记 */
+:deep(.markdown-body p) {
+  line-height: 1.8;
+}
+
+:deep(.markdown-body strong) {
+  color: #f56c6c;
+  font-weight: 600;
+}
+
+:deep(.markdown-body h2) {
+  margin-top: 1.5rem;
+  font-size: 1.3rem;
+  border-bottom: 1px solid #eaecef;
+  padding-bottom: 0.3rem;
+}
+
+/* 突出显示带有▲符号的内容 */
+:deep(.markdown-body p:has(> ▲)) {
+  background-color: rgba(253, 246, 236, 0.6);
+  padding: 0.5rem;
+  border-radius: 4px;
+  border-left: 3px solid #E6A23C;
 }
 </style>
