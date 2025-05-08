@@ -32,6 +32,7 @@ class UserProfile(db.Model):
     sec_uid: Mapped[str] = mapped_column(String(255), index=True)
     hash_sec_uid: Mapped[str] = mapped_column(String(255))
     nickname: Mapped[str] = mapped_column(String(255))
+    signature: Mapped[Optional[str]] = mapped_column(String(500))  # 添加用户签名字段
     gender: Mapped[Optional[str]] = mapped_column(String(50))
     city: Mapped[Optional[str]] = mapped_column(String(100))
     province: Mapped[Optional[str]] = mapped_column(String(100))
@@ -61,6 +62,7 @@ class UserProfile(db.Model):
             "sec_uid": self.sec_uid,
             "hash_sec_uid": self.hash_sec_uid,
             "nickname": self.nickname,
+            "signature": self.signature,
             "gender": self.gender,
             "city": self.city or "未知",
             "province": self.province or "未知",
@@ -246,7 +248,7 @@ class ContentAnalysis(db.Model):
             self.p8_score = score
             if reasoning: self.p8_reasoning = reasoning
 
-# 任务状态跟踪表
+# 单独视频上传任务状态跟踪表
 class VideoProcessingTask(db.Model):
     __tablename__ = "video_processing_tasks"
     
@@ -275,6 +277,136 @@ class VideoProcessingTask(db.Model):
             "error": self.error,
             "attempts": self.attempts
         }
+# 
+class UserAnalysisTask(db.Model):
+    """用于跟踪用户分析任务的表"""
+    __tablename__ = "user_analysis_tasks"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    platform = db.Column(db.String(20), nullable=False)  # 'douyin', 'tiktok', 'bilibili' 等
+    platform_user_id = db.Column(db.String(255), nullable=False, index=True)  # 平台上的用户ID
+    nickname = db.Column(db.String(255))  # 用户昵称（冗余存储，方便查询）
+    avatar = db.Column(db.String(500))  # 用户头像URL
+    
+    # 关联到UserProfile表（如果有详细信息）
+    user_profile_id = db.Column(db.Integer, db.ForeignKey("user_profiles.id"), nullable=True)
+    user_profile = db.relationship("UserProfile", backref=db.backref("analysis_tasks", lazy=True))
+    
+    # 任务状态
+    status = db.Column(db.String(20), default="pending")  # 'pending', 'processing', 'completed', 'failed'
+    progress = db.Column(db.Float, default=0.0)  # 0-100%
+    
+    # 任务配置
+    analysis_type = db.Column(db.String(50), default="full")  # 'full', 'content_only', 'user_only'等
+    max_videos = db.Column(db.Integer, default=50)  # 分析的最大视频数
+    
+    # 分析结果
+    result_summary = db.Column(db.Text, nullable=True)  # 简短的分析总结
+    detailed_result = db.Column(db.JSON, default={})  # 详细分析结果
+    risk_level = db.Column(db.String(20), nullable=True)  # 风险等级：low, medium, high
+    
+    # 时间戳
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # 错误信息
+    error = db.Column(db.Text, nullable=True)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "platform": self.platform,
+            "platform_user_id": self.platform_user_id,
+            "nickname": self.nickname,
+            "avatar": self.avatar,
+            "user_profile_id": self.user_profile_id,
+            "status": self.status,
+            "progress": self.progress,
+            "analysis_type": self.analysis_type,
+            "max_videos": self.max_videos,
+            "result_summary": self.result_summary,
+            "risk_level": self.risk_level,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "error": self.error
+        }
+
+
+# 添加在其他表模型之后
+class DouyinVideo(db.Model):
+    """抖音视频数据表"""
+    __tablename__ = "douyin_videos"
+    
+    # 主键和关联
+    id = db.Column(db.Integer, primary_key=True)
+    aweme_id = db.Column(db.String(36), unique=True, nullable=False)  # 抖音视频ID
+    user_profile_id = db.Column(db.Integer, db.ForeignKey("user_profiles.id"), nullable=False)
+    
+    # 基本信息
+    desc = db.Column(db.Text, nullable=True)  # 视频描述/标题
+    create_time = db.Column(db.DateTime, nullable=True)  # 发布时间
+    cover_url = db.Column(db.String(500), nullable=True)  # 视频封面URL
+    share_url = db.Column(db.String(500), nullable=True)  # 分享链接
+    
+    # 媒体信息
+    media_type = db.Column(db.Integer, nullable=True)  # 媒体类型(视频/图集)
+    video_duration = db.Column(db.Integer, default=0)  # 视频时长(秒)
+    is_top = db.Column(db.Boolean, default=False)  # 是否置顶
+    
+    # 统计数据
+    digg_count = db.Column(db.Integer, default=0)  # 点赞数
+    comment_count = db.Column(db.Integer, default=0)  # 评论数
+    collect_count = db.Column(db.Integer, default=0)  # 收藏数
+    share_count = db.Column(db.Integer, default=0)  # 分享数
+    play_count = db.Column(db.Integer, default=0)  # 播放数
+    
+    # 附加信息
+    tags = db.Column(db.Text, nullable=True)  # 视频标签，逗号分隔
+    fetched_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)  # 抓取时间    
+    # 关联关系
+    user_profile = db.relationship("UserProfile", backref=db.backref("douyin_videos", lazy=True))    
+    def to_dict(self):
+        """转换为字典"""
+        return {
+            "id": self.id,
+            "aweme_id": self.aweme_id,
+            "desc": self.desc,
+            "create_time": self.create_time.isoformat() if self.create_time else None,
+            "cover_url": self.cover_url,
+            "share_url": self.share_url,
+            "media_type": self.media_type,
+            "video_duration": self.video_duration,
+            "is_top": self.is_top,
+            "statistics": {
+                "digg_count": self.digg_count,
+                "comment_count": self.comment_count,
+                "collect_count": self.collect_count,
+                "share_count": self.share_count,
+                "play_count": self.play_count,
+            },
+            "tags": self.tags.split(",") if self.tags else [],
+            "fetched_at": self.fetched_at.isoformat()
+        }
+
+
+# 图片表(针对图集类型内容)
+class DouyinVideoImage(db.Model):
+    """抖音图集中的图片"""
+    __tablename__ = "douyin_video_images"
+    
+    id = db.Column(db.Integer, primary_key=True)
+    aweme_id = db.Column(db.String(36), db.ForeignKey("douyin_videos.aweme_id"), nullable=False)
+    image_url = db.Column(db.String(500), nullable=False)
+    image_index = db.Column(db.Integer, default=0)  # 在图集中的顺序
+    width = db.Column(db.Integer, nullable=True)
+    height = db.Column(db.Integer, nullable=True)
+    
+    # 关联
+    video = db.relationship("DouyinVideo", backref=db.backref("images", lazy=True))
 def init_dataset(app):
     # 对密码进行URL编码（处理特殊字符）
     encoded_password = quote_plus(app.config.PASSWORD)

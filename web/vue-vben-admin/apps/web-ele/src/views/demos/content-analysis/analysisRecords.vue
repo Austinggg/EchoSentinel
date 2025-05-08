@@ -13,6 +13,7 @@ import {
   ElInput,
   ElPagination,
   ElBadge,
+  ElMessageBox,
 } from 'element-plus';
 import {
   Timer,
@@ -26,6 +27,7 @@ import {
 import { getVideoList, deleteVideo, batchDeleteVideos } from '#/api/videoApi';
 import type { VideoAnalysisRecord } from '#/api/videoApi';
 import { useRouter, RouterView } from 'vue-router';
+import axios from 'axios';
 // 定义分析结果数据类型
 interface AnalysisRecord {
   id: string;
@@ -35,74 +37,6 @@ interface AnalysisRecord {
   threatLevel: VideoAnalysisRecord['threatLevel']; // 修改为使用VideoAnalysisRecord的威胁等级
   createTime: string;
 }
-
-// // 示例数据
-// const analysisData = ref<AnalysisRecord[]>([
-//   {
-//     id: '001',
-//     title: '游戏直播片段',
-//     cover: 'https://picsum.photos/id/111/200/120',
-//     summary: '主要内容为游戏直播，无敏感内容，适合大部分年龄段观看。',
-//     threatLevel: 'low',
-//     createTime: '2025-04-15',
-//   },
-//   {
-//     id: '002',
-//     title: '政治评论视频',
-//     cover: 'https://picsum.photos/id/222/200/120',
-//     summary: '包含部分政治敏感言论，建议审核后再发布。',
-//     threatLevel: 'medium',
-//     createTime: '2025-04-14',
-//   },
-//   {
-//     id: '003',
-//     title: '科普教育内容',
-//     cover: 'https://picsum.photos/id/333/200/120',
-//     summary: '科学教育内容，知识准确，适合传播。',
-//     threatLevel: 'low',
-//     createTime: '2025-04-12',
-//   },
-//   {
-//     id: '004',
-//     title: '广告营销视频',
-//     cover: 'https://picsum.photos/id/444/200/120',
-//     summary: '存在虚假宣传内容，建议修改后再发布。',
-//     threatLevel: 'high',
-//     createTime: '2025-04-10',
-//   },
-//   {
-//     id: '005',
-//     title: '音乐MV',
-//     cover: 'https://picsum.photos/id/555/200/120',
-//     summary: '音乐内容健康，无不良信息。',
-//     threatLevel: 'low',
-//     createTime: '2025-04-08',
-//   },
-//   {
-//     id: '006',
-//     title: '健康健身视频',
-//     cover: 'https://picsum.photos/id/666/200/120',
-//     summary: '健身指导视频，部分动作可能存在安全隐患，建议添加警示。',
-//     threatLevel: 'processing',
-//     createTime: '2025-04-05',
-//   },
-//   {
-//     id: '007',
-//     title: '美食烹饪教程',
-//     cover: 'https://picsum.photos/id/777/200/120',
-//     summary: '烹饪内容健康，步骤清晰，适合传播。',
-//     threatLevel: 'low',
-//     createTime: '2025-04-02',
-//   },
-//   {
-//     id: '008',
-//     title: '心理健康讲座',
-//     cover: 'https://picsum.photos/id/888/200/120',
-//     summary: '涉及部分心理疾病内容，建议添加专业免责声明。',
-//     threatLevel: 'medium',
-//     createTime: '2025-03-28',
-//   },
-// ]);
 const loading = ref(false);
 const analysisData = ref<VideoAnalysisRecord[]>([]);
 const total = ref(0);
@@ -250,9 +184,9 @@ const tableRowClassName = ({ row }: { row: AnalysisRecord }) => {
     case 'medium':
       return 'warning-row';
     case 'low':
-      return 'info-row';
-    case 'safe':
-      return 'success-row';
+      return 'success-row'; // 修改为 success-row，显示绿色
+    case 'processing':
+      return 'info-row'; // 处理中状态使用灰色
     default:
       return '';
   }
@@ -262,6 +196,54 @@ const tableRowClassName = ({ row }: { row: AnalysisRecord }) => {
 const handleEdit = (id: string) => {
   ElMessage.info(`编辑记录：${id}`);
   // 这里可以添加编辑逻辑或跳转到编辑页面
+};
+// 添加确认视频删除的函数
+const handleDelete = async (videoId) => {
+  try {
+    // 显示确认删除对话框
+    await ElMessageBox.confirm(
+      '确定要删除此视频及其所有关联数据吗？此操作不可撤销！',
+      '删除确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        closeOnClickModal: false,
+      },
+    );
+
+    // 开始删除操作
+    loading.value = true;
+
+    // 调用API删除视频及其关联数据
+    const response = await axios.delete(`/api/videos/${videoId}/all`);
+
+    if (response.data.code === 200) {
+      // 从表格数据中移除已删除项
+      analysisData.value = analysisData.value.filter(
+        (item) => item.id !== videoId,
+      );
+
+      // 刷新筛选后的表格数据
+      filteredAnalysisData.value = filteredAnalysisData.value.filter(
+        (item) => item.id !== videoId,
+      );
+
+      ElMessage.success('视频及其关联数据已成功删除');
+    } else {
+      throw new Error(response.data.message || '删除操作失败');
+    }
+  } catch (error) {
+    if (error === 'cancel') {
+      // 用户取消删除，不做处理
+      return;
+    }
+
+    console.error('删除视频失败:', error);
+    ElMessage.error(`删除失败: ${error.message || '未知错误'}`);
+  } finally {
+    loading.value = false;
+  }
 };
 
 // 修改威胁等级相关函数
@@ -429,32 +411,49 @@ const handleRowClick = (row) => {
           :row-class-name="tableRowClassName"
           style="width: 100%; height: 100%"
           border
-          stripe
           @selection-change="handleSelectionChange"
-          @row-click="handleRowClick"
         >
           <!-- 多选列 -->
           <el-table-column type="selection" width="55" />
           <!-- 封面列 -->
-          <el-table-column label="封面" min-width="200" align="center">
+          <el-table-column label="封面" min-width="120" align="center">
             <template #default="{ row }">
               <el-image
                 :src="row.cover"
                 fit="cover"
-                style="width: 180px; height: 100px; border-radius: 4px"
+                style="
+                  width: 90px;
+                  height: 140px;
+                  border-radius: 4px;
+                  object-position: center;
+                "
                 :preview="false"
               />
             </template>
           </el-table-column>
 
           <!-- 标题列 -->
-          <el-table-column prop="title" label="标题" min-width="150" />
-
+          <el-table-column label="标题" min-width="180" align="left">
+            <template #default="{ row }">
+              <el-tooltip :content="row.title" placement="top" effect="light">
+                <div class="title-cell" @click="handleRowClick(row)">
+                  <span class="video-title multiline-text">{{
+                    row.title
+                  }}</span>
+                </div>
+              </el-tooltip>
+            </template>
+          </el-table-column>
           <!-- 摘要列 -->
           <el-table-column label="摘要" min-width="300">
             <template #default="{ row }">
               <el-tooltip :content="row.summary" placement="top" effect="light">
-                <span class="truncate">{{ row.summary }}</span>
+                <div
+                  class="summary-cell multiline-text"
+                  @click="handleRowClick(row)"
+                >
+                  {{ row.summary }}
+                </div>
               </el-tooltip>
             </template>
           </el-table-column>
@@ -531,6 +530,57 @@ const handleRowClick = (row) => {
 </template>
 
 <style scoped>
+/* 标题列样式 */
+.multiline-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; /* 显示3行 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.5;
+}
+/* 摘要样式 */
+.summary-cell {
+  padding: 4px 0;
+  font-size: 14px;
+  color: #606266;
+  -webkit-line-clamp: 3; /* 摘要显示4行 */
+}
+/* 移除旧的单行样式 */
+.truncate {
+  max-width: 280px;
+}
+/* 标题样式改为多行 */
+.title-cell {
+  padding: 6px 0;
+  max-width: 100%;
+}
+
+.video-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: #303133;
+  position: relative;
+  padding-left: 8px;
+  line-height: 1.4;
+}
+
+.video-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 14px;
+  width: 3px;
+  background-color: #409eff;
+  border-radius: 2px;
+}
+/* 悬停效果 */
+:deep(.el-table__row:hover .video-title) {
+  color: #409eff;
+}
+
 .pagination-container {
   margin-top: 16px;
   display: flex;
@@ -612,28 +662,30 @@ const handleRowClick = (row) => {
   align-items: center;
 }
 
-/* 确保表格行着色正确 */
-:deep(.danger-row) {
+:deep(.el-table .danger-row) {
   background-color: rgba(245, 108, 108, 0.1);
 }
 
-:deep(.warning-row) {
+:deep(.el-table .warning-row) {
   background-color: rgba(230, 162, 60, 0.1);
 }
 
-:deep(.info-row) {
-  background-color: rgba(144, 147, 153, 0.1);
+:deep(.el-table .info-row) {
+  background-color: white; /* 将处理中状态改为白底 */
+  box-shadow: inset 0 0 0 1px rgba(144, 147, 153, 0.2); /* 添加浅灰色边框，便于识别 */
 }
 
-:deep(.success-row) {
+:deep(.el-table .success-row) {
   background-color: rgba(103, 194, 58, 0.1);
 }
+/* 悬停效果 - 修改为灰色背景 */
+:deep(.el-table__row:hover) {
+  background-color: rgba(144, 147, 153, 0.1) !important; /* 悬停改为浅灰色 */
+  box-shadow: none !important; /* 移除边框阴影 */
+}
+
 /* 添加鼠标指针样式，提示行可点击 */
 :deep(.el-table__row) {
   cursor: pointer;
-}
-/* 鼠标悬停效果 */
-:deep(.el-table__row:hover) {
-  background-color: rgba(0, 0, 0, 0.05) !important;
 }
 </style>

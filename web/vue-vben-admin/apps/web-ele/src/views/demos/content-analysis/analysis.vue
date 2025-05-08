@@ -24,6 +24,7 @@ import {
   ElScrollbar,
   ElProgress,
   ElResult,
+  ElMessageBox,
 } from 'element-plus';
 // 定义评估项的语义映射
 // 创建markdown-it实例
@@ -121,7 +122,7 @@ const assessmentItems = computed(() => {
       reasoning: item.reasoning,
     }));
 });
-// 根据ID加载视频数据
+// 修改loadVideoData函数，从分析接口获取所有数据
 const loadVideoData = async () => {
   try {
     loading.value = true;
@@ -151,10 +152,30 @@ const loadVideoData = async () => {
     // 保存评估数据到专门的变量
     if (videoData.value.analysis && videoData.value.analysis.assessments) {
       assessmentData.value = videoData.value.analysis.assessments;
-      console.log('加载了评估数据:', assessmentData.value);
     } else {
-      console.warn('没有找到评估数据');
       assessmentData.value = {};
+    }
+
+    // 从分析数据中直接提取报告信息
+    if (videoData.value.analysis) {
+      reportData.value = {
+        report: videoData.value.analysis.report,
+        risk_level: videoData.value.analysis.risk?.level,
+        risk_probability: videoData.value.analysis.risk?.probability,
+        scores: {
+          background_sufficiency:
+            videoData.value.analysis.assessments?.p1?.score,
+          background_accuracy: videoData.value.analysis.assessments?.p2?.score,
+          content_completeness: videoData.value.analysis.assessments?.p3?.score,
+          intention_legitimacy: videoData.value.analysis.assessments?.p4?.score,
+          publisher_credibility:
+            videoData.value.analysis.assessments?.p5?.score,
+          emotional_neutrality: videoData.value.analysis.assessments?.p6?.score,
+          behavior_autonomy: videoData.value.analysis.assessments?.p7?.score,
+          information_consistency:
+            videoData.value.analysis.assessments?.p8?.score,
+        },
+      };
     }
 
     loading.value = false;
@@ -162,6 +183,51 @@ const loadVideoData = async () => {
     console.error('加载视频数据失败:', error);
     ElMessage.error('加载视频数据失败');
     loading.value = false;
+  }
+};
+const regenerateReport = async () => {
+  try {
+    reportLoading.value = true;
+    reportError.value = null;
+
+    // 先调用风险分类API
+    const videoId = route.query.id as string;
+    const classifyResponse = await axios.post(
+      `/api/videos/${videoId}/classify-risk`,
+    );
+
+    if (classifyResponse.data.code !== 200) {
+      throw new Error(classifyResponse.data.message || '风险评估失败');
+    }
+
+    // 生成新报告
+    const reportResponse = await axios.post(
+      `/api/videos/${videoId}/generate-report`,
+    );
+
+    if (reportResponse.data.code === 200) {
+      // 重新加载所有数据
+      await loadVideoData();
+      ElMessage.success('报告已重新生成');
+    } else {
+      throw new Error(reportResponse.data.message || '生成报告失败');
+    }
+  } catch (error) {
+    console.error('生成分析报告失败:', error);
+    reportError.value = error.message || '生成分析报告失败';
+    ElMessage.error('生成分析报告失败: ' + error.message);
+  } finally {
+    reportLoading.value = false;
+  }
+};
+
+// 修改菜单选择处理函数
+const handleTabChange = (key: string) => {
+  activeTab.value = key;
+
+  // 当切换到威胁报告标签时，如果没有报告数据则加载
+  if (key === 'threat' && !reportData.value && route.query.id) {
+    loadReportDataOnly(route.query.id as string);
   }
 };
 // 页面加载时获取数据
@@ -180,48 +246,6 @@ const formatTimestamp = (seconds: number | undefined): string => {
 const reportLoading = ref(false);
 const reportData = ref(null);
 const reportError = ref(null);
-
-// 添加获取分析报告的函数
-const loadAnalysisReport = async () => {
-  const videoId = route.query.id;
-  if (!videoId) {
-    reportError.value = '未提供视频ID';
-    return;
-  }
-
-  try {
-    reportLoading.value = true;
-    reportError.value = null;
-
-    // 尝试获取现有报告，如果不存在则自动生成
-    const response = await axios.get(
-      `/api/videos/${videoId}/report?auto_generate=true`,
-    );
-
-    if (response.data.code === 200) {
-      reportData.value = response.data.data;
-      console.log('加载了分析报告:', reportData.value);
-    } else {
-      throw new Error(response.data.message || '获取报告失败');
-    }
-  } catch (error) {
-    console.error('加载分析报告失败:', error);
-    reportError.value = error.message || '加载分析报告失败';
-    ElMessage.error('加载分析报告失败');
-  } finally {
-    reportLoading.value = false;
-  }
-};
-
-// 修改菜单选择处理函数，在选择威胁报告标签时自动加载报告
-const handleTabChange = (key: string) => {
-  activeTab.value = key;
-
-  // 当切换到威胁报告标签时，加载报告数据
-  if (key === 'threat' && !reportData.value) {
-    loadAnalysisReport();
-  }
-};
 const riskLevelInfo = computed(() => {
   if (!reportData.value || !reportData.value.risk_level)
     return { class: 'info', color: '#909399', text: '未评估' };
@@ -501,9 +525,10 @@ const copySubtitleText = () => {
                     </div>
                   </div>
                   <div>
+                    <!-- 重新生成按钮 -->
                     <el-button
                       type="primary"
-                      @click="loadAnalysisReport"
+                      @click="regenerateReport"
                       :icon="Refresh"
                       size="small"
                     >
@@ -649,15 +674,15 @@ const copySubtitleText = () => {
 }
 
 .border-success {
-  border-top-color: #67C23A;
+  border-top-color: #67c23a;
 }
 
 .border-warning {
-  border-top-color: #E6A23C;
+  border-top-color: #e6a23c;
 }
 
 .border-danger {
-  border-top-color: #F56C6C;
+  border-top-color: #f56c6c;
 }
 
 .border-info {
@@ -685,6 +710,6 @@ const copySubtitleText = () => {
   background-color: rgba(253, 246, 236, 0.6);
   padding: 0.5rem;
   border-radius: 4px;
-  border-left: 3px solid #E6A23C;
+  border-left: 3px solid #e6a23c;
 }
 </style>

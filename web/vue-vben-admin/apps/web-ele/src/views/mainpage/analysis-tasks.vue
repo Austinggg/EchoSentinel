@@ -1,0 +1,574 @@
+<script lang="ts" setup>
+import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
+import {
+  ElAlert,
+  ElAvatar,
+  ElButton,
+  ElCard,
+  ElEmpty,
+  ElIcon,
+  ElLoading,
+  ElMessage,
+  ElPagination,
+  ElTable,
+  ElTableColumn,
+  ElTag,
+  ElTooltip,
+  ElInput,
+  ElSelect,
+  ElOption,
+  ElDatePicker,
+} from 'element-plus';
+import {
+  Search,
+  CircleCheck,
+  CircleClose,
+  Loading,
+  MoreFilled,
+  Calendar,
+  Sort,
+  Warning,
+  View,
+  Refresh,
+} from '@element-plus/icons-vue';
+
+const router = useRouter();
+
+// 状态变量
+const loading = ref(false);
+const error = ref('');
+const taskList = ref([]);
+const totalItems = ref(0);
+
+// 分页相关
+const currentPage = ref(1);
+const pageSize = ref(10);
+
+// 搜索和过滤
+const searchText = ref('');
+const platformFilter = ref('');
+const statusFilter = ref('');
+const dateRange = ref([]);
+const sortField = ref('created_at');
+const sortOrder = ref('desc');
+
+// 加载分析任务列表
+const loadTasks = async () => {
+  try {
+    loading.value = true;
+    
+    // 构建查询参数
+    const params = {
+      page: currentPage.value,
+      per_page: pageSize.value,
+      search: searchText.value || undefined,
+      platform: platformFilter.value || undefined,
+      status: statusFilter.value || undefined,
+      sort_by: sortField.value,
+      sort_order: sortOrder.value,
+    };
+    
+    // 如果有日期范围，添加到参数
+    if (dateRange.value && dateRange.value.length === 2) {
+      params.start_date = dateRange.value[0].toISOString().split('T')[0];
+      params.end_date = dateRange.value[1].toISOString().split('T')[0];
+    }
+    
+    // 发送API请求
+    const response = await axios.get('/api/analysis/tasks', { params });
+    
+    if (response.data.code === 200) {
+      taskList.value = response.data.data.tasks || [];
+      totalItems.value = response.data.data.total || 0;
+    } else {
+      throw new Error(response.data.message || '获取任务列表失败');
+    }
+  } catch (err) {
+    console.error('加载任务列表失败:', err);
+    error.value = err.message || '获取任务列表失败';
+    ElMessage.error(error.value);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 格式化日期
+const formatDate = (timestamp) => {
+  if (!timestamp) return '-';
+  
+  try {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  } catch (e) {
+    return timestamp;
+  }
+};
+
+// 获取平台显示名称
+const getPlatformName = (platform) => {
+  const platformMap = {
+    'douyin': '抖音',
+    'tiktok': 'TikTok',
+    'bilibili': 'Bilibili',
+  };
+  return platformMap[platform] || platform;
+};
+
+// 获取状态标签类型
+const getStatusType = (status) => {
+  switch (status) {
+    case 'completed':
+      return 'success';
+    case 'processing':
+      return 'primary';
+    case 'pending':
+      return 'info';
+    case 'failed':
+      return 'danger';
+    default:
+      return 'info';
+  }
+};
+
+// 获取状态显示名称
+const getStatusName = (status) => {
+  const statusMap = {
+    'pending': '等待中',
+    'processing': '处理中',
+    'completed': '已完成',
+    'failed': '失败'
+  };
+  return statusMap[status] || status;
+};
+
+// 获取风险等级标签类型
+const getRiskLevelType = (level) => {
+  switch (level) {
+    case 'high':
+      return 'danger';
+    case 'medium':
+      return 'warning';
+    case 'low':
+      return 'success';
+    default:
+      return 'info';
+  }
+};
+
+// 获取风险等级显示名称
+const getRiskLevelName = (level) => {
+  const levelMap = {
+    'high': '高风险',
+    'medium': '中风险',
+    'low': '低风险'
+  };
+  return levelMap[level] || '未知';
+};
+
+// 处理搜索
+const handleSearch = () => {
+  currentPage.value = 1; // 重置到第一页
+  loadTasks();
+};
+
+// 处理排序变化
+const handleSortChange = (column) => {
+  if (column.prop) {
+    sortField.value = column.prop;
+    sortOrder.value = column.order === 'ascending' ? 'asc' : 'desc';
+    loadTasks();
+  }
+};
+
+// 处理页码变化
+const handleCurrentChange = (val) => {
+  currentPage.value = val;
+  loadTasks();
+};
+
+// 处理每页大小变化
+const handleSizeChange = (val) => {
+  pageSize.value = val;
+  currentPage.value = 1; // 重置到第一页
+  loadTasks();
+};
+
+// 重置筛选条件
+const resetFilters = () => {
+  searchText.value = '';
+  platformFilter.value = '';
+  statusFilter.value = '';
+  dateRange.value = [];
+  currentPage.value = 1;
+  loadTasks();
+};
+
+// 查看用户内容
+const viewUserContent = (row) => {
+  // 修改为子路由路径
+  router.push(`/main/analysis-tasks/user-content?platform=${row.platform}&userId=${row.platform_user_id}`);
+};
+
+// 刷新数据
+const refreshData = () => {
+  loadTasks();
+};
+
+// 初始化
+onMounted(() => {
+  loadTasks();
+});
+</script>
+
+<template>
+  <div>
+    <!-- 只有在访问父路由首页时显示分析任务列表 -->
+    <div v-if="$route.path === '/main/analysis-tasks'" class="analysis-tasks-container">
+      <el-card class="filter-card">
+        <div class="filter-header">
+          <h2 class="page-title">用户分析任务</h2>
+          <div class="filter-actions">
+            <el-button type="primary" plain @click="refreshData">
+              <el-icon><Refresh /></el-icon> 刷新
+            </el-button>
+          </div>
+        </div>
+        
+        <!-- 筛选条件 -->
+        <div class="filters">
+          <el-input
+            v-model="searchText"
+            placeholder="搜索用户名称"
+            class="filter-item"
+            clearable
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          
+          <el-select
+            v-model="platformFilter"
+            placeholder="平台"
+            clearable
+            class="filter-item"
+          >
+            <el-option label="抖音" value="douyin" />
+            <el-option label="TikTok" value="tiktok" />
+            <el-option label="Bilibili" value="bilibili" />
+          </el-select>
+          
+          <el-select
+            v-model="statusFilter"
+            placeholder="状态"
+            clearable
+            class="filter-item"
+          >
+            <el-option label="等待中" value="pending" />
+            <el-option label="处理中" value="processing" />
+            <el-option label="已完成" value="completed" />
+            <el-option label="失败" value="failed" />
+          </el-select>
+          
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            class="filter-item date-range"
+          />
+          
+          <div class="filter-buttons">
+            <el-button type="primary" @click="handleSearch">查询</el-button>
+            <el-button @click="resetFilters">重置</el-button>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- 错误提示 -->
+      <el-alert
+        v-if="error"
+        :title="error"
+        type="error"
+        show-icon
+        :closable="false"
+        class="error-alert"
+      />
+
+      <!-- 任务列表表格 -->
+      <el-card class="task-table-card">
+        <el-table
+          :data="taskList"
+          border
+          stripe
+          style="width: 100%"
+          v-loading="loading"
+          @sort-change="handleSortChange"
+        >
+          <!-- 序号列 -->
+          <el-table-column type="index" width="50" label="#" />
+          
+          <!-- 平台列 -->
+          <el-table-column label="平台" prop="platform" width="100">
+            <template #default="{ row }">
+              <el-tag size="small">{{ getPlatformName(row.platform) }}</el-tag>
+            </template>
+          </el-table-column>
+          
+          <!-- 用户信息列 -->
+          <el-table-column label="用户信息" min-width="200">
+            <template #default="{ row }">
+              <div class="user-info-cell">
+                <el-avatar :size="40" :src="row.avatar">
+                  {{ row.nickname?.charAt(0) || '?' }}
+                </el-avatar>
+                <div class="user-detail">
+                  <div class="user-nickname">{{ row.nickname }}</div>
+                  <div class="user-id">ID: {{ row.platform_user_id }}</div>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          
+          <!-- 状态列 -->
+          <el-table-column label="状态" prop="status" width="120" sortable="custom">
+            <template #default="{ row }">
+              <el-tooltip
+                :content="row.error"
+                placement="top"
+                :disabled="row.status !== 'failed'"
+              >
+                <div class="status-cell">
+                  <el-tag :type="getStatusType(row.status)">
+                    <el-icon v-if="row.status === 'processing'"><Loading /></el-icon>
+                    <el-icon v-if="row.status === 'completed'"><CircleCheck /></el-icon>
+                    <el-icon v-if="row.status === 'failed'"><CircleClose /></el-icon>
+                    {{ getStatusName(row.status) }}
+                  </el-tag>
+                  <div class="progress-text" v-if="row.status === 'processing'">
+                    {{ Math.floor(row.progress) }}%
+                  </div>
+                </div>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+          
+          <!-- 风险等级列 -->
+          <el-table-column label="风险等级" prop="risk_level" width="120" sortable="custom">
+            <template #default="{ row }">
+              <el-tag v-if="row.risk_level" :type="getRiskLevelType(row.risk_level)">
+                {{ getRiskLevelName(row.risk_level) }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          
+          <!-- 分析类型列 -->
+          <el-table-column label="分析类型" prop="analysis_type" width="120">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ row.analysis_type }}</el-tag>
+            </template>
+          </el-table-column>
+          
+          <!-- 创建时间列 -->
+          <el-table-column 
+            label="创建时间" 
+            prop="created_at" 
+            width="180" 
+            sortable="custom"
+          >
+            <template #default="{ row }">
+              <div class="time-cell">
+                <el-icon><Calendar /></el-icon>
+                <span>{{ formatDate(row.created_at) }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          
+          <!-- 完成时间列 -->
+          <el-table-column 
+            label="完成时间" 
+            prop="completed_at" 
+            width="180" 
+            sortable="custom"
+          >
+            <template #default="{ row }">
+              <span>{{ row.completed_at ? formatDate(row.completed_at) : '-' }}</span>
+            </template>
+          </el-table-column>
+          
+          <!-- 操作列 -->
+          <el-table-column label="操作" width="180" fixed="right">
+            <template #default="{ row }">
+              <el-button 
+                type="primary" 
+                link
+                @click="viewUserContent(row)"
+              >
+                <el-icon><View /></el-icon> 查看内容
+              </el-button>
+              
+              <el-tooltip content="查看分析报告" v-if="row.status === 'completed'">
+                <el-button 
+                  type="success" 
+                  link
+                  @click="router.push(`/main/analysis-report?task_id=${row.id}`)"
+                >
+                  查看报告
+                </el-button>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+        </el-table>
+        
+        <!-- 分页组件 -->
+        <div class="pagination-container" v-if="totalItems > 0">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next, jumper"
+            :total="totalItems"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+        
+        <!-- 空状态 -->
+        <el-empty 
+          v-if="taskList.length === 0 && !loading" 
+          description="暂无分析任务"
+        >
+          <el-button type="primary" @click="router.push('/main/add-account')">
+            添加账号
+          </el-button>
+        </el-empty>
+      </el-card>
+    </div>
+    
+    <!-- 当访问子路由时渲染子路由组件 -->
+    <router-view v-else />
+  </div>
+</template>
+
+<style scoped>
+.analysis-tasks-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.filter-card {
+  margin-bottom: 20px;
+}
+
+.filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  color: #303133;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-item {
+  width: 200px;
+}
+
+.date-range {
+  width: 320px;
+}
+
+.filter-buttons {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+}
+
+.error-alert {
+  margin-bottom: 20px;
+}
+
+.task-table-card {
+  margin-bottom: 20px;
+}
+
+.user-info-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.user-nickname {
+  font-weight: 500;
+  color: #303133;
+}
+
+.user-id {
+  font-size: 12px;
+  color: #909399;
+}
+
+.status-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-text {
+  color: #409EFF;
+  font-size: 12px;
+}
+
+.time-cell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #606266;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .filter-item, .date-range {
+    width: 100%;
+  }
+  
+  .filter-buttons {
+    margin-left: 0;
+    margin-top: 12px;
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+</style>

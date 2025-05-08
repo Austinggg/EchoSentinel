@@ -4,15 +4,16 @@ import threading  # 添加这一行
 import time
 import uuid
 from pathlib import Path
+from venv import logger
 
 import requests
 from flask import Blueprint, request, send_file
 from werkzeug.utils import secure_filename
 
-from utils.database import db
-from utils.HttpResponse import HttpResponse
+from utils.database import ContentAnalysis, VideoFile, VideoProcessingTask, VideoTranscript, db
+from utils.HttpResponse import HttpResponse, error_response, success_response
 
-bp = Blueprint("video", __name__)
+video_api = Blueprint("video", __name__)
 
 # 获取项目根目录的绝对路径
 BASE_DIR = Path(os.path.abspath(os.path.dirname(__file__))).parent.parent.parent
@@ -32,7 +33,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 """上传视频文件API，支持同时上传多个文件（最多3个），并且生成缩略图"""
-@bp.route("/api/videos/upload", methods=["POST"])
+@video_api.route("/api/videos/upload", methods=["POST"])
 def upload_video():
     # 检查是否有文件上传
     if 'file' not in request.files and 'files[]' not in request.files:
@@ -159,7 +160,7 @@ def upload_video():
         return HttpResponse.error(f"上传失败: {str(e)}", 500)
 
 """通过id获取视频文件"""
-@bp.route("/api/videos/<file_id>", methods=["GET"])
+@video_api.route("/api/videos/<file_id>", methods=["GET"])
 def get_video(file_id):
     try:
         from utils.database import VideoFile
@@ -186,7 +187,7 @@ def get_video(file_id):
         return HttpResponse.error(f"获取文件失败: {str(e)}", 500)
     
 """获取所有上传的视频列表"""
-@bp.route("/api/videos/list", methods=["GET"])
+@video_api.route("/api/videos/list", methods=["GET"])
 def list_videos():
     try:
         from utils.database import VideoFile
@@ -239,7 +240,7 @@ def list_videos():
         return HttpResponse.error(f"获取视频列表失败: {str(e)}", 500)
 
 """获取视频缩略图，如果不存在则生成"""
-@bp.route("/api/videos/<file_id>/thumbnail", methods=["GET"])
+@video_api.route("/api/videos/<file_id>/thumbnail", methods=["GET"])
 def get_video_thumbnail(file_id):
     try:
         from utils.database import VideoFile
@@ -275,7 +276,7 @@ def get_video_thumbnail(file_id):
         return HttpResponse.error(f"获取缩略图失败: {str(e)}", 500)
 
 """通过URL存储视频文件"""
-@bp.route("/api/videos/store-by-url", methods=["POST"])
+@video_api.route("/api/videos/store-by-url", methods=["POST"])
 def store_video_by_url():
     """通过URL存储视频文件"""
     try:
@@ -298,7 +299,7 @@ def store_video_by_url():
         return HttpResponse.error(f"通过URL存储视频失败: {str(e)}", 500)
 
 """获取单个视频的详细分析信息"""
-@bp.route("/api/videos/<file_id>/analysis", methods=["GET"])
+@video_api.route("/api/videos/<file_id>/analysis", methods=["GET"])
 def get_video_analysis(file_id):
     try:
         from utils.database import ContentAnalysis, VideoFile, VideoTranscript
@@ -359,7 +360,17 @@ def get_video_analysis(file_id):
                     "p6": {"score": analysis.p6_score, "reasoning": analysis.p6_reasoning},
                     "p7": {"score": analysis.p7_score, "reasoning": analysis.p7_reasoning},
                     "p8": {"score": analysis.p8_score, "reasoning": analysis.p8_reasoning}
-                }
+                },
+                # 添加新增的分析报告字段
+                "report": analysis.analysis_report,
+                # 添加风险评估结果
+                "risk": {
+                    "level": analysis.risk_level,
+                    "probability": analysis.risk_probability
+                },
+                # 添加时间戳
+                "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
+                "updated_at": analysis.updated_at.isoformat() if analysis.updated_at else None
             }
         
         return HttpResponse.success(result)
@@ -367,6 +378,44 @@ def get_video_analysis(file_id):
     except Exception as e:
         print(f"获取视频分析失败: {str(e)}")
         return HttpResponse.error(f"获取视频分析失败: {str(e)}", 500)
+#删除接口
+@video_api.route('/api/videos/<video_id>/all', methods=['DELETE'])
+def delete_video_with_related(video_id):
+    """删除视频和所有相关数据
+    
+    包括：
+    - 视频转录数据
+    - 内容分析数据
+    - 处理任务记录
+    - 视频文件记录
+    """
+    try:
+        # 查询视频是否存在
+        video = VideoFile.query.get(video_id)
+        if not video:
+            return error_response(404, f"未找到ID为 {video_id} 的视频")
+        
+        # 删除视频处理任务
+        VideoProcessingTask.query.filter_by(video_id=video_id).delete()
+        
+        # 删除内容分析
+        ContentAnalysis.query.filter_by(video_id=video_id).delete()
+        
+        # 删除视频转录
+        VideoTranscript.query.filter_by(video_id=video_id).delete()
+        
+        # 最后删除视频文件记录
+        db.session.delete(video)
+        
+        # 提交事务
+        db.session.commit()
+        
+        return success_response({"video_id": video_id, "deleted": True})
+    
+    except Exception as e:
+        db.session.rollback()
+        logger.exception(f"删除视频时发生错误: {str(e)}")
+        return error_response(500, f"服务器内部错误: {str(e)}")
 
 # 添加生成缩略图的独立函数
 def generate_video_thumbnail(video_path, file_id):

@@ -41,6 +41,20 @@ PROCESSING_STEPS = [
         "endpoint": "/api/videos/{video_id}/assess",
         "method": "POST",
         "depends_on": "extract"
+    },
+    {
+        "id": "classify",
+        "name": "风险分类",
+        "endpoint": "/api/videos/{video_id}/classify-risk",
+        "method": "POST",
+        "depends_on": "assessment"
+    },
+    {
+        "id": "report",
+        "name": "威胁报告",
+        "endpoint": "/api/videos/{video_id}/generate-report",
+        "method": "POST",
+        "depends_on": "classify"
     }
 ]
 
@@ -228,13 +242,12 @@ def get_processing_status(video_id):
         logger.exception(f"获取处理状态失败: {str(e)}")
         return error_response(500, f"获取状态失败: {str(e)}")
 
-# 修改upload_video函数，在上传完成后自动开始处理
 def auto_process_after_upload(file_id):
     """上传完成后自动开始处理视频"""
     try:
         requests.post(
             url=f"http://localhost:8000/api/videos/{file_id}/process",
-            json={"steps": ["transcription", "extract", "summary", "assessment"]}
+            json={"steps": ["transcription", "extract", "summary", "assessment", "classify", "report"]}
         )
         logger.info(f"已为视频 {file_id} 启动自动处理")
     except Exception as e:
