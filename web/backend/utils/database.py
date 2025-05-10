@@ -109,6 +109,10 @@ class VideoFile(db.Model):
     
     # 关联的用户
     user = relationship("UserProfile", back_populates="videos")
+    # 添加视频来源相关字段
+    source_url = mapped_column(String(500), nullable=True)  # 源视频URL
+    source_platform = mapped_column(String(50), nullable=True)  # 源平台（douyin/tiktok）
+    source_id = mapped_column(String(100), nullable=True)  # 平台上的原始ID
     
     def to_dict(self):
         tags_list = self.tags.split(',') if self.tags else []
@@ -368,6 +372,8 @@ class DouyinVideo(db.Model):
     tags = db.Column(db.Text, nullable=True)  # 视频标签，逗号分隔
     fetched_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)  # 抓取时间    
     # 关联关系
+    video_file_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=True)
+    video_file = db.relationship("VideoFile", backref=db.backref("douyin_video", uselist=False))
     user_profile = db.relationship("UserProfile", backref=db.backref("douyin_videos", lazy=True))    
     def to_dict(self):
         """转换为字典"""
@@ -389,7 +395,8 @@ class DouyinVideo(db.Model):
                 "play_count": self.play_count,
             },
             "tags": self.tags.split(",") if self.tags else [],
-            "fetched_at": self.fetched_at.isoformat()
+            "fetched_at": self.fetched_at.isoformat(),
+            "video_file_id": self.video_file_id
         }
 
 

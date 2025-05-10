@@ -553,7 +553,7 @@ def auto_process_video(video_id):
         # 调用处理API
         response = requests.post(
             url=f"http://localhost:8000/api/videos/{video_id}/process",
-            json={"steps": ["transcription", "extract", "summary", "assessment"]}
+            json={"steps": ["transcription", "extract", "summary", "assessment", "classify", "report"]}
         )
         print(f"视频 {video_id} 自动处理启动：{response.status_code}")
     except Exception as e:

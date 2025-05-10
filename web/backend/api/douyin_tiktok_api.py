@@ -10,6 +10,7 @@ import requests
 import logging
 # 导入视频处理相关函数
 from api.videoUpload import UPLOAD_DIR, THUMBNAIL_DIR, generate_video_thumbnail, auto_process_video
+from utils.database import VideoFile, db, DouyinVideo  # 添加DouyinVideo导入
 from utils.database import VideoFile, db
 from utils.HttpResponse import HttpResponse
 import json
@@ -26,9 +27,9 @@ DOCKER_SERVICE_HOST = "http://localhost:80"
 
 # 设置日志
 logger = logging.getLogger(__name__)
+"""在线下载抖音/TikTok视频，并且存入数据库开启分析"""
 @douyin_api.route('/api/download', methods=['GET'])
 def download_social_media_video():
-    """在线下载抖音/TikTok视频API"""
     try:
         # 获取参数
         video_url = request.args.get('url')
@@ -55,92 +56,276 @@ def download_social_media_video():
         # 生成唯一文件名
         file_id = str(uuid.uuid4())
         
-        # 调用Docker服务下载视频
-        api_endpoint = "/api/download" 
+        # 尝试从URL中提取aweme_id
+        aweme_id = None
+        if "video/" in video_url:
+            # 格式如: https://www.douyin.com/video/7372484719365098803
+            match = re.search(r'video/(\d+)', video_url)
+            if match:
+                aweme_id = match.group(1)
+                logger.info(f"从URL提取的aweme_id: {aweme_id}")
         
+        # 如果找到aweme_id，使用fetch_one_video接口获取详情
+        if aweme_id:
+            detail_api_endpoint = f"/api/douyin/web/fetch_one_video?aweme_id={aweme_id}"
+            logger.info(f"获取视频详情: {DOCKER_SERVICE_HOST}{detail_api_endpoint}")
+            
+            detail_response = requests.get(f"{DOCKER_SERVICE_HOST}{detail_api_endpoint}")
+            if detail_response.status_code != 200:
+                logger.error(f"获取视频详情失败: HTTP {detail_response.status_code}")
+                return {"code": 500, "message": f"获取视频详情失败: HTTP {detail_response.status_code}"}, 500
+            
+            try:
+                detail_data = detail_response.json()
+                if detail_data.get("code") != 200:
+                    logger.error(f"获取视频详情失败: {detail_data.get('message')}")
+                    return {"code": 500, "message": f"获取视频详情失败: {detail_data.get('message')}"}, 500
+                
+                # 提取视频详细信息
+                aweme_detail = detail_data.get("data", {}).get("aweme_detail", {})
+                
+                if not aweme_detail:
+                    logger.error("返回的数据中缺少aweme_detail")
+                    return handle_direct_download(video_url, platform, file_id, prefix, with_watermark)
+                
+                # 从详情中提取所需数据
+                desc = aweme_detail.get("desc", "无标题")
+                create_time_str = str(aweme_detail.get("create_time", ""))
+                author = aweme_detail.get("author", {})
+                nickname = author.get("nickname", "未知作者")
+                
+                # 提取标签信息
+                text_extra = aweme_detail.get("text_extra", [])
+                tags = []
+                for item in text_extra:
+                    if item.get("type") == 1 and item.get("hashtag_name"):
+                        tags.append("#" + item.get("hashtag_name"))
+                
+                # 调用下载API获取视频文件
+                download_api_endpoint = "/api/download"
+                
+                logger.info(f"开始下载视频: {DOCKER_SERVICE_HOST}{download_api_endpoint}")
+                
+                # 直接下载视频
+                download_response = requests.get(
+                    f"{DOCKER_SERVICE_HOST}{download_api_endpoint}",
+                    params={
+                        "url": video_url,
+                        "prefix": str(prefix).lower(),
+                        "with_watermark": str(with_watermark).lower()
+                    },
+                    stream=True  # 使用流模式
+                )
+                
+                if download_response.status_code != 200:
+                    return {"code": 500, "message": f"下载视频失败: HTTP {download_response.status_code}"}, 500
+                
+                # 解析创建时间
+                create_time = None
+                if create_time_str and create_time_str.isdigit():
+                    create_time = datetime.fromtimestamp(int(create_time_str))
+                else:
+                    create_time = datetime.now()
+                    
+                # 处理文件名
+                time_prefix = create_time.strftime('%Y-%m-%d %H-%M-%S')
+                
+                # 构建完整文件名
+                file_components = [time_prefix]
+                if desc and desc != "无标题":
+                    clean_desc = re.sub(r'[\\/*?:"<>|]', "", desc)
+                    clean_desc = clean_desc.replace(" ", "_").replace("\n", "_")
+                    if len(clean_desc) > 50:
+                        clean_desc = clean_desc[:47] + "..."
+                    file_components.append(clean_desc)
+                
+                if tags:
+                    # 为避免文件名过长，只使用前两个标签
+                    tag_str = "_".join(tags[:2])
+                    file_components.append(tag_str)
+                    
+                file_components.append("video")
+                formatted_filename = "_".join(file_components)
+                
+                # 确定文件扩展名
+                content_type = download_response.headers.get('content-type', '')
+                if 'video/mp4' in content_type:
+                    file_ext = 'mp4'
+                elif 'video/webm' in content_type:
+                    file_ext = 'webm'
+                else:
+                    file_ext = 'mp4'  # 默认扩展名
+                
+                # 完整的文件路径
+                filename_with_ext = f"{formatted_filename}.{file_ext}"
+                download_path = platform_dir / filename_with_ext
+                upload_path = UPLOAD_DIR / f"{file_id}.{file_ext}"
+                
+                # 保存视频文件
+                with open(download_path, 'wb') as f:
+                    for chunk in download_response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                
+                # 复制一份到上传目录
+                import shutil
+                shutil.copy2(str(download_path), str(upload_path))
+                
+                # 获取文件大小
+                file_size = os.path.getsize(upload_path)
+                
+                # 保存到数据库
+                new_video = VideoFile(
+                    id=file_id,
+                    filename=desc,
+                    extension=file_ext,
+                    size=file_size,
+                    mime_type=f"video/{file_ext}",
+                    user_id=None,
+                    upload_time=datetime.utcnow(),
+                    publish_time=create_time,
+                    tags=','.join(tags),
+                    status="processing",
+                    source_url=video_url,
+                    source_platform=platform,
+                    source_id=aweme_id
+                )
+
+                db.session.add(new_video)
+                db.session.commit()
+
+                # 添加以下代码：检查并更新DouyinVideo与VideoFile的关联
+                if aweme_id:
+                    existing_douyin_video = DouyinVideo.query.filter_by(aweme_id=aweme_id).first()
+                    if existing_douyin_video:
+                        # 更新关联
+                        existing_douyin_video.video_file_id = file_id
+                        db.session.commit()
+                        logger.info(f"更新视频关联: DouyinVideo (aweme_id: {aweme_id}) -> VideoFile (id: {file_id})")
+                    else:
+                        logger.info(f"未找到抖音视频记录: aweme_id={aweme_id}")
+
+                logger.info(f"视频下载成功: {download_path}, ID: {file_id}")
+                
+                # 启动后台处理
+                try:
+                    # 启动缩略图生成
+                    thumbnail_thread = threading.Thread(
+                        target=generate_video_thumbnail,
+                        args=(str(upload_path), file_id)
+                    )
+                    thumbnail_thread.daemon = True
+                    thumbnail_thread.start()
+                    
+                    # 启动视频处理
+                    processing_thread = threading.Thread(
+                        target=auto_process_video,
+                        args=(file_id,)
+                    )
+                    processing_thread.daemon = True
+                    processing_thread.start()
+                except Exception as e:
+                    logger.error(f"启动后处理任务失败: {str(e)}")
+                
+                # 返回成功响应
+                return {
+                    "code": 200, 
+                    "message": "下载成功",
+                    "data": {
+                        "fileId": file_id,
+                        "filename": desc,
+                        "size": file_size,
+                        "mimeType": f"video/{file_ext}",
+                        "url": f"/api/videos/{file_id}",
+                        "thumbnail": f"/api/videos/{file_id}/thumbnail",
+                        "publishTime": create_time.isoformat() if create_time else None,
+                        "tags": tags,
+                        "platform": platform,
+                        "originalUrl": video_url,
+                        "downloadPath": str(download_path)
+                    }
+                }
+                
+            except json.JSONDecodeError:
+                logger.warning("视频详情API未返回JSON数据，转为直接下载模式")
+                return handle_direct_download(video_url, platform, file_id, prefix, with_watermark)
+        else:
+            # 如果未能从URL中提取aweme_id，使用直接下载模式
+            logger.warning(f"无法从URL中提取aweme_id: {video_url}")
+            return handle_direct_download(video_url, platform, file_id, prefix, with_watermark)
+            
+    except Exception as e:
+        logger.exception(f"下载视频失败: {str(e)}")
+        db.session.rollback()
+        return {"code": 500, "message": f"下载失败: {str(e)}"}, 500
+
+# 抖音单个视频详情
+@douyin_api.route('/api/douyin/web/fetch_one_video', methods=['GET'])
+def proxy_douyin_one_video():
+    """代理抖音单个视频详情请求"""
+    try:
+        # 获取原始请求的查询参数
+        query_params = request.args.to_dict()
+        
+        # 构建目标URL
+        target_url = f"{DOCKER_SERVICE_HOST}/api/douyin/web/fetch_one_video"
+        
+        # 发送请求到Docker服务
         response = requests.get(
-            f"{DOCKER_SERVICE_HOST}{api_endpoint}",
+            target_url,
+            params=query_params,
+            headers={k: v for k, v in request.headers if k.lower() not in ['host', 'content-length']}
+        )
+        
+        # 记录请求信息
+        logger.info(f"Proxied request to: {target_url} with params: {query_params}")
+        
+        # 返回代理的响应
+        return Response(
+            response.content, 
+            status=response.status_code,
+            headers={
+                key: value for key, value in response.headers.items()
+                if key.lower() not in ['content-length', 'transfer-encoding', 'connection']
+            },
+            content_type=response.headers.get('content-type', 'application/json')
+        )
+    
+    except Exception as e:
+        logger.exception(f"Error proxying request to douyin video detail API: {str(e)}")
+        return {"code": 500, "message": f"代理请求失败: {str(e)}"}, 500
+def handle_direct_download(video_url, platform, file_id, prefix, with_watermark):
+    """直接下载处理（无元数据）"""
+    try:
+        platform_dir = DOWNLOAD_DIR / platform
+        
+        # 直接下载视频文件
+        download_response = requests.get(
+            f"{DOCKER_SERVICE_HOST}/api/download",
             params={
                 "url": video_url,
                 "prefix": str(prefix).lower(),
                 "with_watermark": str(with_watermark).lower()
-            }
+            },
+            stream=True
         )
         
-        if response.status_code != 200:
-            return {"code": 500, "message": f"下载服务请求失败: HTTP {response.status_code}"}, 500
-            
-        data = response.json()
-        if data.get("code") != 200:
-            return {"code": 500, "message": f"下载失败: {data.get('message')}"}, 500
-            
-        # 获取视频信息
-        video_info = data.get("data", {})
-        video_url = video_info.get("video_url")
+        if download_response.status_code != 200:
+            return {"code": 500, "message": f"下载视频失败: HTTP {download_response.status_code}"}, 500
         
-        if not video_url:
-            return {"code": 404, "message": "没有找到可下载的视频URL"}, 404
-            
-        # 从返回数据中提取元数据
-        aweme_id = video_info.get("aweme_id", "")
-        desc = video_info.get("desc", "无标题")
-        create_time_str = video_info.get("create_time", "")
+        # 使用当前时间作为文件名
+        time_prefix = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        formatted_filename = f"{time_prefix}_video"
         
-        # 获取视频作者信息
-        author = video_info.get("author", {})
-        nickname = author.get("nickname", "未知作者")
-        
-        # 解析创建时间
-        create_time = None
-        if create_time_str and create_time_str.isdigit():
-            create_time = datetime.fromtimestamp(int(create_time_str))
-        else:
-            create_time = datetime.now()
-            
-        # 提取标签
-        hashtags = video_info.get("hashtags", [])
-        tags = ["#" + tag.get("hashtag_name") for tag in hashtags if tag.get("hashtag_name")]
-        
-        # 处理文件名（以时间+标题+标签方式命名，与解析器兼容）
-        time_prefix = create_time.strftime('%Y-%m-%d %H-%M-%S')
-        
-        # 构建完整文件名
-        file_components = [time_prefix]
-        if desc and desc != "无标题":
-            # 清理描述中的特殊字符
-            clean_desc = re.sub(r'[\\/*?:"<>|]', "", desc)
-            clean_desc = clean_desc.replace(" ", "_").replace("\n", "_")
-            if len(clean_desc) > 50:  # 限制标题长度
-                clean_desc = clean_desc[:47] + "..."
-            file_components.append(clean_desc)
-        
-        if tags:
-            file_components.extend(tags)
-            
-        file_components.append("video")
-        formatted_filename = "_".join(file_components)
-        
-        # 下载视频文件
-        video_response = requests.get(video_url, stream=True)
-        if video_response.status_code != 200:
-            return {"code": 500, "message": f"下载视频失败: HTTP {video_response.status_code}"}, 500
-            
         # 确定文件扩展名
-        content_type = video_response.headers.get('content-type', '')
+        content_type = download_response.headers.get('content-type', '')
         if 'video/mp4' in content_type:
             file_ext = 'mp4'
         elif 'video/webm' in content_type:
             file_ext = 'webm'
         else:
-            # 从URL尝试提取扩展名
-            url_path = urllib.parse.urlparse(video_url).path
-            if '.' in url_path:
-                file_ext = url_path.split('.')[-1].lower()
-                if len(file_ext) > 5:  # 确保扩展名合理
-                    file_ext = 'mp4'  # 默认扩展名
-            else:
-                file_ext = 'mp4'  # 默认扩展名
-                
+            file_ext = 'mp4'  # 默认扩展名
+            
         # 完整的文件路径
         filename_with_ext = f"{formatted_filename}.{file_ext}"
         download_path = platform_dir / filename_with_ext
@@ -148,42 +333,55 @@ def download_social_media_video():
         
         # 保存视频文件
         with open(download_path, 'wb') as f:
-            for chunk in video_response.iter_content(chunk_size=8192):
+            for chunk in download_response.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
-        
-        # 复制一份到上传目录（使用文件ID）
+                    
+        # 复制一份到上传目录
         import shutil
         shutil.copy2(str(download_path), str(upload_path))
         
         # 获取文件大小
         file_size = os.path.getsize(upload_path)
         
-        # 保存到数据库
+        # 保存到数据库（简化信息）
         new_video = VideoFile(
             id=file_id,
-            filename=desc,
+            filename=f"从{platform}下载的视频",
             extension=file_ext,
             size=file_size,
             mime_type=f"video/{file_ext}",
             user_id=None,
             upload_time=datetime.utcnow(),
-            publish_time=create_time,
-            tags=','.join(tags),
+            publish_time=datetime.utcnow(),
             status="processing",
             source_url=video_url,
-            source_platform=platform,
-            source_id=aweme_id
+            source_platform=platform
         )
-        
+    
         db.session.add(new_video)
         db.session.commit()
-        
-        logger.info(f"视频下载成功: {download_path}, ID: {file_id}")
-        
-        # 启动缩略图生成和处理
+
+        # 尝试从URL提取aweme_id并更新关联
+        extracted_aweme_id = None
+        if "video/" in video_url:
+            match = re.search(r'video/(\d+)', video_url)
+            if match:
+                extracted_aweme_id = match.group(1)
+                
+        if extracted_aweme_id:
+            existing_douyin_video = DouyinVideo.query.filter_by(aweme_id=extracted_aweme_id).first()
+            if existing_douyin_video:
+                # 更新关联
+                existing_douyin_video.video_file_id = file_id
+                db.session.commit()
+                logger.info(f"更新视频关联(直接下载): DouyinVideo (aweme_id: {extracted_aweme_id}) -> VideoFile (id: {file_id})")
+
+        logger.info(f"视频下载成功（直接下载）: {download_path}, ID: {file_id}")
+                
+        # 启动后台处理
         try:
-            # 生成缩略图（在后台执行，不阻塞响应）
+            # 启动缩略图生成
             thumbnail_thread = threading.Thread(
                 target=generate_video_thumbnail,
                 args=(str(upload_path), file_id)
@@ -191,7 +389,7 @@ def download_social_media_video():
             thumbnail_thread.daemon = True
             thumbnail_thread.start()
             
-            # 启动自动处理流程
+            # 启动视频处理
             processing_thread = threading.Thread(
                 target=auto_process_video,
                 args=(file_id,)
@@ -201,28 +399,24 @@ def download_social_media_video():
         except Exception as e:
             logger.error(f"启动后处理任务失败: {str(e)}")
         
-        # 返回成功响应
         return {
             "code": 200, 
             "message": "下载成功",
             "data": {
                 "fileId": file_id,
-                "filename": desc,
+                "filename": f"从{platform}下载的视频",
                 "size": file_size,
                 "mimeType": f"video/{file_ext}",
                 "url": f"/api/videos/{file_id}",
                 "thumbnail": f"/api/videos/{file_id}/thumbnail",
-                "publishTime": create_time.isoformat() if create_time else None,
-                "tags": tags,
                 "platform": platform,
                 "originalUrl": video_url,
                 "downloadPath": str(download_path)
             }
         }
-        
+    
     except Exception as e:
-        logger.exception(f"下载视频失败: {str(e)}")
-        db.session.rollback()
+        logger.exception(f"直接下载处理失败: {str(e)}")
         return {"code": 500, "message": f"下载失败: {str(e)}"}, 500
     
 @douyin_api.route('/api/douyin/web/handler_user_profile', methods=['GET'])

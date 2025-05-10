@@ -1,7 +1,31 @@
 <script lang="ts" setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import {
+  ref,
+  onMounted,
+  computed,
+  watch,
+  onBeforeUnmount,
+  nextTick,
+} from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
+import * as echarts from 'echarts/core';
+import { PieChart } from 'echarts/charts';
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+// 注册ECharts组件
+echarts.use([
+  PieChart,
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  CanvasRenderer,
+]);
+
 import {
   ElAlert,
   ElAvatar,
@@ -22,6 +46,7 @@ import {
   ElOption,
   ElMessageBox,
 } from 'element-plus';
+
 import {
   ArrowLeft,
   VideoPlay,
@@ -37,8 +62,161 @@ import {
   CircleCheckFilled,
   CircleCloseFilled,
   Delete,
+  Loading,
+  ChatLineRound,
+  Location,
 } from '@element-plus/icons-vue';
+const loadingStats = ref(false);
+const statsData = ref({
+  total_videos: 0,
+  analyzed_videos: 0,
+  pending_videos: 0,
+  risk_distribution: [],
+  analysis_status: [],
+});
 
+// 图表引用
+const analysisStatusChart = ref(null);
+const riskDistributionChart = ref(null);
+
+// ECharts实例
+let statusChartInstance = null;
+let riskChartInstance = null;
+
+// 加载统计数据
+const loadStats = async () => {
+  if (!accountInfo.value?.id) return;
+
+  try {
+    loadingStats.value = true;
+
+    const response = await axios.get(
+      `/api/account/${accountInfo.value.id}/stats`,
+    );
+
+    if (response.data.code === 200) {
+      statsData.value = response.data.data;
+
+      // 初始化图表
+      nextTick(() => {
+        initCharts();
+      });
+    }
+  } catch (error) {
+    console.error('加载统计数据失败:', error);
+    ElMessage.error('加载统计数据失败');
+  } finally {
+    loadingStats.value = false;
+  }
+};
+
+// 初始化图表
+const initCharts = () => {
+  console.log('开始初始化图表', statsData.value);
+
+  // 使用setTimeout确保DOM完全渲染
+  setTimeout(() => {
+    try {
+      // 状态分析图
+      if (analysisStatusChart.value) {
+        console.log(
+          '容器1尺寸:',
+          analysisStatusChart.value.clientWidth,
+          analysisStatusChart.value.clientHeight,
+        );
+
+        // 先销毁旧实例
+        if (statusChartInstance) statusChartInstance.dispose();
+
+        // 重新创建实例
+        statusChartInstance = echarts.init(analysisStatusChart.value);
+
+        // 应用选项
+        const option = {
+          tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)',
+          },
+          legend: {
+            orient: 'vertical',
+            left: 10,
+            data: statsData.value.analysis_status.map((item) => item.name),
+          },
+          series: [
+            {
+              name: '分析状态',
+              type: 'pie',
+              radius: ['40%', '70%'],
+              avoidLabelOverlap: false,
+              itemStyle: {
+                borderRadius: 10,
+                borderColor: '#fff',
+                borderWidth: 2,
+              },
+              data: statsData.value.analysis_status,
+              color: ['#67C23A', '#E6A23C', '#909399'],
+            },
+          ],
+        };
+
+        console.log('应用选项:', option);
+        statusChartInstance.setOption(option);
+        console.log('图表1初始化完成');
+      }
+
+      // 风险分析图
+      if (riskDistributionChart.value) {
+        console.log(
+          '容器2尺寸:',
+          riskDistributionChart.value.clientWidth,
+          riskDistributionChart.value.clientHeight,
+        );
+
+        if (riskChartInstance) riskChartInstance.dispose();
+
+        riskChartInstance = echarts.init(riskDistributionChart.value);
+
+        const option = {
+          tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)',
+          },
+          legend: {
+            orient: 'vertical',
+            left: 10,
+            data: statsData.value.risk_distribution.map((item) => item.name),
+          },
+          series: [
+            {
+              name: '风险分布',
+              type: 'pie',
+              radius: ['40%', '70%'],
+              avoidLabelOverlap: false,
+              itemStyle: {
+                borderRadius: 10,
+                borderColor: '#fff',
+                borderWidth: 2,
+              },
+              data: statsData.value.risk_distribution,
+              color: ['#67C23A', '#E6A23C', '#F56C6C', '#909399'],
+            },
+          ],
+        };
+
+        riskChartInstance.setOption(option);
+        console.log('图表2初始化完成');
+      }
+    } catch (error) {
+      console.error('图表初始化错误:', error);
+    }
+  }, 300); // 给DOM渲染足够的时间
+};
+
+// 监听窗口大小变化
+const resizeCharts = () => {
+  if (statusChartInstance) statusChartInstance.resize();
+  if (riskChartInstance) riskChartInstance.resize();
+};
 const route = useRoute();
 const router = useRouter();
 
@@ -100,32 +278,194 @@ const formatNumber = (num) => {
 // 格式化日期
 const formatDate = (timestamp) => {
   if (!timestamp) return '-';
-  const date = new Date(typeof timestamp === 'number' ? timestamp * 1000 : timestamp);
+  const date = new Date(
+    typeof timestamp === 'number' ? timestamp * 1000 : timestamp,
+  );
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
+// 存储视频分析状态
+const videoAnalysisStatus = ref({});
+// 存储分析定时器
+const analysisTimers = ref({});
 
+// 获取分析按钮类型
+const getAnalysisButtonType = (row) => {
+  if (row.analyzing) return 'warning';
+  if (row.analysis_status === 'completed') return 'success';
+  if (row.analysis_status === 'failed') return 'danger';
+  return 'primary';
+};
+
+// 获取分析按钮文字
+const getAnalysisButtonText = (row) => {
+  if (row.analyzing) return '分析中...';
+  if (row.analysis_status === 'completed') return '已分析';
+  if (row.analysis_status === 'failed') return '分析失败';
+  return '分析视频';
+};
+
+// 获取风险等级标签类型
+const getRiskLevelType = (level) => {
+  if (!level) return 'info';
+  switch (level.toLowerCase()) {
+    case 'low':
+      return 'success';
+    case 'medium':
+      return 'warning';
+    case 'high':
+      return 'danger';
+    default:
+      return 'info';
+  }
+};
+
+// 获取风险等级文字
+const getRiskLevelText = (level) => {
+  if (!level) return '未知';
+  switch (level.toLowerCase()) {
+    case 'low':
+      return '低风险';
+    case 'medium':
+      return '中风险';
+    case 'high':
+      return '高风险';
+    default:
+      return '未知';
+  }
+};
+
+// 分析视频
+const analyzeVideo = async (row) => {
+  if (row.analyzing) {
+    ElMessage.info('视频正在分析中，请稍候');
+    return;
+  }
+
+  if (row.analysis_status === 'completed') {
+    ElMessage.info('视频已经分析过了');
+    return;
+  }
+
+  try {
+    // 设置分析中状态
+    row.analyzing = true;
+    row.analysis_progress = 0;
+
+    // 调用分析API
+    const response = await axios.post(
+      `/api/account/videos/${row.aweme_id}/analyze`,
+    );
+
+    if (response.data.code === 200) {
+      ElMessage.success('分析任务已启动');
+
+      // 启动定时器检查分析状态
+      if (analysisTimers.value[row.aweme_id]) {
+        clearInterval(analysisTimers.value[row.aweme_id]);
+      }
+
+      analysisTimers.value[row.aweme_id] = setInterval(() => {
+        checkAnalysisStatus(row);
+      }, 3000); // 每3秒检查一次
+    } else {
+      throw new Error(response.data.message || '启动分析失败');
+    }
+  } catch (error) {
+    console.error('分析视频失败:', error);
+    ElMessage.error(`分析失败: ${error.message || '未知错误'}`);
+    row.analyzing = false;
+  }
+};
+
+// 检查分析状态
+const checkAnalysisStatus = async (row) => {
+  try {
+    const response = await axios.get(
+      `/api/account/videos/${row.aweme_id}/analysis-status`,
+    );
+
+    if (response.data.code === 200) {
+      const statusData = response.data.data;
+
+      // 更新状态
+      row.analysis_status = statusData.status;
+
+      if (statusData.status === 'processing') {
+        row.analysis_progress = statusData.progress || 0;
+      } else if (statusData.status === 'completed') {
+        // 分析完成
+        row.analyzing = false;
+        row.risk_level = statusData.risk_level;
+        row.risk_probability = statusData.risk_probability;
+
+        // 停止定时器
+        if (analysisTimers.value[row.aweme_id]) {
+          clearInterval(analysisTimers.value[row.aweme_id]);
+          delete analysisTimers.value[row.aweme_id];
+        }
+
+        ElMessage.success('视频分析已完成');
+      } else if (statusData.status === 'failed') {
+        // 分析失败
+        row.analyzing = false;
+
+        // 停止定时器
+        if (analysisTimers.value[row.aweme_id]) {
+          clearInterval(analysisTimers.value[row.aweme_id]);
+          delete analysisTimers.value[row.aweme_id];
+        }
+
+        ElMessage.error(`分析失败: ${statusData.error || '未知错误'}`);
+      }
+    }
+  } catch (error) {
+    console.error('检查分析状态失败:', error);
+  }
+};
+
+// 查看分析报告
+const viewAnalysisReport = (row) => {
+  if (row.video_file_id) {
+    router.push(`/demos/analysis-records/analysis?id=${row.video_file_id}`);
+  } else {
+    ElMessage.warning('无法查看分析报告，缺少视频文件ID');
+  }
+};
+// 在加载视频列表后检查分析状态
+const checkAllAnalysisStatus = () => {
+  contentList.value.forEach((row) => {
+    // 如果有video_file_id，检查分析状态
+    if (row.video_file_id) {
+      checkAnalysisStatus(row);
+    }
+  });
+};
 // 加载用户信息
 const loadUserInfo = async () => {
   try {
     loading.value = true;
-    
+
     // 尝试从数据库获取用户信息
-    const dbResponse = await axios.get(`/api/account/by-secuid/${userId.value}`);
-    
+    const dbResponse = await axios.get(
+      `/api/account/by-secuid/${userId.value}`,
+    );
+
     if (dbResponse.data.code === 200 && dbResponse.data.data) {
       // 数据库中已有用户数据
       accountInfo.value = dbResponse.data.data;
       console.log('从数据库加载用户信息成功:', accountInfo.value);
-      
+
       // 有了用户ID，加载其视频列表
       loadVideosFromDB();
       return;
     }
-    
+
     // 如果数据库没有，尝试从抖音API获取
     if (platform.value === 'douyin') {
-      const response = await axios.get(`/api/douyin/web/handler_user_profile?sec_user_id=${userId.value}`);
-      
+      const response = await axios.get(
+        `/api/douyin/web/handler_user_profile?sec_user_id=${userId.value}`,
+      );
+
       if (response.data.code === 200) {
         accountInfo.value = response.data.data.user;
         console.log('从抖音API加载用户信息成功:', accountInfo.value);
@@ -147,27 +487,32 @@ const loadVideosFromDB = async () => {
     console.log('无法加载视频：缺少用户ID');
     return;
   }
-  
+
   try {
     loading.value = true;
     console.log('正在从数据库加载视频列表...');
-    
+
     // 构建API请求参数
     const params = {
       page: currentPage.value,
       per_page: pageSize.value,
       sort_by: sortField.value,
       sort_order: sortOrder.value,
-      search: searchText.value || undefined
+      search: searchText.value || undefined,
     };
-    
+
     // 从后端API获取视频列表
-    const response = await axios.get(`/api/account/${accountInfo.value.id}/videos`, { params });
-    
+    const response = await axios.get(
+      `/api/account/${accountInfo.value.id}/videos`,
+      { params },
+    );
+
     if (response.data.code === 200) {
       contentList.value = response.data.data.videos || [];
       totalItems.value = response.data.data.total || 0;
       console.log('视频列表加载成功，共', totalItems.value, '条记录');
+      // 加载完视频列表后检查分析状态
+      checkAllAnalysisStatus();
     } else {
       throw new Error(response.data.message || '获取视频列表失败');
     }
@@ -186,26 +531,29 @@ const fetchLatestVideos = async () => {
     ElMessage.warning('无法获取视频：缺少用户ID');
     return;
   }
-  
+
   try {
     fetchingVideos.value = true;
-    
+
     // 显示加载中提示
     const loading = ElLoading.service({
       lock: true,
       text: '正在获取最新视频...',
       background: 'rgba(0, 0, 0, 0.7)',
     });
-    
+
     // 调用后端API获取最新视频
-    const response = await axios.post(`/api/account/${accountInfo.value.id}/fetch_videos`, {
-      max_videos: 30 // 最多获取30个视频
-    });
-    
+    const response = await axios.post(
+      `/api/account/${accountInfo.value.id}/fetch_videos`,
+      {
+        max_videos: 30, // 最多获取30个视频
+      },
+    );
+
     if (response.data.code === 200) {
       const videosAdded = response.data.data.videos_added;
       ElMessage.success(`成功获取${videosAdded}个视频`);
-      
+
       // 重新加载视频列表
       await loadVideosFromDB();
     } else {
@@ -287,44 +635,52 @@ watch(searchText, (value) => {
     handleSearch(); // 当搜索框清空时，自动重新加载
   }
 });
+// 在视频列表加载后加载统计数据
+watch(
+  () => contentList.value,
+  (newVal, oldVal) => {
+    // 只在初始加载时触发一次，而不是每次列表变化都触发
+    if (newVal && newVal.length > 0 && (!oldVal || oldVal.length === 0)) {
+      loadStats();
+    }
+  },
+);
 
 // 初始加载
+// 组件挂载时的处理
 onMounted(() => {
+  // 添加窗口大小变化监听
+  window.addEventListener('resize', resizeCharts);
+
+  // 初始加载
   if (!platform.value || !userId.value) {
     error.value = '缺少必要的参数';
     return;
   }
-
   loadUserInfo();
+
+  // 调试
+  console.log(
+    '组件已挂载，图表容器:',
+    analysisStatusChart.value,
+    riskDistributionChart.value,
+  );
+});
+// 组件卸载时清理所有定时器
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeCharts);
+  if (statusChartInstance) statusChartInstance.dispose();
+  if (riskChartInstance) riskChartInstance.dispose();
+
+  Object.values(analysisTimers.value).forEach((timer) => {
+    clearInterval(timer);
+  });
+  analysisTimers.value = {};
 });
 </script>
 
 <template>
   <div class="user-content-container">
-    <!-- 返回按钮和标题 -->
-    <div class="page-header">
-      <el-button type="text" @click="goBack">
-        <el-icon><ArrowLeft /></el-icon> 返回
-      </el-button>
-      <h2 class="page-title">{{ platformName }}用户内容</h2>
-      
-      <!-- 添加搜索框 -->
-      <div class="search-box">
-        <el-input
-          v-model="searchText"
-          placeholder="搜索标题或标签"
-          class="search-input"
-          clearable
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-button type="primary" @click="handleSearch">搜索</el-button>
-      </div>
-    </div>
-
     <!-- 错误提示 -->
     <el-alert
       v-if="error"
@@ -335,41 +691,155 @@ onMounted(() => {
       class="error-alert"
     />
 
-    <!-- 用户信息卡片 -->
+    <!-- 重新设计的用户信息卡片 -->
     <el-card v-if="accountInfo" class="user-card">
+      <template #header>
+        <div class="card-header">
+          <span class="card-header-title">账号详情</span>
+          <div class="card-header-actions">
+            <el-button
+              type="primary"
+              :loading="fetchingVideos"
+              @click="fetchLatestVideos"
+              size="small"
+            >
+              <el-icon><Refresh /></el-icon>
+              获取最新视频
+            </el-button>
+            <el-button
+              type="primary"
+              size="small"
+              @click="loadStats"
+              :loading="loadingStats"
+            >
+              <el-icon><Refresh /></el-icon>
+              刷新分析数据
+            </el-button>
+          </div>
+        </div>
+      </template>
+
+      <!-- 改进的用户信息布局 -->
       <div class="user-info-container">
-        <div class="user-info">
-          <el-avatar :size="60" :src="accountInfo.avatar" />
-          <div class="user-details">
-            <h3>{{ accountInfo.nickname }}</h3>
-            <div class="user-stats">
-              <span>{{ formatNumber(accountInfo.following_count) }} 关注</span>
-              <span class="divider">|</span>
-              <span>{{ formatNumber(accountInfo.follower_count) }} 粉丝</span>
-              <span class="divider">|</span>
-              <span>{{ formatNumber(accountInfo.aweme_count) }} 作品</span>
-            </div>
-            <div class="user-signature" v-if="accountInfo.signature">
-              {{ accountInfo.signature }}
+        <!-- 左侧：用户头像 -->
+        <div class="user-avatar-section">
+          <div class="account-avatar-container">
+            <el-avatar
+              :size="100"
+              :src="accountInfo.avatar"
+              class="account-avatar"
+            />
+            <div v-if="accountInfo.custom_verify" class="verified-badge">
+              <el-tooltip :content="accountInfo.custom_verify">
+                <el-icon><CircleCheckFilled /></el-icon>
+              </el-tooltip>
             </div>
           </div>
         </div>
-        
-        <!-- 添加刷新按钮 -->
-        <div class="user-actions">
-          <el-button 
-            type="primary"
-            :loading="fetchingVideos"
-            @click="fetchLatestVideos"
-            size="small"
-          >
-            <el-icon><Refresh /></el-icon>
-            获取最新视频
-          </el-button>
+
+        <!-- 右侧：用户信息 -->
+        <div class="user-details-section">
+          <h2 class="account-name">{{ accountInfo.nickname }}</h2>
+          <div class="account-id">
+            {{ accountInfo.unique_id || accountInfo.sec_user_id }}
+          </div>
+
+          <div class="account-stats">
+            <div class="stat-item">
+              <div class="stat-value">
+                {{ formatNumber(accountInfo.following_count) }}
+              </div>
+              <div class="stat-label">关注</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">
+                {{ formatNumber(accountInfo.follower_count) }}
+              </div>
+              <div class="stat-label">粉丝</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">
+                {{ formatNumber(accountInfo.total_favorited || 0) }}
+              </div>
+              <div class="stat-label">获赞</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">
+                {{ formatNumber(accountInfo.aweme_count) }}
+              </div>
+              <div class="stat-label">作品</div>
+            </div>
+          </div>
+
+          <!-- 用户地理位置 -->
+          <div v-if="accountInfo.ip_location" class="account-location">
+            <el-icon><Location /></el-icon> {{ accountInfo.ip_location }}
+          </div>
+
+          <!-- 用户简介 -->
+          <div v-if="accountInfo.signature" class="account-bio">
+            {{ accountInfo.signature }}
+          </div>
+        </div>
+      </div>
+
+      <div class="analysis-section">
+        <el-divider content-position="center">内容分析概览</el-divider>
+        <div class="analysis-overview-section">
+          <div class="stats-container">
+            <div v-if="loadingStats" class="stats-loading">
+              <el-icon class="rotating"><Loading /></el-icon>
+              <span>加载统计数据...</span>
+            </div>
+            <div v-else-if="!statsData.total_videos" class="stats-empty">
+              <el-empty description="暂无统计数据">
+                <template #description>
+                  <p>尚未采集到视频数据或尚未进行分析</p>
+                </template>
+              </el-empty>
+            </div>
+            <div v-else class="stats-content">
+              <!-- 统计数字 -->
+              <div class="stats-summary">
+                <div class="stat-item">
+                  <div class="stat-value">{{ statsData.total_videos }}</div>
+                  <div class="stat-label">总视频数</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-value">{{ statsData.analyzed_videos }}</div>
+                  <div class="stat-label">已分析</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-value">{{ statsData.pending_videos }}</div>
+                  <div class="stat-label">待分析</div>
+                </div>
+              </div>
+
+              <!-- 图表区域 -->
+              <div class="charts-container">
+                <!-- 分析状态图表 -->
+                <div class="chart-wrapper">
+                  <h4>分析状态分布</h4>
+                  <div
+                    ref="analysisStatusChart"
+                    class="echarts-container"
+                  ></div>
+                </div>
+
+                <!-- 风险级别图表 -->
+                <div class="chart-wrapper">
+                  <h4>风险级别分布</h4>
+                  <div
+                    ref="riskDistributionChart"
+                    class="echarts-container"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </el-card>
-
     <!-- 视频列表表格 -->
     <el-card class="content-table-card">
       <div class="table-header">
@@ -377,14 +847,32 @@ onMounted(() => {
           <h3>发布视频列表</h3>
           <span class="video-count">共 {{ totalItems }} 条内容</span>
         </div>
-        
-        <!-- 表格操作区域 -->
-        <div class="table-operations" v-if="multipleSelection.length > 0">
-          <span class="selected-count">已选择 {{ multipleSelection.length }} 项</span>
+
+        <!-- 中间：表格操作区域 -->
+        <div v-if="multipleSelection.length > 0" class="table-operations">
+          <span class="selected-count"
+            >已选择 {{ multipleSelection.length }} 项</span
+          >
           <el-button size="small" @click="clearSelection">清除选择</el-button>
         </div>
+
+        <!-- 右侧：搜索框 -->
+        <div class="search-box">
+          <el-input
+            v-model="searchText"
+            placeholder="搜索标题或标签"
+            class="search-input"
+            clearable
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <el-button type="primary" @click="handleSearch">搜索</el-button>
+        </div>
       </div>
-      
+
       <!-- 数据表格 -->
       <el-table
         ref="multipleTableRef"
@@ -398,7 +886,7 @@ onMounted(() => {
         @row-click="handleRowClick"
       >
         <el-table-column type="selection" width="55" />
-        
+
         <!-- 封面列 -->
         <el-table-column label="封面" width="100" align="center">
           <template #default="{ row }">
@@ -416,15 +904,17 @@ onMounted(() => {
             </el-image>
           </template>
         </el-table-column>
-        
+
         <!-- 标题/描述列 -->
         <el-table-column label="标题" prop="desc" min-width="240">
           <template #default="{ row }">
             <div class="video-title-cell">
               <el-tooltip :content="row.desc" placement="top" effect="light">
-                <div class="multiline-text video-title">{{ row.desc || '无标题' }}</div>
+                <div class="multiline-text video-title">
+                  {{ row.desc || '无标题' }}
+                </div>
               </el-tooltip>
-              
+
               <!-- 标签 -->
               <div class="video-tags" v-if="row.tags && row.tags.length > 0">
                 <el-tag
@@ -443,12 +933,12 @@ onMounted(() => {
             </div>
           </template>
         </el-table-column>
-        
+
         <!-- 发布时间列 -->
-        <el-table-column 
-          label="发布时间" 
-          prop="create_time" 
-          width="120" 
+        <el-table-column
+          label="发布时间"
+          prop="create_time"
+          width="120"
           sortable="custom"
         >
           <template #default="{ row }">
@@ -458,55 +948,82 @@ onMounted(() => {
             </div>
           </template>
         </el-table-column>
-        
+        <!-- 添加风险等级列 -->
+        <el-table-column label="风险等级" width="120" align="center">
+          <template #default="{ row }">
+            <div v-if="row.analysis_status === 'completed'">
+              <el-tag :type="getRiskLevelType(row.risk_level)" effect="dark">
+                {{ getRiskLevelText(row.risk_level) }}
+              </el-tag>
+            </div>
+            <div v-else-if="row.analyzing">
+              <el-progress
+                type="circle"
+                :width="30"
+                :stroke-width="4"
+                :percentage="row.analysis_progress || 0"
+              />
+            </div>
+            <div v-else>
+              <el-tag type="info" effect="plain">未分析</el-tag>
+            </div>
+          </template>
+        </el-table-column>
         <!-- 点赞数列 -->
-        <el-table-column 
-          label="点赞数" 
-          prop="digg_count" 
-          width="100" 
+        <el-table-column
+          label="点赞数"
+          prop="digg_count"
+          width="100"
           sortable="custom"
           align="center"
         >
           <template #default="{ row }">
             <div class="stat-cell">
               <el-icon><Star /></el-icon>
-              <span>{{ formatNumber(row.statistics?.digg_count || row.digg_count) }}</span>
+              <span>{{
+                formatNumber(row.statistics?.digg_count || row.digg_count)
+              }}</span>
             </div>
           </template>
         </el-table-column>
-        
+
         <!-- 评论数列 -->
-        <el-table-column 
-          label="评论数" 
-          prop="comment_count" 
-          width="100" 
+        <el-table-column
+          label="评论数"
+          prop="comment_count"
+          width="100"
           sortable="custom"
           align="center"
         >
           <template #default="{ row }">
             <div class="stat-cell">
-              <el-icon><Chat /></el-icon>
-              <span>{{ formatNumber(row.statistics?.comment_count || row.comment_count) }}</span>
+              <el-icon><ChatLineRound /></el-icon>
+              <!-- 替换 Chat -->
+              <span>{{
+                formatNumber(row.statistics?.comment_count || row.comment_count)
+              }}</span>
             </div>
           </template>
         </el-table-column>
-        
+
         <!-- 分享数列 -->
-        <el-table-column 
-          label="分享数" 
-          prop="share_count" 
-          width="100" 
+        <el-table-column
+          label="分享数"
+          prop="share_count"
+          width="100"
           sortable="custom"
           align="center"
         >
           <template #default="{ row }">
             <div class="stat-cell">
               <el-icon><Share /></el-icon>
-              <span>{{ formatNumber(row.statistics?.share_count || row.share_count) }}</span>
+              <span>{{
+                formatNumber(row.statistics?.share_count || row.share_count)
+              }}</span>
             </div>
           </template>
         </el-table-column>
-        
+
         <!-- 分享链接列 -->
         <el-table-column label="分享链接" width="150">
           <template #default="{ row }">
@@ -517,30 +1034,44 @@ onMounted(() => {
             </el-tooltip>
           </template>
         </el-table-column>
-        
-        <!-- 操作列 -->
-        <el-table-column label="操作" width="150" fixed="right" align="center">
+        <!-- 在操作列添加分析按钮 -->
+        <el-table-column label="操作" width="240" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button 
-              size="small" 
-              type="primary" 
+            <el-button
+              size="small"
+              type="primary"
               link
               @click.stop="handleRowClick(row)"
             >
               查看详情
             </el-button>
-            <el-button 
-              size="small" 
-              type="primary" 
+
+            <!-- 添加分析按钮，根据分析状态显示不同状态 -->
+            <el-button
+              size="small"
+              :type="getAnalysisButtonType(row)"
               link
-              @click.stop="$router.push(`/main/content-analysis?id=${row.aweme_id}`)"
+              :loading="row.analyzing"
+              @click.stop="analyzeVideo(row)"
             >
-              内容分析
+              {{ getAnalysisButtonText(row) }}
+            </el-button>
+
+            <!-- 如果已分析，添加查看分析报告按钮 -->
+            <el-button
+              v-if="row.analysis_status === 'completed'"
+              size="small"
+              type="success"
+              link
+              @click.stop="viewAnalysisReport(row)"
+            >
+              查看分析
             </el-button>
           </template>
         </el-table-column>
+
+
       </el-table>
-      
       <!-- 分页组件 -->
       <div class="pagination-container" v-if="totalItems > 0">
         <el-pagination
@@ -553,10 +1084,10 @@ onMounted(() => {
           @current-change="handleCurrentChange"
         />
       </div>
-      
+
       <!-- 空状态 -->
-      <el-empty 
-        v-if="contentList.length === 0 && !loading" 
+      <el-empty
+        v-if="contentList.length === 0 && !loading"
         description="暂无视频数据"
       >
         <template #default>
@@ -574,83 +1105,174 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* 页面容器样式 */
+.user-info-container {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.user-avatar-section {
+  flex-shrink: 0;
+}
+
+.user-details-section {
+  flex: 1;
+}
+
+.account-name {
+  font-size: 22px;
+  margin: 0 0 4px 0;
+}
+
+.account-id {
+  color: #909399;
+  font-size: 14px;
+  margin-bottom: 15px;
+}
+
+.account-stats {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.account-location {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #606266;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+/* 在移动设备上调整为上下布局 */
+@media (max-width: 768px) {
+  .user-info-container {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .account-stats {
+    justify-content: center;
+  }
+
+  .account-location,
+  .account-bio {
+    justify-content: center;
+  }
+}
 .user-content-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
 }
 
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.page-title {
-  margin: 0 0 0 10px;
-  font-size: 24px;
-  color: #303133;
-}
-
-.search-box {
-  display: flex;
-  gap: 10px;
-}
-
-.search-input {
-  width: 220px;
-}
-
+/* 错误提示样式 */
 .error-alert {
   margin-bottom: 20px;
 }
 
+/* 用户卡片样式 */
 .user-card {
   margin-bottom: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.user-info-container {
+/* 卡片头部样式 */
+.card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
 }
 
-.user-info {
+.card-header-title {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.card-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* 用户头像和信息样式 */
+.account-avatar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.account-avatar {
+  border: 3px solid #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 12px;
+}
+
+.verified-badge {
+  position: absolute;
+  bottom: 65px;
+  right: calc(50% - 50px);
+  background: #409eff;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  color: white;
+  border: 2px solid white;
 }
 
-.user-details {
-  margin-left: 15px;
+.account-name {
+  font-size: 22px;
+  margin: 0 0 4px 0;
+  text-align: center;
 }
 
-.user-details h3 {
-  margin: 0 0 5px 0;
-  font-size: 18px;
+.account-id {
+  color: #909399;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 12px;
 }
 
-.user-stats {
+.account-info-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-stats {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.account-bio {
+  margin: 16px 0;
+  line-height: 1.5;
   color: #606266;
+  word-break: break-word;
+}
+
+.account-location {
+  color: #606266;
+  margin-bottom: 8px;
   font-size: 14px;
 }
 
-.user-signature {
-  margin-top: 8px;
-  color: #606266;
-  font-size: 13px;
-  max-width: 400px;
+/* 分析概览区域样式 */
+.analysis-section {
+  margin-top: 20px;
 }
 
-.divider {
-  margin: 0 8px;
-  color: #dcdfe6;
-}
-
+/* 表格区域样式 */
 .content-table-card {
   margin-bottom: 20px;
 }
@@ -693,9 +1315,13 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.user-actions {
+.search-box {
   display: flex;
   gap: 10px;
+}
+
+.search-input {
+  width: 220px;
 }
 
 /* 视频标题与标签样式 */
@@ -733,7 +1359,8 @@ onMounted(() => {
 }
 
 /* 数据单元格样式 */
-.stat-cell, .time-cell {
+.stat-cell,
+.time-cell {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -754,6 +1381,7 @@ onMounted(() => {
   color: #909399;
 }
 
+/* 分页和链接样式 */
 .pagination-container {
   margin-top: 20px;
   display: flex;
@@ -769,6 +1397,7 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+/* 空状态样式 */
 .empty-action {
   display: flex;
   flex-direction: column;
@@ -784,5 +1413,125 @@ onMounted(() => {
 
 :deep(.el-table__row:hover) {
   background-color: rgba(64, 158, 255, 0.08) !important;
+}
+
+/* 图表相关样式 */
+.stats-container {
+  min-height: 300px;
+}
+
+.charts-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: space-around;
+  margin-top: 20px;
+}
+
+.chart-wrapper {
+  flex: 1 1 400px;
+  min-width: 300px;
+  border: 1px solid #eee;
+  padding: 10px;
+}
+
+.echarts-container {
+  height: 300px;
+  width: 100%;
+  background-color: #fafafa;
+}
+
+/* 统计数据加载状态 */
+.stats-loading,
+.stats-empty {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+  color: #909399;
+}
+
+.rotating {
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 统计数字样式 */
+.stats-summary {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 20px;
+  padding: 20px;
+  background: #f8f8f8;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.stat-item {
+  padding: 15px 25px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-5px);
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: bold;
+  color: #409eff;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #606266;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .account-avatar-col,
+  .account-info-col {
+    text-align: center;
+  }
+
+  .account-stats {
+    justify-content: center;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .card-header-actions {
+    width: 100%;
+    justify-content: space-around;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .search-box {
+    width: 100%;
+  }
+
+  .search-input {
+    flex: 1;
+  }
 }
 </style>
