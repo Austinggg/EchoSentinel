@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { UserProfile } from './types/main';
+import type { UserProfile } from './types';
 
 import { ref, watch } from 'vue';
 

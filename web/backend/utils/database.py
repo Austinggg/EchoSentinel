@@ -1,9 +1,9 @@
-import json
 import datetime
-from typing import Dict, Optional, Any
+import json
+from typing import Dict, Optional
 from urllib.parse import quote_plus  # 用于密码编码
 
-from sqlalchemy import JSON, BigInteger, Boolean, String, ForeignKey, Integer, DateTime
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -51,7 +51,7 @@ class UserProfile(db.Model):
     is_series_user: Mapped[Optional[bool]] = mapped_column(Boolean)
     covers: Mapped[Dict] = mapped_column(JSON, default={})
     avatar_medium: Mapped[Optional[str]] = mapped_column(String(255))
-    
+
     # 添加与VideoFile的关系
     videos = relationship("VideoFile", back_populates="user")
 
@@ -89,7 +89,7 @@ class UserProfile(db.Model):
 # 视频文件表(分析结果表)
 class VideoFile(db.Model):
     __tablename__ = "video_files"
-    
+
     id = mapped_column(String(36), primary_key=True)
     filename = mapped_column(String(255), nullable=False)
     extension = mapped_column(String(10))  # 只存储文件扩展名
@@ -97,25 +97,31 @@ class VideoFile(db.Model):
     mime_type = mapped_column(String(100))
     upload_time = mapped_column(DateTime, default=datetime.datetime.utcnow)
     user_id = mapped_column(Integer, ForeignKey("user_profiles.id"), nullable=True)
-    
+
     # 分析结果相关字段
     summary = mapped_column(String(500), default="处理中")
     risk_level = mapped_column(String(20), default="processing")
     status = mapped_column(String(50), default="processing")
-    
+
     # 新增爬虫数据字段
     publish_time = mapped_column(DateTime, nullable=True)  # 视频发布时间
     tags = mapped_column(String(500), nullable=True)  # 视频标签，以逗号分隔
-    
+
     # 关联的用户
     user = relationship("UserProfile", back_populates="videos")
     # 添加视频来源相关字段
     source_url = mapped_column(String(500), nullable=True)  # 源视频URL
     source_platform = mapped_column(String(50), nullable=True)  # 源平台（douyin/tiktok）
     source_id = mapped_column(String(100), nullable=True)  # 平台上的原始ID
-    
+
+    # 添加数字人检测字段
+    aigc_use=mapped_column(String(50),nullable=True)
+    aigc_status = mapped_column(String(50), nullable=True)
+    aigc_face = mapped_column(String(50), nullable=True)
+    aigc_body = mapped_column(String(50), nullable=True)
+
     def to_dict(self):
-        tags_list = self.tags.split(',') if self.tags else []
+        tags_list = self.tags.split(",") if self.tags else []
         return {
             "id": self.id,
             "filename": self.filename,
@@ -127,62 +133,66 @@ class VideoFile(db.Model):
             "riskLevel": self.risk_level,
             "status": self.status,
             "tags": tags_list,
-            "url": f"/api/videos/{self.id}"
+            "url": f"/api/videos/{self.id}",
         }
+
 
 # 视频转录表
 class VideoTranscript(db.Model):
     __tablename__ = "video_transcripts"
-    
+
     id = db.Column(db.Integer, primary_key=True)
     video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
     transcript = db.Column(db.Text, nullable=True)  # 完整转录文本
     chunks = db.Column(db.JSON, default=[])  # 带时间戳的分段文本
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
 
     # 关联的视频
-    video = db.relationship("VideoFile", backref=db.backref("transcript_data", uselist=False))
+    video = db.relationship(
+        "VideoFile", backref=db.backref("transcript_data", uselist=False)
+    )
 
 
 class ContentAnalysis(db.Model):
     __tablename__ = "content_analysis"
-    
+
     id = db.Column(db.Integer, primary_key=True)
     video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
     intent = db.Column(db.JSON, default=[])  # 意图列表
     statements = db.Column(db.JSON, default=[])  # 陈述内容列表
     summary = db.Column(db.Text, nullable=True)  # 内容摘要
-    
+
     # P1: 背景信息充分性评估
     p1_score = db.Column(db.Float, nullable=True)
     p1_reasoning = db.Column(db.Text, nullable=True)
-    
+
     # P2: 背景信息准确性评估
     p2_score = db.Column(db.Float, nullable=True)
     p2_reasoning = db.Column(db.Text, nullable=True)
-    
+
     # P3: 内容完整性评估
     p3_score = db.Column(db.Float, nullable=True)
     p3_reasoning = db.Column(db.Text, nullable=True)
-    
+
     # P4: 不当意图评估
     p4_score = db.Column(db.Float, nullable=True)
     p4_reasoning = db.Column(db.Text, nullable=True)
-    
+
     # P5: 发布者历史评估
     p5_score = db.Column(db.Float, nullable=True)
     p5_reasoning = db.Column(db.Text, nullable=True)
-    
+
     # P6: 情感煽动性评估
     p6_score = db.Column(db.Float, nullable=True)
     p6_reasoning = db.Column(db.Text, nullable=True)
-    
+
     # P7: 诱导行为评估
     p7_score = db.Column(db.Float, nullable=True)
     p7_reasoning = db.Column(db.Text, nullable=True)
-    
+
     # P8: 信息一致性评估
     p8_score = db.Column(db.Float, nullable=True)
     p8_reasoning = db.Column(db.Text, nullable=True)
@@ -192,11 +202,15 @@ class ContentAnalysis(db.Model):
     analysis_report = db.Column(db.Text, nullable=True)  # 存储生成的分析报告
     # 时间戳
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-    
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
     # 关联的视频
-    video = db.relationship("VideoFile", backref=db.backref("content_analysis", uselist=False))
-    
+    video = db.relationship(
+        "VideoFile", backref=db.backref("content_analysis", uselist=False)
+    )
+
     def to_dict(self):
         """转换为字典，方便API返回"""
         result = {
@@ -209,66 +223,78 @@ class ContentAnalysis(db.Model):
                 "p5": {"score": self.p5_score, "reasoning": self.p5_reasoning},
                 "p6": {"score": self.p6_score, "reasoning": self.p6_reasoning},
                 "p7": {"score": self.p7_score, "reasoning": self.p7_reasoning},
-                "p8": {"score": self.p8_score, "reasoning": self.p8_reasoning}
+                "p8": {"score": self.p8_score, "reasoning": self.p8_reasoning},
             },
-            "risk": {
-                "level": self.risk_level,
-                "probability": self.risk_probability
-            },
+            "risk": {"level": self.risk_level, "probability": self.risk_probability},
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
-        
+
         # 添加报告字段（如果存在）
         if self.analysis_report:
             result["analysis_report"] = self.analysis_report
-            
+
         return result
-    
+
     def update_assessment(self, assessment_item, score, reasoning=None):
         """更新特定评估项的得分和理由"""
         if assessment_item == "p1":
             self.p1_score = score
-            if reasoning: self.p1_reasoning = reasoning
+            if reasoning:
+                self.p1_reasoning = reasoning
         elif assessment_item == "p2":
             self.p2_score = score
-            if reasoning: self.p2_reasoning = reasoning
+            if reasoning:
+                self.p2_reasoning = reasoning
         elif assessment_item == "p3":
             self.p3_score = score
-            if reasoning: self.p3_reasoning = reasoning
+            if reasoning:
+                self.p3_reasoning = reasoning
         elif assessment_item == "p4":
             self.p4_score = score
-            if reasoning: self.p4_reasoning = reasoning
+            if reasoning:
+                self.p4_reasoning = reasoning
         elif assessment_item == "p5":
             self.p5_score = score
-            if reasoning: self.p5_reasoning = reasoning
+            if reasoning:
+                self.p5_reasoning = reasoning
         elif assessment_item == "p6":
             self.p6_score = score
-            if reasoning: self.p6_reasoning = reasoning
+            if reasoning:
+                self.p6_reasoning = reasoning
         elif assessment_item == "p7":
             self.p7_score = score
-            if reasoning: self.p7_reasoning = reasoning
+            if reasoning:
+                self.p7_reasoning = reasoning
         elif assessment_item == "p8":
             self.p8_score = score
-            if reasoning: self.p8_reasoning = reasoning
+            if reasoning:
+                self.p8_reasoning = reasoning
+
 
 # 单独视频上传任务状态跟踪表
 class VideoProcessingTask(db.Model):
     __tablename__ = "video_processing_tasks"
-    
+
     id = db.Column(db.Integer, primary_key=True)
     video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
-    task_type = db.Column(db.String(30), nullable=False)  # transcription, summary, assessment
-    status = db.Column(db.String(30), default="pending")  # pending, processing, completed, failed
-    progress = db.Column(db.Float, default=0.0)           # 0-100%
+    task_type = db.Column(
+        db.String(30), nullable=False
+    )  # transcription, summary, assessment
+    status = db.Column(
+        db.String(30), default="pending"
+    )  # pending, processing, completed, failed
+    progress = db.Column(db.Float, default=0.0)  # 0-100%
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
     error = db.Column(db.Text, nullable=True)
-    attempts = db.Column(db.Integer, default=0)           # 重试次数
-    
+    attempts = db.Column(db.Integer, default=0)  # 重试次数
+
     # 关联
-    video = db.relationship("VideoFile", backref=db.backref("processing_tasks", lazy=True))
-    
+    video = db.relationship(
+        "VideoFile", backref=db.backref("processing_tasks", lazy=True)
+    )
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -277,47 +303,66 @@ class VideoProcessingTask(db.Model):
             "status": self.status,
             "progress": self.progress,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "error": self.error,
-            "attempts": self.attempts
+            "attempts": self.attempts,
         }
-# 
+
+
+#
 class UserAnalysisTask(db.Model):
     """用于跟踪用户分析任务的表"""
+
     __tablename__ = "user_analysis_tasks"
-    
+
     id = db.Column(db.Integer, primary_key=True)
-    platform = db.Column(db.String(20), nullable=False)  # 'douyin', 'tiktok', 'bilibili' 等
-    platform_user_id = db.Column(db.String(255), nullable=False, index=True)  # 平台上的用户ID
+    platform = db.Column(
+        db.String(20), nullable=False
+    )  # 'douyin', 'tiktok', 'bilibili' 等
+    platform_user_id = db.Column(
+        db.String(255), nullable=False, index=True
+    )  # 平台上的用户ID
     nickname = db.Column(db.String(255))  # 用户昵称（冗余存储，方便查询）
     avatar = db.Column(db.String(500))  # 用户头像URL
-    
+
     # 关联到UserProfile表（如果有详细信息）
-    user_profile_id = db.Column(db.Integer, db.ForeignKey("user_profiles.id"), nullable=True)
-    user_profile = db.relationship("UserProfile", backref=db.backref("analysis_tasks", lazy=True))
-    
+    user_profile_id = db.Column(
+        db.Integer, db.ForeignKey("user_profiles.id"), nullable=True
+    )
+    user_profile = db.relationship(
+        "UserProfile", backref=db.backref("analysis_tasks", lazy=True)
+    )
+
     # 任务状态
-    status = db.Column(db.String(20), default="pending")  # 'pending', 'processing', 'completed', 'failed'
+    status = db.Column(
+        db.String(20), default="pending"
+    )  # 'pending', 'processing', 'completed', 'failed'
     progress = db.Column(db.Float, default=0.0)  # 0-100%
-    
+
     # 任务配置
-    analysis_type = db.Column(db.String(50), default="full")  # 'full', 'content_only', 'user_only'等
+    analysis_type = db.Column(
+        db.String(50), default="full"
+    )  # 'full', 'content_only', 'user_only'等
     max_videos = db.Column(db.Integer, default=50)  # 分析的最大视频数
-    
+
     # 分析结果
     result_summary = db.Column(db.Text, nullable=True)  # 简短的分析总结
     detailed_result = db.Column(db.JSON, default={})  # 详细分析结果
     risk_level = db.Column(db.String(20), nullable=True)  # 风险等级：low, medium, high
-    
+
     # 时间戳
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
-    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-    
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
     # 错误信息
     error = db.Column(db.Text, nullable=True)
-    
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -334,43 +379,48 @@ class UserAnalysisTask(db.Model):
             "risk_level": self.risk_level,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-            "error": self.error
+            "error": self.error,
         }
 
 
 # 添加在其他表模型之后
 class DouyinVideo(db.Model):
     """抖音视频数据表"""
+
     __tablename__ = "douyin_videos"
-    
+
     # 主键和关联
     id = db.Column(db.Integer, primary_key=True)
     aweme_id = db.Column(db.String(36), unique=True, nullable=False)  # 抖音视频ID
-    user_profile_id = db.Column(db.Integer, db.ForeignKey("user_profiles.id"), nullable=False)
-    
+    user_profile_id = db.Column(
+        db.Integer, db.ForeignKey("user_profiles.id"), nullable=False
+    )
+
     # 基本信息
     desc = db.Column(db.Text, nullable=True)  # 视频描述/标题
     create_time = db.Column(db.DateTime, nullable=True)  # 发布时间
     cover_url = db.Column(db.String(500), nullable=True)  # 视频封面URL
     share_url = db.Column(db.String(500), nullable=True)  # 分享链接
-    
+
     # 媒体信息
     media_type = db.Column(db.Integer, nullable=True)  # 媒体类型(视频/图集)
     video_duration = db.Column(db.Integer, default=0)  # 视频时长(秒)
     is_top = db.Column(db.Boolean, default=False)  # 是否置顶
-    
+
     # 统计数据
     digg_count = db.Column(db.Integer, default=0)  # 点赞数
     comment_count = db.Column(db.Integer, default=0)  # 评论数
     collect_count = db.Column(db.Integer, default=0)  # 收藏数
     share_count = db.Column(db.Integer, default=0)  # 分享数
     play_count = db.Column(db.Integer, default=0)  # 播放数
-    
+
     # 附加信息
     tags = db.Column(db.Text, nullable=True)  # 视频标签，逗号分隔
-    fetched_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)  # 抓取时间    
+    fetched_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)  # 抓取时间
     # 关联关系
     video_file_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=True)
     video_file = db.relationship("VideoFile", backref=db.backref("douyin_video", uselist=False))
@@ -403,17 +453,22 @@ class DouyinVideo(db.Model):
 # 图片表(针对图集类型内容)
 class DouyinVideoImage(db.Model):
     """抖音图集中的图片"""
+
     __tablename__ = "douyin_video_images"
-    
+
     id = db.Column(db.Integer, primary_key=True)
-    aweme_id = db.Column(db.String(36), db.ForeignKey("douyin_videos.aweme_id"), nullable=False)
+    aweme_id = db.Column(
+        db.String(36), db.ForeignKey("douyin_videos.aweme_id"), nullable=False
+    )
     image_url = db.Column(db.String(500), nullable=False)
     image_index = db.Column(db.Integer, default=0)  # 在图集中的顺序
     width = db.Column(db.Integer, nullable=True)
     height = db.Column(db.Integer, nullable=True)
-    
+
     # 关联
     video = db.relationship("DouyinVideo", backref=db.backref("images", lazy=True))
+
+
 def init_dataset(app):
     # 对密码进行URL编码（处理特殊字符）
     encoded_password = quote_plus(app.config.PASSWORD)

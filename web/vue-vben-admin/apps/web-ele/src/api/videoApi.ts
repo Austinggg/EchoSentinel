@@ -1,4 +1,4 @@
-import { requestClient } from './request';//返回的是data
+import { requestClient } from './request'; // 返回的是data
 
 // 定义视频分析记录类型（仅包含前端需要显示的字段）
 export interface VideoAnalysisRecord {
@@ -6,7 +6,7 @@ export interface VideoAnalysisRecord {
   title: string;
   cover: string;
   summary: string;
-  threatLevel: 'low' | 'medium' | 'high' | 'processing';
+  threatLevel: 'high' | 'low' | 'medium' | 'processing';
   createTime: string;
   publishTime?: string;
   tags?: string[];
@@ -40,11 +40,15 @@ export function batchDeleteVideos(ids: string[]) {
 
 // 上传视频API - 返回上传后的视频信息
 export function uploadVideo(formData: FormData) {
-  return requestClient.post<ApiResponse<VideoAnalysisRecord>>('/videos/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
+  return requestClient.post<ApiResponse<VideoAnalysisRecord>>(
+    '/videos/upload',
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     },
-  });
+  );
 }
 
 // API响应的顶层结构（仅用于upload等其他API）
@@ -56,5 +60,7 @@ export interface ApiResponse<T> {
 
 // 更新视频分析状态API（例如手动触发分析）
 export function analyzeVideo(id: string) {
-  return requestClient.post<ApiResponse<{fileId: string; analysis: any}>>(`/videos/${id}/analyze`);
+  return requestClient.post<ApiResponse<{ analysis: any; fileId: string }>>(
+    `/videos/${id}/analyze`,
+  );
 }
