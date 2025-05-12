@@ -450,24 +450,31 @@ class DouyinVideo(db.Model):
         }
 
 
-# 图片表(针对图集类型内容)
-class DouyinVideoImage(db.Model):
-    """抖音图集中的图片"""
-
-    __tablename__ = "douyin_video_images"
+class ProcessingLog(db.Model):
+    __tablename__ = "processing_logs"
 
     id = db.Column(db.Integer, primary_key=True)
-    aweme_id = db.Column(
-        db.String(36), db.ForeignKey("douyin_videos.aweme_id"), nullable=False
-    )
-    image_url = db.Column(db.String(500), nullable=False)
-    image_index = db.Column(db.Integer, default=0)  # 在图集中的顺序
-    width = db.Column(db.Integer, nullable=True)
-    height = db.Column(db.Integer, nullable=True)
+    video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey("video_processing_tasks.id"), nullable=True)
+    task_type = db.Column(db.String(30), nullable=True)  # 冗余存储任务类型，方便查询
+    level = db.Column(db.String(20), default="INFO")  # INFO, WARNING, ERROR等
+    message = db.Column(db.Text, nullable=False)  # 日志内容
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     # 关联
-    video = db.relationship("DouyinVideo", backref=db.backref("images", lazy=True))
+    video = db.relationship("VideoFile", backref=db.backref("processing_logs", lazy=True))
+    task = db.relationship("VideoProcessingTask", backref=db.backref("logs", lazy=True))
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "video_id": self.video_id,
+            "task_id": self.task_id,
+            "task_type": self.task_type,
+            "level": self.level,
+            "message": self.message,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
 
 def init_dataset(app):
     # 对密码进行URL编码（处理特殊字符）

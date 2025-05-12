@@ -258,12 +258,124 @@ const platformName = computed(() => {
       return platform.value;
   }
 });
+// 批量分析相关状态
+const batchAnalyzing = ref(false);
 
-// 返回按钮处理函数
-const goBack = () => {
-  router.go(-1);
+// 检查是否有可分析的视频
+const hasVideosToAnalyze = computed(() => {
+  return multipleSelection.value.some(
+    (video) => video.analysis_status !== 'completed' && !video.analyzing,
+  );
+});
+
+// 批量分析视频
+const batchAnalyzeVideos = async () => {
+  if (batchAnalyzing.value) {
+    ElMessage.info('批量分析任务正在进行中，请稍候');
+    return;
+  }
+
+  // 过滤出未分析和未在分析中的视频
+  const videosToAnalyze = multipleSelection.value.filter(
+    (video) => video.analysis_status !== 'completed' && !video.analyzing,
+  );
+
+  if (videosToAnalyze.length === 0) {
+    ElMessage.info('没有可分析的视频，已选视频已全部分析或正在分析中');
+    return;
+  }
+
+  try {
+    batchAnalyzing.value = true;
+
+    // 显示确认对话框
+    await ElMessageBox.confirm(
+      `确定要批量分析选中的 ${videosToAnalyze.length} 个视频吗？`,
+      '批量分析确认',
+      {
+        confirmButtonText: '确定分析',
+        cancelButtonText: '取消',
+        type: 'info',
+      },
+    );
+
+    // 创建进度提示
+    const loadingInstance = ElLoading.service({
+      lock: true,
+      text: `正在提交分析任务 (0/${videosToAnalyze.length})`,
+      background: 'rgba(0, 0, 0, 0.7)',
+    });
+
+    // 处理每个视频
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < videosToAnalyze.length; i++) {
+      const video = videosToAnalyze[i];
+
+      // 更新加载提示
+      loadingInstance.setText(
+        `正在提交分析任务 (${i + 1}/${videosToAnalyze.length})`,
+      );
+
+      try {
+        // 设置分析中状态
+        video.analyzing = true;
+        video.analysis_progress = 0;
+
+        // 提交分析请求
+        const response = await axios.post(
+          `/api/account/videos/${video.aweme_id}/analyze`,
+        );
+
+        if (response.data.code === 200) {
+          successCount++;
+
+          // 启动定时器检查分析状态
+          if (analysisTimers.value[video.aweme_id]) {
+            clearInterval(analysisTimers.value[video.aweme_id]);
+          }
+
+          analysisTimers.value[video.aweme_id] = setInterval(() => {
+            checkAnalysisStatus(video);
+          }, 3000); // 每3秒检查一次
+        } else {
+          throw new Error(response.data.message || '启动分析失败');
+        }
+      } catch (error) {
+        console.error(`视频 ${video.aweme_id} 分析失败:`, error);
+        failCount++;
+        video.analyzing = false;
+      }
+
+      // 短暂延迟，避免API请求过于频繁
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+
+    // 关闭加载提示
+    loadingInstance.close();
+
+    // 显示结果
+    if (successCount > 0 && failCount === 0) {
+      ElMessage.success(`成功提交 ${successCount} 个视频的分析任务`);
+    } else if (successCount > 0 && failCount > 0) {
+      ElMessage.warning(
+        `成功提交 ${successCount} 个视频分析任务，${failCount} 个视频提交失败`,
+      );
+    } else {
+      ElMessage.error('所有视频分析任务提交失败');
+    }
+  } catch (error) {
+    if (error === 'cancel') {
+      ElMessage.info('已取消批量分析');
+    } else {
+      console.error('批量分析失败:', error);
+      ElMessage.error(`批量分析失败: ${error.message || '未知错误'}`);
+    }
+  } finally {
+    batchAnalyzing.value = false;
+  }
 };
-
 // 格式化数字(显示为1.2k, 3.5w等)
 const formatNumber = (num) => {
   if (!num) return '0';
@@ -598,11 +710,17 @@ const handleSizeChange = (val) => {
   loadVideosFromDB();
 };
 
-// 处理表格行点击
+// 使用路由名称导航
 const handleRowClick = (row) => {
-  // 这里可以实现点击行查看视频详情
-  console.log('查看视频详情:', row);
-  ElMessage.info(`查看视频: ${row.aweme_id}`);
+  localStorage.setItem('lastProfileId', accountInfo.value.id);
+
+  router.push({
+    name: 'VideoProcessingDetails',
+    query: {
+      awemeId: row.aweme_id,
+      id: row.video_file_id,
+    },
+  });
 };
 
 // 处理多选变化
@@ -680,7 +798,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="user-content-container">
+  <div
+    v-if="$route.path === '/main/analysis-tasks/user-content'"
+    class="user-content-container"
+  >
     <!-- 错误提示 -->
     <el-alert
       v-if="error"
@@ -854,6 +975,15 @@ onBeforeUnmount(() => {
             >已选择 {{ multipleSelection.length }} 项</span
           >
           <el-button size="small" @click="clearSelection">清除选择</el-button>
+          <el-button
+            size="small"
+            type="primary"
+            @click="batchAnalyzeVideos"
+            :loading="batchAnalyzing"
+            :disabled="!hasVideosToAnalyze"
+          >
+            批量分析
+          </el-button>
         </div>
 
         <!-- 右侧：搜索框 -->
@@ -1035,6 +1165,7 @@ onBeforeUnmount(() => {
           </template>
         </el-table-column>
         <!-- 在操作列添加分析按钮 -->
+        <!-- 操作列按钮 -->
         <el-table-column label="操作" width="240" fixed="right" align="center">
           <template #default="{ row }">
             <el-button
@@ -1043,11 +1174,12 @@ onBeforeUnmount(() => {
               link
               @click.stop="handleRowClick(row)"
             >
-              查看详情
+              分析详情
             </el-button>
 
-            <!-- 添加分析按钮，根据分析状态显示不同状态 -->
+            <!-- 只有未分析完成的视频才显示分析按钮 -->
             <el-button
+              v-if="row.analysis_status !== 'completed'"
               size="small"
               :type="getAnalysisButtonType(row)"
               link
@@ -1057,7 +1189,7 @@ onBeforeUnmount(() => {
               {{ getAnalysisButtonText(row) }}
             </el-button>
 
-            <!-- 如果已分析，添加查看分析报告按钮 -->
+            <!-- 已分析视频显示分析报告按钮 -->
             <el-button
               v-if="row.analysis_status === 'completed'"
               size="small"
@@ -1065,12 +1197,10 @@ onBeforeUnmount(() => {
               link
               @click.stop="viewAnalysisReport(row)"
             >
-              查看分析
+              分析报告
             </el-button>
           </template>
         </el-table-column>
-
-
       </el-table>
       <!-- 分页组件 -->
       <div class="pagination-container" v-if="totalItems > 0">
@@ -1102,6 +1232,7 @@ onBeforeUnmount(() => {
       </el-empty>
     </el-card>
   </div>
+  <router-view v-else />
 </template>
 
 <style scoped>

@@ -142,113 +142,207 @@ def analyze_douyin_video(aweme_id):
         if not video:
             return jsonify({"code": 404, "message": "视频不存在"}), 404
         
-        # 检查视频是否已下载
-        if not video.video_file_id:
-            # 还没有下载，先下载视频
-            video_url = video.share_url
+        # 如果视频已有分析结果，直接返回
+        if video.video_file_id:
+            from utils.database import ContentAnalysis
             
-            if not video_url:
-                return jsonify({"code": 400, "message": "视频链接不可用，无法下载"}), 400
-                
-            # 调用下载API
-            download_response = requests.get(
-                f"http://localhost/api/download",
-                params={
-                    "url": video_url,
-                    "prefix": "false",
-                    "with_watermark": "false"
-                }
-            )
+            content_analysis = ContentAnalysis.query.filter_by(
+                video_id=video.video_file_id
+            ).first()
             
-            if download_response.status_code != 200:
+            if content_analysis and content_analysis.risk_level:
                 return jsonify({
-                    "code": 500, 
-                    "message": f"视频下载失败: HTTP {download_response.status_code}"
-                }), 500
-            
-            response_data = download_response.json()
-            if response_data.get("code") != 200:
-                return jsonify({
-                    "code": 500, 
-                    "message": f"视频下载失败: {response_data.get('message')}"
-                }), 500
-            
-            # 获取下载后的视频ID
-            file_id = response_data.get("data", {}).get("fileId")
-            if not file_id:
-                return jsonify({"code": 500, "message": "下载后无法获取视频ID"}), 500
-                
-            # 更新视频关联
-            video.video_file_id = file_id
-            db.session.commit()
+                    "code": 200,
+                    "message": "视频已分析过",
+                    "data": {
+                        "video_id": video.video_file_id,
+                        "risk_level": content_analysis.risk_level,
+                        "risk_probability": content_analysis.risk_probability,
+                        "summary": content_analysis.summary
+                    }
+                })
         
-        # 至此已确保视频已下载，开始分析
-        # 获取分析任务的状态
-        from utils.database import VideoProcessingTask, ContentAnalysis
+        # 获取视频URL
+        video_url = video.share_url
         
-        processing_tasks = VideoProcessingTask.query.filter_by(
-            video_id=video.video_file_id
-        ).all()
+        if not video_url:
+            return jsonify({"code": 400, "message": "视频链接不可用，无法下载"}), 400
         
-        # 检查是否已有分析数据
-        content_analysis = ContentAnalysis.query.filter_by(
-            video_id=video.video_file_id
-        ).first()
+        # 调用下载并分析API
+        download_analyze_response = requests.get(
+            f"http://localhost:8000/api/download_and_analyze",
+            params={
+                "url": video_url,
+                "prefix": "false",
+                "with_watermark": "false"
+            }
+        )
         
-        # 如果已经有完整的分析数据，直接返回
-        if content_analysis and content_analysis.risk_level:
+        # 检查HTTP状态码
+        if download_analyze_response.status_code != 200:
             return jsonify({
-                "code": 200,
-                "message": "视频已分析过",
-                "data": {
-                    "video_id": video.video_file_id,
-                    "risk_level": content_analysis.risk_level,
-                    "risk_probability": content_analysis.risk_probability,
-                    "summary": content_analysis.summary
-                }
-            })
+                "code": 500, 
+                "message": f"视频下载分析失败: HTTP {download_analyze_response.status_code}"
+            }), 500
         
-        # 如果没有正在执行的任务，启动分析流程
-        active_tasks = [t for t in processing_tasks if t.status in ('pending', 'processing')]
-        if not active_tasks:
-            # 调用处理API
-            process_response = requests.post(
-                url=f"http://localhost:8000/api/videos/{video.video_file_id}/process",
-                json={"steps": ["transcription", "extract", "summary", "assessment", "classify", "report"]}
-            )
+        # 安全解析JSON
+        try:
+            response_data = download_analyze_response.json()
+        except Exception as e:
+            return jsonify({
+                "code": 500,
+                "message": f"解析响应失败: {str(e)}"
+            }), 500
+        
+        # 检查API响应状态
+        if response_data.get("code") != 200:
+            return jsonify({
+                "code": 500, 
+                "message": f"视频下载分析失败: {response_data.get('message')}"
+            }), 500
+        
+        # 获取文件ID
+        file_id = response_data.get("data", {}).get("fileId")
+        if not file_id:
+            return jsonify({"code": 500, "message": "未能获取视频ID"}), 500
             
-            if process_response.status_code != 200:
-                return jsonify({
-                    "code": 500, 
-                    "message": f"启动分析任务失败: HTTP {process_response.status_code}"
-                }), 500
-                
-            return jsonify({
-                "code": 200,
-                "message": "分析任务已启动",
-                "data": {
-                    "video_id": video.video_file_id,
-                    "status": "processing"
-                }
-            })
-        else:
-            # 返回当前分析状态
-            return jsonify({
-                "code": 200,
-                "message": "视频正在分析中",
-                "data": {
-                    "video_id": video.video_file_id,
-                    "status": "processing",
-                    "tasks": [t.task_type for t in active_tasks]
-                }
-            })
+        # 更新视频关联
+        video.video_file_id = file_id
+        db.session.commit()
+        
+        # 返回成功响应
+        return jsonify({
+            "code": 200,
+            "message": "分析任务已启动",
+            "data": {
+                "video_id": file_id,
+                "status": "processing"
+            }
+        })
             
     except Exception as e:
         print(f"分析视频失败: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"code": 500, "message": f"分析视频失败: {str(e)}"}), 500
-    
+# 修改 get_video_processing_details 函数，添加最近的日志信息
+
+@account_api.route('/api/account/videos/<string:aweme_id>/processing-details', methods=['GET'])
+def get_video_processing_details(aweme_id):
+    """获取视频处理的详细进度信息"""
+    try:
+        # 获取视频信息
+        video = DouyinVideo.query.filter_by(aweme_id=aweme_id).first()
+        
+        if not video:
+            return jsonify({"code": 404, "message": "视频不存在"}), 404
+            
+        if not video.video_file_id:
+            return jsonify({
+                "code": 200,
+                "data": {
+                    "status": "not_downloaded",
+                    "message": "视频尚未下载",
+                    "tasks": []
+                }
+            })
+        
+        # 查询处理任务
+        from utils.database import VideoProcessingTask, VideoFile, ProcessingLog
+        
+        # 获取视频文件信息
+        video_file = VideoFile.query.get(video.video_file_id)
+        if not video_file:
+            return jsonify({"code": 404, "message": "视频文件不存在"}), 404
+            
+        # 获取处理任务列表
+        tasks = VideoProcessingTask.query.filter_by(video_id=video.video_file_id).all()
+        tasks_data = []
+        
+        # 为每个任务添加最近的日志
+        for task in tasks:
+            task_dict = task.to_dict()
+            # 获取该任务最近的10条日志
+            recent_logs = ProcessingLog.query.filter_by(
+                video_id=video.video_file_id, 
+                task_id=task.id
+            ).order_by(ProcessingLog.created_at.desc()).limit(10).all()
+            
+            # 添加日志到任务数据中
+            task_dict["logs"] = [log.to_dict() for log in recent_logs]
+            tasks_data.append(task_dict)
+        
+        # 确定总体进度
+        overall_status = "completed"
+        if any(task.status == "failed" for task in tasks):
+            overall_status = "failed"
+        elif any(task.status == "processing" for task in tasks):
+            overall_status = "processing"
+        elif any(task.status == "pending" for task in tasks):
+            overall_status = "pending"
+            
+        # 计算总体进度百分比
+        if tasks:
+            overall_progress = sum(task.progress for task in tasks) / len(tasks)
+        else:
+            overall_progress = 0
+        
+        # 计算完成时间（如果已完成）
+        completed_time = None
+        if overall_status == "completed" and tasks:
+            completed_tasks = [t for t in tasks if t.completed_at]
+            if completed_tasks:
+                latest_completion = max(t.completed_at for t in completed_tasks)
+                completed_time = latest_completion.isoformat()
+            
+        return jsonify({
+            "code": 200,
+            "data": {
+                "video_id": video.video_file_id,
+                "aweme_id": video.aweme_id,
+                "desc": video.desc,
+                "cover_url": video.cover_url,
+                "status": overall_status,
+                "progress": overall_progress,
+                "source_type": "upload" if not video.share_url else "download",
+                "download_time": video_file.upload_time.isoformat() if video_file.upload_time else None,
+                "completed_time": completed_time,
+                "tasks": tasks_data
+            }
+        })
+        
+    except Exception as e:
+        print(f"获取视频处理详情失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"code": 500, "message": f"获取视频处理详情失败: {str(e)}"}), 500
+@account_api.route('/api/account/videos/<string:aweme_id>/info', methods=['GET'])
+def get_video_info(aweme_id):
+    """获取视频基本信息，包括所属用户ID"""
+    try:
+        # 获取视频信息
+        video = DouyinVideo.query.filter_by(aweme_id=aweme_id).first()
+        
+        if not video:
+            return jsonify({"code": 404, "message": "视频不存在"}), 404
+            
+        # 返回视频信息，包括所属用户ID
+        return jsonify({
+            "code": 200,
+            "data": {
+                "aweme_id": video.aweme_id,
+                "desc": video.desc,
+                "cover_url": video.cover_url,
+                "profile_id": video.user_profile_id,
+                "video_file_id": video.video_file_id
+            }
+        })
+        
+    except Exception as e:
+        print(f"获取视频信息失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"code": 500, "message": f"获取视频信息失败: {str(e)}"}), 500
 @account_api.route('/api/analysis/tasks', methods=['GET'])
 def get_analysis_tasks():
     """获取用户分析任务列表"""
@@ -703,7 +797,6 @@ def fetch_and_save_videos(sec_uid, user_profile_id, max_count=20):
         import traceback
         traceback.print_exc()
         return videos_added
-
 def process_video(video_data, user_profile_id):
     """处理单个视频数据并保存到数据库"""
     try:
@@ -778,7 +871,6 @@ def process_video(video_data, user_profile_id):
     except Exception as e:
         print(f"处理视频数据时出错: {str(e)}")
         return None
-
 def update_video_stats(video, video_data):
     """更新已存在视频的统计数据"""
     try:
@@ -794,7 +886,6 @@ def update_video_stats(video, video_data):
         db.session.rollback()
         print(f"更新视频统计数据时出错: {str(e)}")
         return False
-
 def extract_tags(video_data):
     """从视频数据中提取标签"""
     tags = []

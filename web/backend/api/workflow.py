@@ -57,7 +57,37 @@ PROCESSING_STEPS = [
         "depends_on": "classify"
     }
 ]
-
+@workflow_api.route('/api/videos/<video_id>/logs', methods=['GET'])
+def get_processing_logs(video_id):
+    """获取视频处理日志"""
+    try:
+        # 获取过滤参数
+        task_type = request.args.get('task_type')
+        level = request.args.get('level')
+        limit = int(request.args.get('limit', 100))
+        
+        # 构建查询
+        from utils.database import ProcessingLog
+        query = db.session.query(ProcessingLog).filter(ProcessingLog.video_id == video_id)
+        
+        if task_type:
+            query = query.filter(ProcessingLog.task_type == task_type)
+        
+        if level:
+            query = query.filter(ProcessingLog.level == level)
+            
+        # 按时间排序，最新的先返回
+        logs = query.order_by(ProcessingLog.created_at.desc()).limit(limit).all()
+        
+        # 返回结果
+        return success_response({
+            "video_id": video_id,
+            "logs": [log.to_dict() for log in logs]
+        })
+        
+    except Exception as e:
+        logger.exception(f"获取处理日志失败: {str(e)}")
+        return error_response(500, f"获取日志失败: {str(e)}")
 @workflow_api.route('/api/videos/<video_id>/process', methods=['POST'])
 def start_video_processing(video_id):
     """启动视频处理流程"""
@@ -124,15 +154,47 @@ def start_video_processing(video_id):
         logger.exception(f"启动视频处理流程失败: {str(e)}")
         return error_response(500, f"启动处理流程失败: {str(e)}")
 
+# 修改 process_video_workflow 函数
+def add_processing_log(video_id, task_id=None, task_type=None, level="INFO", message=""):
+    """添加处理日志到数据库"""
+    from utils.database import ProcessingLog, db
+    
+    try:
+        log = ProcessingLog(
+            video_id=video_id,
+            task_id=task_id,
+            task_type=task_type,
+            level=level,
+            message=message
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        # 同时输出到终端
+        logger.log(getattr(logging, level), message)
+    except Exception as e:
+        logger.error(f"记录日志失败: {str(e)}")
+
 def process_video_workflow(video_id, steps_to_run, app):
     """处理视频的完整工作流程"""
     with app.app_context():
+        # 记录工作流开始的日志
+        add_processing_log(
+            video_id=video_id,
+            level="INFO",
+            message=f"开始视频处理工作流，包含任务: {', '.join(steps_to_run)}"
+        )
+        
         # 按顺序执行每个步骤
         for step_id in steps_to_run:
             # 查找步骤定义
             step_def = next((s for s in PROCESSING_STEPS if s['id'] == step_id), None)
             if not step_def:
-                logger.warning(f"跳过未定义的步骤: {step_id}")
+                add_processing_log(
+                    video_id=video_id, 
+                    level="WARNING",
+                    message=f"跳过未定义的步骤: {step_id}"
+                )
                 continue
             
             # 检查依赖项
@@ -145,7 +207,11 @@ def process_video_workflow(video_id, steps_to_run, app):
                 
                 # 如果依赖任务不存在或未完成，跳过此步骤
                 if not depend_task or depend_task.status != 'completed':
-                    logger.warning(f"依赖步骤 {step_def['depends_on']} 未完成，跳过: {step_id}")
+                    add_processing_log(
+                        video_id=video_id,
+                        level="WARNING",
+                        message=f"依赖步骤 {step_def['depends_on']} 未完成，跳过: {step_id}"
+                    )
                     continue
             
             # 更新任务状态为处理中
@@ -155,7 +221,11 @@ def process_video_workflow(video_id, steps_to_run, app):
             ).first()
             
             if not task:
-                logger.warning(f"找不到任务记录: {step_id}")
+                add_processing_log(
+                    video_id=video_id,
+                    level="WARNING",
+                    message=f"找不到任务记录: {step_id}"
+                )
                 continue
             
             try:
@@ -165,20 +235,45 @@ def process_video_workflow(video_id, steps_to_run, app):
                 task.progress = 10.0
                 db.session.commit()
                 
+                # 记录开始日志
+                add_processing_log(
+                    video_id=video_id,
+                    task_id=task.id,
+                    task_type=step_id,
+                    level="INFO",
+                    message=f"开始执行 {step_def['name']} 任务"
+                )
+                
                 # 构建API请求URL
                 endpoint = step_def['endpoint'].format(video_id=video_id)
-                url = f"http://localhost:8000{endpoint}"  # 使用本地地址调用自身API
+                url = f"http://localhost:8000{endpoint}"
                 
                 # 发送请求
-                logger.info(f"执行步骤 {step_id}: {url}")
+                add_processing_log(
+                    video_id=video_id,
+                    task_id=task.id,
+                    task_type=step_id,
+                    level="INFO",
+                    message=f"调用API: {url}"
+                )
+                
                 response = requests.request(
                     method=step_def['method'],
                     url=url,
-                    json={}  # 如果需要参数，可以添加
+                    json={}
                 )
                 
                 task.progress = 80.0
                 db.session.commit()
+                
+                # 记录响应状态
+                add_processing_log(
+                    video_id=video_id,
+                    task_id=task.id,
+                    task_type=step_id,
+                    level="INFO",
+                    message=f"API响应状态: {response.status_code}"
+                )
                 
                 # 检查响应
                 if response.status_code >= 200 and response.status_code < 300:
@@ -187,7 +282,14 @@ def process_video_workflow(video_id, steps_to_run, app):
                     task.progress = 100.0
                     task.completed_at = datetime.datetime.utcnow()
                     db.session.commit()
-                    logger.info(f"步骤 {step_id} 完成")
+                    
+                    add_processing_log(
+                        video_id=video_id,
+                        task_id=task.id,
+                        task_type=step_id,
+                        level="INFO",
+                        message=f"{step_def['name']} 任务完成"
+                    )
                 else:
                     # 失败
                     error_data = response.json()
@@ -195,13 +297,25 @@ def process_video_workflow(video_id, steps_to_run, app):
                     raise Exception(error_msg)
             
             except Exception as e:
-                logger.exception(f"处理步骤 {step_id} 失败: {str(e)}")
+                add_processing_log(
+                    video_id=video_id,
+                    task_id=task.id,
+                    task_type=step_id,
+                    level="ERROR",
+                    message=f"处理失败: {str(e)}"
+                )
+                
                 task.status = "failed"
                 task.error = str(e)
                 db.session.commit()
-                
-                # 如果一个步骤失败，后续步骤可能也会失败，但我们继续尝试
                 continue
+                
+        # 记录工作流结束的日志
+        add_processing_log(
+            video_id=video_id,
+            level="INFO",
+            message="视频处理工作流完成"
+        )
 
 @workflow_api.route('/api/videos/<video_id>/process/status', methods=['GET'])
 def get_processing_status(video_id):

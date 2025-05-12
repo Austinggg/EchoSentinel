@@ -40,6 +40,18 @@ const routes: RouteRecordRaw[] = [
             name: 'UserContent',
             path: 'user-content',
             component: () => import('#/views/mainpage/user-content.vue'),
+            children: [
+              // 添加视频处理进度页面作为子路由
+              {
+                path: 'processing-details',
+                name: 'VideoProcessingDetails',
+                component: () => import('#/views/mainpage/video-processing-details.vue'),
+                meta: {
+                  title: '视频处理进度',
+                  hideInMenu: true, // 在菜单中隐藏此路由
+                }
+              }
+            ]
           },
         ],
       },
