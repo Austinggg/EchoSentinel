@@ -116,9 +116,9 @@ class VideoFile(db.Model):
 
     # 添加数字人检测字段
     aigc_use=mapped_column(String(50),nullable=True)
-    aigc_status = mapped_column(String(50), nullable=True)
     aigc_face = mapped_column(String(50), nullable=True)
     aigc_body = mapped_column(String(50), nullable=True)
+    aigc_whole = mapped_column(String(50), nullable=True)
 
     def to_dict(self):
         tags_list = self.tags.split(",") if self.tags else []
