@@ -48,5 +48,5 @@ export async function logoutApi() {
  */
 export async function getAccessCodesApi() {
   // return requestClient.get<string[]>('/auth/codes');
-  return [];//不需要授权码，返回空值
+  return []; // 不需要授权码，返回空值
 }

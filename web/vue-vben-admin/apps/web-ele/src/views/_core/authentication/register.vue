@@ -2,10 +2,14 @@
 import type { VbenFormSchema } from '@vben/common-ui';
 import type { Recordable } from '@vben/types';
 
-import { computed, h, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { AuthenticationRegister, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
+
+import { ElMessage } from 'element-plus';
+
+import { requestClient } from '#/api/request';
 
 defineOptions({ name: 'Register' });
 
@@ -57,33 +61,39 @@ const formSchema = computed((): VbenFormSchema[] => {
       fieldName: 'confirmPassword',
       label: $t('authentication.confirmPassword'),
     },
-    {
-      component: 'VbenCheckbox',
-      fieldName: 'agreePolicy',
-      renderComponentContent: () => ({
-        default: () =>
-          h('span', [
-            $t('authentication.agree'),
-            h(
-              'a',
-              {
-                class: 'vben-link ml-1 ',
-                href: '',
-              },
-              `${$t('authentication.privacyPolicy')} & ${$t('authentication.terms')}`,
-            ),
-          ]),
-      }),
-      rules: z.boolean().refine((value) => !!value, {
-        message: $t('authentication.agreeTip'),
-      }),
-    },
+    // {
+    //   component: 'VbenCheckbox',
+    //   fieldName: 'agreePolicy',
+    //   renderComponentContent: () => ({
+    //     default: () =>
+    //       h('span', [
+    //         $t('authentication.agree'),
+    //         h(
+    //           'a',
+    //           {
+    //             class: 'vben-link ml-1 ',
+    //             href: '',
+    //           },
+    //           `${$t('authentication.privacyPolicy')} & ${$t('authentication.terms')}`,
+    //         ),
+    //       ]),
+    //   }),
+    //   rules: z.boolean().refine((value) => !!value, {
+    //     message: $t('authentication.agreeTip'),
+    //   }),
+    // },
   ];
 });
 
-function handleSubmit(value: Recordable<any>) {
+async function handleSubmit(value: Recordable<any>) {
   // eslint-disable-next-line no-console
   console.log('register submit:', value);
+  const response = await requestClient.post('/auth/register', value);
+  if (response === 'success') {
+    ElMessage('注册成功！');
+  } else {
+    ElMessage('注册失败！');
+  }
 }
 </script>
 
