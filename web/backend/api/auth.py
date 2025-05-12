@@ -3,6 +3,7 @@ from flask_jwt_extended import create_access_token
 from sqlalchemy import select
 
 from utils.database import User, db
+from utils.extensions import app
 from utils.HttpResponse import HttpResponse
 
 bp = Blueprint("auth", __name__)
@@ -40,3 +41,18 @@ def auth_login():
 @bp.route("/api/auth/logout", methods=["GET", "POST"])
 def auth_logout():
     return HttpResponse.success("logout")
+
+
+@bp.post("/api/auth/register")
+def auth_register():
+    try:
+        request_json = request.get_json()
+        user = User()
+        user.username = request_json.get("username")
+        user.set_password(request_json.get("password"))
+        db.session.add(user)
+        db.session.commit()
+        return HttpResponse.success(data="success")
+    except Exception as e:
+        app.logger.warning(str(e))
+        return HttpResponse.error(e)
