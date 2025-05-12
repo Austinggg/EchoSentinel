@@ -17,6 +17,7 @@ from utils.database import (
     VideoTranscript,
     db,
 )
+from utils.extensions import app
 from utils.HttpResponse import HttpResponse, error_response, success_response
 
 video_api = Blueprint("video", __name__)
@@ -40,9 +41,9 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-"""上传视频文件API，支持同时上传多个文件（最多3个），并且生成缩略图"""
 @video_api.route("/api/videos/upload", methods=["POST"])
 def upload_video():
+    """上传视频文件API，支持同时上传多个文件（最多3个），并且生成缩略图"""
     aigc = request.args.get("aigc", False)
     # 检查是否有文件上传
     if "file" not in request.files and "files[]" not in request.files:
@@ -141,7 +142,20 @@ def upload_video():
             # aigc 添加
             if aigc:
                 # TODO
-                pass
+                with open(file_path, "rb") as f:
+                    files = {"file": (unique_filename, f)}
+                    response = requests.post(
+                        url="http://121.48.227.136:3000/aigc-detection-service/startProcess",
+                        params={
+                            "video_id": file_id,
+                        },
+                        files=files,
+                    )
+                app.logger.info(
+                    "aigc detection process request: %s %s",
+                    response.status_code,
+                    response.text,
+                )
             else:
                 # 上传成功后，启动自动处理流程(与生成缩略图并行)
                 try:
@@ -184,11 +198,13 @@ def upload_video():
         db.session.rollback()
         return HttpResponse.error(f"上传失败: {str(e)}", 500)
 
-"""通过id获取视频文件"""
+
 @video_api.route("/api/videos/<file_id>", methods=["GET"])
 def get_video(file_id):
+    """通过id获取视频文件"""
     try:
         from utils.database import VideoFile
+
         video = db.session.query(VideoFile).filter(VideoFile.id == file_id).first()
 
         if not video:
@@ -210,9 +226,9 @@ def get_video(file_id):
         return HttpResponse.error(f"获取文件失败: {str(e)}", 500)
 
 
-"""获取所有上传的视频列表"""
 @video_api.route("/api/videos/list", methods=["GET"])
 def list_videos():
+    """获取所有上传的视频列表"""
     try:
         from utils.database import VideoFile
 
@@ -264,11 +280,13 @@ def list_videos():
     except Exception as e:
         return HttpResponse.error(f"获取视频列表失败: {str(e)}", 500)
 
-"""获取视频缩略图，如果不存在则生成"""
+
 @video_api.route("/api/videos/<file_id>/thumbnail", methods=["GET"])
 def get_video_thumbnail(file_id):
+    """获取视频缩略图，如果不存在则生成"""
     try:
         from utils.database import VideoFile
+
         video = db.session.query(VideoFile).filter(VideoFile.id == file_id).first()
         if not video:
             return HttpResponse.error("文件不存在", 404)
@@ -304,7 +322,7 @@ def get_video_thumbnail(file_id):
         print(f"获取缩略图失败: {str(e)}")
         return HttpResponse.error(f"获取缩略图失败: {str(e)}", 500)
 
-"""通过URL存储视频文件"""
+
 @video_api.route("/api/videos/store-by-url", methods=["POST"])
 def store_video_by_url():
     """通过URL存储视频文件"""
@@ -325,9 +343,10 @@ def store_video_by_url():
     except Exception as e:
         return HttpResponse.error(f"通过URL存储视频失败: {str(e)}", 500)
 
-"""获取单个视频的详细分析信息"""
+
 @video_api.route("/api/videos/<file_id>/analysis", methods=["GET"])
 def get_video_analysis(file_id):
+    """获取单个视频的详细分析信息"""
     try:
         from utils.database import ContentAnalysis, VideoFile, VideoTranscript
 
@@ -484,6 +503,7 @@ def delete_video_with_related(video_id):
         logger.exception(f"删除视频时发生错误: {str(e)}")
         return error_response(500, f"服务器内部错误: {str(e)}")
 
+
 # 添加生成缩略图的独立函数
 def generate_video_thumbnail(video_path, file_id):
     """根据视频生成缩略图，并返回是否成功"""
@@ -551,6 +571,7 @@ def get_video_file_path(video_id, extension=None):
     # 如果找不到视频，返回None
     return None
 
+
 def parse_crawler_filename(filename):
     """
     解析爬虫爬取的视频文件名
@@ -611,6 +632,7 @@ def parse_crawler_filename(filename):
         print(f"解析文件名失败: {str(e)}, 文件名: {filename}")
         return None, filename, []
 
+
 # 在文件末尾添加这个函数
 def auto_process_video(video_id):
     """上传完成后自动处理视频"""
@@ -621,7 +643,16 @@ def auto_process_video(video_id):
         # 调用处理API
         response = requests.post(
             url=f"http://localhost:8000/api/videos/{video_id}/process",
-            json={"steps": ["transcription", "extract", "summary", "assessment", "classify", "report"]}
+            json={
+                "steps": [
+                    "transcription",
+                    "extract",
+                    "summary",
+                    "assessment",
+                    "classify",
+                    "report",
+                ]
+            },
         )
         print(f"视频 {video_id} 自动处理启动：{response.status_code}")
     except Exception as e:
