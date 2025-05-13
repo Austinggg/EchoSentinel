@@ -45,15 +45,26 @@ const routes: RouteRecordRaw[] = [
               {
                 path: 'processing-details',
                 name: 'VideoProcessingDetails',
-                component: () => import('#/views/mainpage/video-processing-details.vue'),
+                component: () =>
+                  import('#/views/mainpage/video-processing-details.vue'),
                 meta: {
                   title: '视频处理进度',
                   hideInMenu: true, // 在菜单中隐藏此路由
-                }
-              }
-            ]
+                },
+              },
+            ],
           },
         ],
+      },
+      // 知识图谱
+      {
+        meta: {
+          icon: 'mdi:graph',
+          title: $t('demos.KnowledgeGraph'),
+        },
+        name: 'KnowledgeGraph',
+        path: '/demos/KnowledgeGraph',
+        component: () => import('#/views/demos/KnowledgeGraph/index.vue'),
       },
       {
         meta: {

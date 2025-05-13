@@ -32,9 +32,7 @@ const md = new MarkdownIt({
   linkify: true, // 自动将URL转换为链接
   typographer: true, // 启用一些语言中性的替换+引号美化
 });
-const components = {
-  Refresh,
-};
+
 const assessmentNames = {
   p1: '背景信息充分性',
   p2: '背景信息准确性',
@@ -104,7 +102,11 @@ const regenerateSummary = async () => {
 const hasAssessments = computed(() => {
   return assessmentData.value && Object.keys(assessmentData.value).length > 0;
 });
-
+const formatDate = (date) => {
+  if (!date) return '未知时间';
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
 // 添加格式化评估项的计算属性
 const assessmentItems = computed(() => {
   if (!hasAssessments.value) return [];
@@ -498,7 +500,12 @@ const copySubtitleText = () => {
 
           <!-- 威胁报告内容 -->
           <div v-else-if="activeTab === 'threat'">
-            <h3 class="section-heading">内容威胁分析报告</h3>
+            <div class="threat-report-header">
+              <h3 class="section-heading">内容威胁分析报告</h3>
+              <div class="report-timestamp">
+                生成时间: {{ formatDate(reportData?.timestamp || new Date()) }}
+              </div>
+            </div>
 
             <!-- 加载状态 -->
             <div v-if="reportLoading" class="loading-container">
@@ -569,10 +576,12 @@ const copySubtitleText = () => {
 
               <!-- 分析报告内容 -->
               <el-card class="report-content">
-                <div
-                  class="markdown-body"
-                  v-html="md.render(reportData.report)"
-                ></div>
+                <div class="report-container">
+                  <div
+                    class="markdown-body"
+                    v-html="md.render(reportData.report)"
+                  ></div>
+                </div>
               </el-card>
               <!-- 评分摘要 -->
             </div>
@@ -1016,5 +1025,146 @@ const copySubtitleText = () => {
   padding: 0.5rem;
   border-radius: 4px;
   border-left: 3px solid #e6a23c;
+}
+/* 报告容器样式 */
+.report-container {
+  padding: 10px 5px;
+}
+
+/* 报告内容增强样式 */
+:deep(.markdown-body) {
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #333;
+  word-break: break-word;
+}
+
+/* 标题样式增强 */
+:deep(.markdown-body h2) {
+  margin-top: 28px;
+  font-size: 20px;
+  font-weight: 600;
+  border-bottom: 2px solid #409eff;
+  padding-bottom: 8px;
+  color: #303133;
+}
+
+:deep(.markdown-body h3) {
+  margin-top: 24px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #409eff;
+  background-color: #ecf5ff;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+/* 风险警告突出显示 */
+:deep(.markdown-body p:has(> ▲)) {
+  background-color: #fef0f0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 4px solid #f56c6c;
+  margin-bottom: 20px;
+}
+
+/* 突出显示风险标记 */
+:deep(.markdown-body p ▲) {
+  color: #f56c6c;
+  font-weight: bold;
+  margin-right: 4px;
+}
+
+/* 增强列表样式 */
+:deep(.markdown-body ol) {
+  padding-left: 22px;
+  margin-bottom: 20px;
+}
+
+:deep(.markdown-body ol li) {
+  margin-bottom: 10px;
+  padding-left: 6px;
+}
+
+/* 突出显示粗体文本 */
+:deep(.markdown-body strong) {
+  color: #e6a23c;
+  font-weight: bold;
+  background-color: rgba(255, 229, 100, 0.3);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+/* 突出显示风险类别 */
+:deep(.markdown-body p strong:first-of-type) {
+  display: inline-block;
+  margin-right: 5px;
+}
+
+/* 突出显示评分数据 */
+:deep(.markdown-body p span.score) {
+  font-weight: bold;
+}
+
+:deep(.markdown-body p span.score-high) {
+  color: #67c23a;
+}
+
+:deep(.markdown-body p span.score-medium) {
+  color: #e6a23c;
+}
+
+:deep(.markdown-body p span.score-low) {
+  color: #f56c6c;
+}
+
+/* 增强代码块样式 */
+:deep(.markdown-body code) {
+  color: #476582;
+  background-color: rgba(27, 31, 35, 0.05);
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+/* 表格样式增强 */
+:deep(.markdown-body table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+:deep(.markdown-body table th) {
+  background: #f2f6fc;
+  padding: 12px;
+  border: 1px solid #ebeef5;
+}
+
+:deep(.markdown-body table td) {
+  padding: 12px;
+  border: 1px solid #ebeef5;
+}
+
+/* 结论部分特殊样式 */
+:deep(.markdown-body > p:first-child) {
+  font-size: 16px;
+  background-color: #fef0f0;
+  padding: 15px;
+  border-radius: 6px;
+  border-left: 5px solid #f56c6c;
+  font-weight: 500;
+  margin-bottom: 25px;
+}
+.threat-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.report-timestamp {
+  font-size: 14px;
+  color: #909399;
+  font-style: italic;
 }
 </style>

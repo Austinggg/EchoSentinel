@@ -490,6 +490,7 @@ const analyzeVideo = async (row) => {
 };
 
 // 检查分析状态
+// 检查分析状态
 const checkAnalysisStatus = async (row) => {
   try {
     const response = await axios.get(
@@ -498,7 +499,8 @@ const checkAnalysisStatus = async (row) => {
 
     if (response.data.code === 200) {
       const statusData = response.data.data;
-
+      const previousStatus = row.analysis_status; // 保存之前的状态
+      
       // 更新状态
       row.analysis_status = statusData.status;
 
@@ -514,9 +516,11 @@ const checkAnalysisStatus = async (row) => {
         if (analysisTimers.value[row.aweme_id]) {
           clearInterval(analysisTimers.value[row.aweme_id]);
           delete analysisTimers.value[row.aweme_id];
+          
+          // 只有当视频是从"处理中"变为"已完成"时，才显示消息
+          // 或者是手动触发的分析（row.analyzing为true时）
+          ElMessage.success('视频分析已完成');
         }
-
-        ElMessage.success('视频分析已完成');
       } else if (statusData.status === 'failed') {
         // 分析失败
         row.analyzing = false;
@@ -525,9 +529,8 @@ const checkAnalysisStatus = async (row) => {
         if (analysisTimers.value[row.aweme_id]) {
           clearInterval(analysisTimers.value[row.aweme_id]);
           delete analysisTimers.value[row.aweme_id];
+          ElMessage.error(`分析失败: ${statusData.error || '未知错误'}`);
         }
-
-        ElMessage.error(`分析失败: ${statusData.error || '未知错误'}`);
       }
     }
   } catch (error) {
