@@ -467,43 +467,86 @@ def get_video_analysis(file_id):
 # 删除接口
 @video_api.route("/api/videos/<video_id>/all", methods=["DELETE"])
 def delete_video_with_related(video_id):
-    """删除视频和所有相关数据
-
-    包括：
-    - 视频转录数据
-    - 内容分析数据
-    - 处理任务记录
-    - 视频文件记录
-    """
+    """删除视频和所有相关数据"""
     try:
         # 查询视频是否存在
         video = VideoFile.query.get(video_id)
         if not video:
             return error_response(404, f"未找到ID为 {video_id} 的视频")
 
-        # 删除视频处理任务
-        VideoProcessingTask.query.filter_by(video_id=video_id).delete()
+        # 使用原生SQL删除所有关联记录，避免ORM会话中的级联更新问题
+        with db.engine.connect() as connection:
+            # 1. 创建事务
+            with connection.begin():
+                # 获取任务IDs
+                task_result = connection.execute(
+                    db.text("SELECT id FROM video_processing_tasks WHERE video_id = :video_id"),
+                    {"video_id": video_id}
+                )
+                task_ids = [row[0] for row in task_result]
 
-        # 删除内容分析
-        ContentAnalysis.query.filter_by(video_id=video_id).delete()
+                # 2. 删除处理日志
+                if task_ids:
+                    connection.execute(
+                        db.text("DELETE FROM processing_logs WHERE task_id IN :task_ids"),
+                        {"task_ids": tuple(task_ids) if len(task_ids) > 1 else f"({task_ids[0]})"}
+                    )
+                
+                # 也删除直接关联到视频的日志
+                connection.execute(
+                    db.text("DELETE FROM processing_logs WHERE video_id = :video_id"),
+                    {"video_id": video_id}
+                )
+                
+                # 3. 删除处理任务
+                connection.execute(
+                    db.text("DELETE FROM video_processing_tasks WHERE video_id = :video_id"),
+                    {"video_id": video_id}
+                )
+                
+                # 4. 删除内容分析
+                connection.execute(
+                    db.text("DELETE FROM content_analysis WHERE video_id = :video_id"),
+                    {"video_id": video_id}
+                )
+                
+                # 5. 删除视频转录
+                connection.execute(
+                    db.text("DELETE FROM video_transcripts WHERE video_id = :video_id"),
+                    {"video_id": video_id}
+                )
+                
+                # 6. 更新抖音视频引用
+                connection.execute(
+                    db.text("UPDATE douyin_videos SET video_file_id = NULL WHERE video_file_id = :video_id"),
+                    {"video_id": video_id}
+                )
+                
+                # 7. 最后删除视频文件记录
+                connection.execute(
+                    db.text("DELETE FROM video_files WHERE id = :video_id"),
+                    {"video_id": video_id}
+                )
 
-        # 删除视频转录
-        VideoTranscript.query.filter_by(video_id=video_id).delete()
-
-        # 最后删除视频文件记录
-        db.session.delete(video)
-
-        # 提交事务
-        db.session.commit()
+        # 8. 尝试删除磁盘上的文件(不阻止API响应)
+        try:
+            # 删除视频文件和缩略图
+            video_path = get_video_file_path(video_id, video.extension)
+            if video_path and video_path.exists():
+                os.remove(video_path)
+                
+            thumbnail_path = os.path.join(THUMBNAIL_DIR, f"{video_id}.jpg")
+            if os.path.exists(thumbnail_path):
+                os.remove(thumbnail_path)
+                
+        except Exception as file_error:
+            print(f"删除物理文件失败: {str(file_error)}")
 
         return success_response({"video_id": video_id, "deleted": True})
 
     except Exception as e:
-        db.session.rollback()
         logger.exception(f"删除视频时发生错误: {str(e)}")
         return error_response(500, f"服务器内部错误: {str(e)}")
-
-
 # 添加生成缩略图的独立函数
 def generate_video_thumbnail(video_path, file_id):
     """根据视频生成缩略图，并返回是否成功"""
