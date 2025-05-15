@@ -15,7 +15,7 @@ packages:
 catalog:
   '@ast-grep/napi': ^0.32.3
   '@changesets/changelog-github': ^0.5.1
-  '@changesets/cli': ^2.29.3
+  '@changesets/cli': ^2.29.4
   '@changesets/git': ^3.0.4
   '@clack/prompts': ^0.9.1
   '@commitlint/cli': ^19.8.1
@@ -36,7 +36,7 @@ catalog:
   '@stylistic/stylelint-plugin': ^3.1.2
   '@tailwindcss/nesting': 0.0.0-insiders.565cd3e
   '@tailwindcss/typography': ^0.5.16
-  '@tanstack/vue-query': ^5.75.7
+  '@tanstack/vue-query': ^5.76.0
   '@tanstack/vue-store': ^0.7.0
   '@types/archiver': ^6.0.3
   '@types/eslint': ^9.6.1
@@ -51,8 +51,8 @@ catalog:
   '@types/postcss-import': ^14.0.3
   '@types/qrcode': ^1.5.5
   '@types/sortablejs': ^1.15.8
-  '@typescript-eslint/eslint-plugin': ^8.32.0
-  '@typescript-eslint/parser': ^8.32.0
+  '@typescript-eslint/eslint-plugin': ^8.32.1
+  '@typescript-eslint/parser': ^8.32.1
   '@vee-validate/zod': ^4.15.0
   '@vite-pwa/vitepress': ^0.5.4
   '@vitejs/plugin-vue': ^5.2.4
@@ -182,7 +182,7 @@ catalog:
   vue-router: ^4.5.1
   vue-tippy: ^6.7.0
   vue-tsc: 2.1.10
-  vxe-pc-ui: ^4.6.4
+  vxe-pc-ui: ^4.6.6
   vxe-table: 4.10.0
   watermark-js-plus: ^1.6.1
   zod: ^3.24.4

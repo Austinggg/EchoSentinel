@@ -11,10 +11,7 @@ from flask import Blueprint, request, send_file
 from werkzeug.utils import secure_filename
 
 from utils.database import (
-    ContentAnalysis,
     VideoFile,
-    VideoProcessingTask,
-    VideoTranscript,
     db,
 )
 from utils.extensions import app
@@ -122,6 +119,9 @@ def upload_video():
             # aigc 添加
             if aigc:
                 new_video.aigc_use = "yes"
+                new_video.aigc_face = "处理中"
+                new_video.aigc_body = "处理中"
+                new_video.aigc_whole = "处理中"
             else:
                 new_video.aigc_use = "no"
 
@@ -144,7 +144,7 @@ def upload_video():
                 # TODO
                 with open(file_path, "rb") as f:
                     files = {"file": (unique_filename, f)}
-                    response = requests.post(
+                    response =requests.post(
                         url="http://121.48.227.136:3000/aigc-detection-service/startProcess",
                         params={
                             "video_id": file_id,
