@@ -1,22 +1,25 @@
 <script setup lang="ts">
 import type { Column, UploadProps, UploadUserFile } from 'element-plus';
 
-import type { EchoDetectionData } from './types';
+import type { CellRenderProps, EchoDetectionData } from './types';
 
-import { computed, onMounted, ref } from 'vue';
+import { computed, h, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
 import {
   ElButton,
   ElCard,
+  ElImage,
   ElMessage,
   ElTableV2,
+  ElTag,
   ElUpload,
-  TableV2Alignment,
 } from 'element-plus';
 
 import { requestClient } from '#/api/request';
+
+import { Alignment } from './types';
 
 const fileList = ref<UploadUserFile[]>([]);
 
@@ -48,7 +51,7 @@ const handleExceed: UploadProps['onExceed'] = (files, uploadFiles) => {
 // 调整表格宽度
 const divRef = ref<HTMLDivElement>();
 const tableWidth = ref(1000);
-const cellWidth = computed(() => tableWidth.value / 4);
+const cellWidth = computed(() => tableWidth.value / 5);
 onMounted(() => {
   updateTableWidth();
   window.addEventListener('resize', updateTableWidth);
@@ -59,31 +62,77 @@ const updateTableWidth = () => {
   }
 };
 // 表格数据
-const columnDefs = [
-  { key: 'id', title: 'ID' },
-  { key: 'face', title: '面部' },
-  { key: 'body', title: '躯干' },
-  { key: 'whole', title: '整体' },
-];
-
-const columns = computed<Column[]>(() =>
-  columnDefs.map(({ key, title }) => ({
-    align: TableV2Alignment.CENTER,
-    key,
-    dataKey: key,
-    title,
-    width: cellWidth.value,
-  })),
-);
-
-const tableData = ref<EchoDetectionData[]>([
+const videoCoverVNode = (props: CellRenderProps) => {
+  return h('div', { style: { margin: '10px', height: '180px' } }, [
+    h(ElImage, {
+      src: `/api/videos/${props.rowData.id}/thumbnail`,
+      fit: 'scale-down',
+      previewSrcList: [`/api/videos/${props.rowData.id}/thumbnail`],
+      style: { height: '100%' },
+    }),
+  ]);
+};
+const tagVNode = (props: CellRenderProps) => {
+  return h(
+    ElTag,
+    {
+      size: 'large',
+      style: {
+        fontSize: '14px',
+      },
+    },
+    () => props.cellData,
+  );
+};
+const columns = computed<Column[]>(() => [
+  // {
+  //   key: 'id',
+  //   dataKey: 'id',
+  //   title: 'ID',
+  //   width: cellWidth.value,
+  // },
   {
-    id: 'demo',
-    face: 'face Demo',
-    body: 'body Demo',
-    whole: 'whole Demo',
+    key: 'filename',
+    dataKey: 'filename',
+    title: '视频标题',
+    width: cellWidth.value,
+    align: Alignment.CENTER,
+  },
+  {
+    key: 'videoCover',
+    dataKey: 'videoCover',
+    title: '视频封面',
+    width: cellWidth.value,
+    align: Alignment.CENTER,
+    cellRenderer: (props) => videoCoverVNode(props),
+  },
+  {
+    key: 'face',
+    dataKey: 'face',
+    title: '面部',
+    width: cellWidth.value,
+    align: Alignment.CENTER,
+    cellRenderer: (props) => tagVNode(props),
+  },
+  {
+    key: 'body',
+    dataKey: 'body',
+    title: '躯干',
+    width: cellWidth.value,
+    align: Alignment.CENTER,
+    cellRenderer: (props) => tagVNode(props),
+  },
+  {
+    key: 'whole',
+    dataKey: 'whole',
+    title: '整体',
+    width: cellWidth.value,
+    align: Alignment.CENTER,
+    cellRenderer: (props) => tagVNode(props),
   },
 ]);
+
+const tableData = ref<EchoDetectionData[]>([]);
 const fetchData = async () => {
   const response = await requestClient.get<EchoDetectionData[]>(
     '/aigc-detection/tableData',
@@ -119,6 +168,7 @@ onMounted(() => {
             :data="tableData"
             :width="tableWidth"
             :height="600"
+            :row-height="200"
             fixed
           />
         </div>

@@ -11,11 +11,21 @@ bp = Blueprint("aigc-detection", __name__)
 def aigc_tableData():
     try:
         stmt = select(
-            VideoFile.id, VideoFile.aigc_face, VideoFile.aigc_body, VideoFile.aigc_whole
+            VideoFile.id,
+            VideoFile.aigc_face,
+            VideoFile.aigc_body,
+            VideoFile.aigc_whole,
+            VideoFile.filename,
         ).where(VideoFile.aigc_use == "yes")
         results = db.session.execute(stmt).all()
         tableData = [
-            {"id": row[0], "face": row[1], "body": row[2], "whole": row[3]}
+            {
+                "id": row[0],
+                "face": row[1],
+                "body": row[2],
+                "whole": row[3],
+                "filename": row[4],
+            }
             for row in results
         ]
         return HttpResponse.success(data=tableData)
