@@ -119,7 +119,7 @@ class VideoFile(db.Model):
     aigc_face = mapped_column(String(50), nullable=True)
     aigc_body = mapped_column(String(50), nullable=True)
     aigc_whole = mapped_column(String(50), nullable=True)
-
+    digital_human_probability = mapped_column(db.Float, default=0.0, nullable=False)
     def to_dict(self):
         tags_list = self.tags.split(",") if self.tags else []
         return {
@@ -326,6 +326,7 @@ class UserAnalysisTask(db.Model):
     )  # 平台上的用户ID
     nickname = db.Column(db.String(255))  # 用户昵称（冗余存储，方便查询）
     avatar = db.Column(db.String(500))  # 用户头像URL
+    digital_human_probability = db.Column(db.Float, default=0.0, nullable=False)
 
     # 关联到UserProfile表（如果有详细信息）
     user_profile_id = db.Column(
@@ -370,6 +371,7 @@ class UserAnalysisTask(db.Model):
             "platform_user_id": self.platform_user_id,
             "nickname": self.nickname,
             "avatar": self.avatar,
+            "digital_human_probability": self.digital_human_probability,  # 返回概率值
             "user_profile_id": self.user_profile_id,
             "status": self.status,
             "progress": self.progress,

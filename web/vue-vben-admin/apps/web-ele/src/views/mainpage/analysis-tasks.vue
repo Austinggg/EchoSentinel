@@ -20,6 +20,8 @@ import {
   ElSelect,
   ElOption,
   ElDatePicker,
+  ElSlider,
+  ElProgress,
 } from 'element-plus';
 import {
   Search,
@@ -54,11 +56,13 @@ const dateRange = ref([]);
 const sortField = ref('created_at');
 const sortOrder = ref('desc');
 
+const probabilityRange = ref([0, 1]); // 默认范围0-1
+
 // 加载分析任务列表
 const loadTasks = async () => {
   try {
     loading.value = true;
-    
+
     // 构建查询参数
     const params = {
       page: currentPage.value,
@@ -66,19 +70,21 @@ const loadTasks = async () => {
       search: searchText.value || undefined,
       platform: platformFilter.value || undefined,
       status: statusFilter.value || undefined,
+      min_probability: probabilityRange.value[0],
+      max_probability: probabilityRange.value[1],
       sort_by: sortField.value,
       sort_order: sortOrder.value,
     };
-    
+
     // 如果有日期范围，添加到参数
     if (dateRange.value && dateRange.value.length === 2) {
       params.start_date = dateRange.value[0].toISOString().split('T')[0];
       params.end_date = dateRange.value[1].toISOString().split('T')[0];
     }
-    
+
     // 发送API请求
     const response = await axios.get('/api/analysis/tasks', { params });
-    
+
     if (response.data.code === 200) {
       taskList.value = response.data.data.tasks || [];
       totalItems.value = response.data.data.total || 0;
@@ -93,11 +99,22 @@ const loadTasks = async () => {
     loading.value = false;
   }
 };
-
+// 获取数字人评估结果颜色
+const getDigitalHumanColor = (probability) => {
+  if (probability === null || probability === undefined) return '#909399'; // 灰色 - 未知
+  if (probability >= 0.7) return '#F56C6C'; // 红色 - 高概率
+  if (probability >= 0.4) return '#E6A23C'; // 黄色 - 中概率
+  return '#67C23A'; // 绿色 - 低概率
+};
+// 格式化数字人概率显示
+const formatProbability = (probability) => {
+  if (probability === null || probability === undefined) return '未知';
+  return `${(probability * 100).toFixed(1)}%`;
+};
 // 格式化日期
 const formatDate = (timestamp) => {
   if (!timestamp) return '-';
-  
+
   try {
     const date = new Date(timestamp);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
@@ -109,9 +126,9 @@ const formatDate = (timestamp) => {
 // 获取平台显示名称
 const getPlatformName = (platform) => {
   const platformMap = {
-    'douyin': '抖音',
-    'tiktok': 'TikTok',
-    'bilibili': 'Bilibili',
+    douyin: '抖音',
+    tiktok: 'TikTok',
+    bilibili: 'Bilibili',
   };
   return platformMap[platform] || platform;
 };
@@ -135,10 +152,10 @@ const getStatusType = (status) => {
 // 获取状态显示名称
 const getStatusName = (status) => {
   const statusMap = {
-    'pending': '等待中',
-    'processing': '处理中',
-    'completed': '已完成',
-    'failed': '失败'
+    pending: '等待中',
+    processing: '处理中',
+    completed: '已完成',
+    failed: '失败',
   };
   return statusMap[status] || status;
 };
@@ -156,13 +173,25 @@ const getRiskLevelType = (level) => {
       return 'info';
   }
 };
-
+const probabilityMarks = {
+  0: '0%',
+  0.3: '30%',
+  0.5: '50%',
+  0.7: {
+    style: {
+      color: '#F56C6C',
+      fontWeight: 'bold'
+    },
+    label: '70%'
+  },
+  1: '100%'
+};
 // 获取风险等级显示名称
 const getRiskLevelName = (level) => {
   const levelMap = {
-    'high': '高风险',
-    'medium': '中风险',
-    'low': '低风险'
+    high: '高风险',
+    medium: '中风险',
+    low: '低风险',
   };
   return levelMap[level] || '未知';
 };
@@ -201,6 +230,7 @@ const resetFilters = () => {
   platformFilter.value = '';
   statusFilter.value = '';
   dateRange.value = [];
+  probabilityRange.value = [0, 1]; // 重置概率范围
   currentPage.value = 1;
   loadTasks();
 };
@@ -208,7 +238,9 @@ const resetFilters = () => {
 // 查看用户内容
 const viewUserContent = (row) => {
   // 修改为子路由路径
-  router.push(`/main/analysis-tasks/user-content?platform=${row.platform}&userId=${row.platform_user_id}`);
+  router.push(
+    `/main/analysis-tasks/user-content?platform=${row.platform}&userId=${row.platform_user_id}`,
+  );
 };
 
 // 刷新数据
@@ -225,7 +257,10 @@ onMounted(() => {
 <template>
   <div>
     <!-- 只有在访问父路由首页时显示分析任务列表 -->
-    <div v-if="$route.path === '/main/analysis-tasks'" class="analysis-tasks-container">
+    <div
+      v-if="$route.path === '/main/analysis-tasks'"
+      class="analysis-tasks-container"
+    >
       <el-card class="filter-card">
         <div class="filter-header">
           <h2 class="page-title">用户分析任务</h2>
@@ -235,7 +270,7 @@ onMounted(() => {
             </el-button>
           </div>
         </div>
-        
+
         <!-- 筛选条件 -->
         <div class="filters">
           <el-input
@@ -249,7 +284,7 @@ onMounted(() => {
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
-          
+
           <el-select
             v-model="platformFilter"
             placeholder="平台"
@@ -260,7 +295,7 @@ onMounted(() => {
             <el-option label="TikTok" value="tiktok" />
             <el-option label="Bilibili" value="bilibili" />
           </el-select>
-          
+
           <el-select
             v-model="statusFilter"
             placeholder="状态"
@@ -272,7 +307,7 @@ onMounted(() => {
             <el-option label="已完成" value="completed" />
             <el-option label="失败" value="failed" />
           </el-select>
-          
+
           <el-date-picker
             v-model="dateRange"
             type="daterange"
@@ -281,7 +316,25 @@ onMounted(() => {
             end-placeholder="结束日期"
             class="filter-item date-range"
           />
-          
+          <div class="filter-item probability-slider">
+            <div class="slider-header">
+              <span class="slider-label">数字人概率:</span>
+              <span class="slider-value"
+                >{{ probabilityRange[0] * 100 }}% -
+                {{ probabilityRange[1] * 100 }}%</span
+              >
+            </div>
+            <el-slider
+              v-model="probabilityRange"
+              range
+              :step="0.1"
+              :min="0"
+              :max="1"
+              :marks="probabilityMarks"
+              show-stops
+              :format-tooltip="(val) => `${(val * 100).toFixed(0)}%`"
+            />
+          </div>
           <div class="filter-buttons">
             <el-button type="primary" @click="handleSearch">查询</el-button>
             <el-button @click="resetFilters">重置</el-button>
@@ -311,14 +364,14 @@ onMounted(() => {
         >
           <!-- 序号列 -->
           <el-table-column type="index" width="50" label="#" />
-          
+
           <!-- 平台列 -->
           <el-table-column label="平台" prop="platform" width="100">
             <template #default="{ row }">
               <el-tag size="small">{{ getPlatformName(row.platform) }}</el-tag>
             </template>
           </el-table-column>
-          
+
           <!-- 用户信息列 -->
           <el-table-column label="用户信息" min-width="200">
             <template #default="{ row }">
@@ -333,9 +386,14 @@ onMounted(() => {
               </div>
             </template>
           </el-table-column>
-          
+
           <!-- 状态列 -->
-          <el-table-column label="状态" prop="status" width="120" sortable="custom">
+          <el-table-column
+            label="状态"
+            prop="status"
+            width="120"
+            sortable="custom"
+          >
             <template #default="{ row }">
               <el-tooltip
                 :content="row.error"
@@ -344,9 +402,15 @@ onMounted(() => {
               >
                 <div class="status-cell">
                   <el-tag :type="getStatusType(row.status)">
-                    <el-icon v-if="row.status === 'processing'"><Loading /></el-icon>
-                    <el-icon v-if="row.status === 'completed'"><CircleCheck /></el-icon>
-                    <el-icon v-if="row.status === 'failed'"><CircleClose /></el-icon>
+                    <el-icon v-if="row.status === 'processing'"
+                      ><Loading
+                    /></el-icon>
+                    <el-icon v-if="row.status === 'completed'"
+                      ><CircleCheck
+                    /></el-icon>
+                    <el-icon v-if="row.status === 'failed'"
+                      ><CircleClose
+                    /></el-icon>
                     {{ getStatusName(row.status) }}
                   </el-tag>
                   <div class="progress-text" v-if="row.status === 'processing'">
@@ -356,29 +420,55 @@ onMounted(() => {
               </el-tooltip>
             </template>
           </el-table-column>
-          
-          <!-- 风险等级列 -->
-          <el-table-column label="风险等级" prop="risk_level" width="120" sortable="custom">
+          <!-- 添加数字人概率列 -->
+          <el-table-column
+            label="数字人概率"
+            prop="digital_human_probability"
+            width="120"
+            sortable="custom"
+          >
             <template #default="{ row }">
-              <el-tag v-if="row.risk_level" :type="getRiskLevelType(row.risk_level)">
+              <el-progress
+                :percentage="(row.digital_human_probability || 0) * 100"
+                :color="getDigitalHumanColor(row.digital_human_probability)"
+                :stroke-width="8"
+                :show-text="true"
+                :format="() => formatProbability(row.digital_human_probability)"
+              />
+            </template>
+          </el-table-column>
+          <!-- 风险等级列 -->
+          <el-table-column
+            label="风险等级"
+            prop="risk_level"
+            width="120"
+            sortable="custom"
+          >
+            <template #default="{ row }">
+              <el-tag
+                v-if="row.risk_level"
+                :type="getRiskLevelType(row.risk_level)"
+              >
                 {{ getRiskLevelName(row.risk_level) }}
               </el-tag>
               <span v-else>-</span>
             </template>
           </el-table-column>
-          
+
           <!-- 分析类型列 -->
           <el-table-column label="分析类型" prop="analysis_type" width="120">
             <template #default="{ row }">
-              <el-tag size="small" effect="plain">{{ row.analysis_type }}</el-tag>
+              <el-tag size="small" effect="plain">{{
+                row.analysis_type
+              }}</el-tag>
             </template>
           </el-table-column>
-          
+
           <!-- 创建时间列 -->
-          <el-table-column 
-            label="创建时间" 
-            prop="created_at" 
-            width="180" 
+          <el-table-column
+            label="创建时间"
+            prop="created_at"
+            width="180"
             sortable="custom"
           >
             <template #default="{ row }">
@@ -388,35 +478,38 @@ onMounted(() => {
               </div>
             </template>
           </el-table-column>
-          
+
           <!-- 完成时间列 -->
-          <el-table-column 
-            label="完成时间" 
-            prop="completed_at" 
-            width="180" 
+          <el-table-column
+            label="完成时间"
+            prop="completed_at"
+            width="180"
             sortable="custom"
           >
             <template #default="{ row }">
-              <span>{{ row.completed_at ? formatDate(row.completed_at) : '-' }}</span>
+              <span>{{
+                row.completed_at ? formatDate(row.completed_at) : '-'
+              }}</span>
             </template>
           </el-table-column>
-          
+
           <!-- 操作列 -->
           <el-table-column label="操作" width="180" fixed="right">
             <template #default="{ row }">
-              <el-button 
-                type="primary" 
-                link
-                @click="viewUserContent(row)"
-              >
+              <el-button type="primary" link @click="viewUserContent(row)">
                 <el-icon><View /></el-icon> 查看内容
               </el-button>
-              
-              <el-tooltip content="查看分析报告" v-if="row.status === 'completed'">
-                <el-button 
-                  type="success" 
+
+              <el-tooltip
+                content="查看分析报告"
+                v-if="row.status === 'completed'"
+              >
+                <el-button
+                  type="success"
                   link
-                  @click="router.push(`/main/analysis-report?task_id=${row.id}`)"
+                  @click="
+                    router.push(`/main/analysis-report?task_id=${row.id}`)
+                  "
                 >
                   查看报告
                 </el-button>
@@ -424,7 +517,7 @@ onMounted(() => {
             </template>
           </el-table-column>
         </el-table>
-        
+
         <!-- 分页组件 -->
         <div class="pagination-container" v-if="totalItems > 0">
           <el-pagination
@@ -437,10 +530,10 @@ onMounted(() => {
             @current-change="handleCurrentChange"
           />
         </div>
-        
+
         <!-- 空状态 -->
-        <el-empty 
-          v-if="taskList.length === 0 && !loading" 
+        <el-empty
+          v-if="taskList.length === 0 && !loading"
           description="暂无分析任务"
         >
           <el-button type="primary" @click="router.push('/main/add-account')">
@@ -449,7 +542,7 @@ onMounted(() => {
         </el-empty>
       </el-card>
     </div>
-    
+
     <!-- 当访问子路由时渲染子路由组件 -->
     <router-view v-else />
   </div>
@@ -542,7 +635,7 @@ onMounted(() => {
 }
 
 .progress-text {
-  color: #409EFF;
+  color: #409eff;
   font-size: 12px;
 }
 
@@ -560,15 +653,65 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .filter-item, .date-range {
+  .filter-item,
+  .date-range {
     width: 100%;
   }
-  
+
   .filter-buttons {
     margin-left: 0;
     margin-top: 12px;
     width: 100%;
     justify-content: space-between;
   }
+}
+/* 添加数字人概率滑块样式 */
+.probability-slider {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.slider-label {
+  font-size: 14px;
+  color: #606266;
+}
+/* 改进数字人概率滑块样式 */
+.probability-slider {
+  width: 100%;
+  max-width: 400px; /* 增加宽度以更好显示标记 */
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.slider-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.slider-value {
+  font-size: 13px;
+  color: #409EFF;
+  font-weight: 500;
+}
+
+/* 覆盖Element Plus默认样式 */
+.probability-slider :deep(.el-slider__stop) {
+  width: 6px;
+  height: 6px;
+}
+
+/* 重要阈值点高亮 */
+.probability-slider :deep(.el-slider__marks-text) {
+  font-size: 12px;
+  padding-top: 4px;
 }
 </style>

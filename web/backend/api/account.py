@@ -353,6 +353,10 @@ def get_analysis_tasks():
         search = request.args.get('search', '')
         platform = request.args.get('platform')
         status = request.args.get('status')
+
+        # 数字人概率筛选 - 支持范围查询
+        min_probability = request.args.get('min_probability', type=float)
+        max_probability = request.args.get('max_probability', type=float)
         sort_by = request.args.get('sort_by', 'created_at')
         sort_order = request.args.get('sort_order', 'desc')
         start_date = request.args.get('start_date')
@@ -369,6 +373,11 @@ def get_analysis_tasks():
         if status:
             query = query.filter(UserAnalysisTask.status == status)
         
+                # 应用数字人概率范围筛选
+        if min_probability is not None:
+            query = query.filter(UserAnalysisTask.digital_human_probability >= min_probability)
+        if max_probability is not None:
+            query = query.filter(UserAnalysisTask.digital_human_probability <= max_probability)
         # 应用日期范围过滤
         if start_date:
             start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
@@ -402,6 +411,7 @@ def get_analysis_tasks():
                 "user_profile_id": task.user_profile_id,
                 "nickname": task.nickname,
                 "avatar": task.avatar,
+                "digital_human_probability": task.digital_human_probability if hasattr(task, 'digital_human_probability') else 0.0,
                 "status": task.status,
                 "progress": task.progress,
                 "error": task.error,
