@@ -16,17 +16,11 @@ import {
   AnalysisChartsTabs,
   AnalysisOverview,
 } from '@vben/common-ui';
-import {
-  SvgBellIcon,
-  SvgCakeIcon,
-  SvgCardIcon,
-  SvgDownloadIcon,
-} from '@vben/icons';
 
 import AnalyticsTrends from './analytics-trends.vue';
-import AnalyticsVisitsData from './analytics-visits-data.vue';
+import AnalyticsVisitsData from './analytics-risk-radar.vue';
 import AnalyticsVisitsSales from './analytics-visits-sales.vue';
-import AnalyticsVisitsSource from './analytics-visits-source.vue';
+import AnalyticsVisitsSource from './analytics-videos-source.vue';
 import AnalyticsVisits from './analytics-visits.vue';
 
 // 添加数据存储和加载状态
@@ -129,7 +123,7 @@ const chartTabs: TabOption[] = [
     </AnalysisChartsTabs>
 
     <div class="mt-5 w-full md:flex">
-      <AnalysisChartCard class="mt-5 md:mr-4 md:mt-0 md:w-1/3" title="风险分布">
+      <AnalysisChartCard class="mt-5 md:mr-4 md:mt-0 md:w-1/3" title="视频风险分布">
         <AnalyticsVisitsData />
       </AnalysisChartCard>
       <AnalysisChartCard class="mt-5 md:mr-4 md:mt-0 md:w-1/3" title="视频来源">

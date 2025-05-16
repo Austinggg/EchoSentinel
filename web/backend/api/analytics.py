@@ -206,49 +206,47 @@ def get_video_sources():
         ).filter(VideoFile.source_platform.isnot(None))\
          .group_by(VideoFile.source_platform).all()
         
+        # 修改平台分类，添加bilibili
         platforms = {
             'douyin': 0,
             'tiktok': 0,
-            'local': 0,
-            'other': 0
+            'bilibili': 0,  # 添加bilibili
+            'upload': 0     # 将local改名为upload
         }
         
-        # 计算本地上传数量
-        local_count = db.session.query(func.count(VideoFile.id))\
+        # 计算用户上传数量(原来的local改为upload)
+        upload_count = db.session.query(func.count(VideoFile.id))\
             .filter(VideoFile.source_platform.is_(None)).scalar() or 0
-        platforms['local'] = local_count
+        platforms['upload'] = upload_count
         
+        # 统计各平台数量
         for platform, count in platform_stats:
-            if platform.lower() in platforms:
-                platforms[platform.lower()] = count
-            else:
-                platforms['other'] += count
+            platform_lower = platform.lower()
+            if platform_lower in platforms:
+                platforms[platform_lower] = count
+            # 不再使用other分类，确保所有可能的平台都被正确分类
         
-        # 使用数字人占比 (使用aigc_use字段)
-        aigc_stats = db.session.query(
-            VideoFile.aigc_use, 
-            func.count(VideoFile.id).label('count')
-        ).filter(VideoFile.aigc_use.isnot(None))\
-         .group_by(VideoFile.aigc_use).all()
+        # 使用数字人概率进行数字人统计
+        digital_human_threshold = 0.7
+        digital_count = db.session.query(func.count(VideoFile.id))\
+            .filter(VideoFile.digital_human_probability >= digital_human_threshold).scalar() or 0
+        
+        non_digital_count = db.session.query(func.count(VideoFile.id))\
+            .filter(VideoFile.digital_human_probability < digital_human_threshold).scalar() or 0
+        
+        # 未知数量
+        unknown_count = db.session.query(func.count(VideoFile.id))\
+            .filter(VideoFile.digital_human_probability.is_(None)).scalar() or 0
         
         aigc_data = {
-            'yes': 0,
-            'no': 0,
-            'unknown': 0
+            'digital': digital_count,
+            'non_digital': non_digital_count,
+            'unknown': unknown_count
         }
-        
-        for status, count in aigc_stats:
-            if status.lower() in aigc_data:
-                aigc_data[status.lower()] = count
-        
-        # 未知的数量
-        unknown_count = db.session.query(func.count(VideoFile.id))\
-            .filter(VideoFile.aigc_use.is_(None)).scalar() or 0
-        aigc_data['unknown'] += unknown_count
         
         return success_response({
             'platform_distribution': platforms,
-            'aigc_distribution': aigc_data
+            'digital_human_distribution': aigc_data
         })
         
     except Exception as e:
@@ -258,6 +256,9 @@ def get_video_sources():
 def get_risk_distribution():
     """获取视频风险分布与数字人关系的统计数据"""
     try:
+        # 设置数字人阈值 - 概率大于0.7认为是数字人
+        digital_human_threshold = 0.7
+        
         # 按风险等级和是否为数字人的分布统计
         risk_distribution = {
             'high': {'digital': 0, 'non_digital': 0},
@@ -265,19 +266,19 @@ def get_risk_distribution():
             'low': {'digital': 0, 'non_digital': 0}
         }
         
-        # 查询视频文件的风险等级和数字人状态
+        # 查询视频文件的风险等级和数字人概率
         videos = db.session.query(
             VideoFile.risk_level,
-            VideoFile.aigc_use
+            VideoFile.digital_human_probability
         ).filter(VideoFile.risk_level.in_(['high', 'medium', 'low'])).all()
         
         # 统计每个组合的数量
-        for risk_level, aigc_use in videos:
+        for risk_level, probability in videos:
             if risk_level not in risk_distribution:
                 continue
                 
-            # 确定是否为数字人
-            is_digital = (aigc_use == 'yes') if aigc_use else False
+            # 确定是否为数字人 - 基于概率阈值
+            is_digital = (probability >= digital_human_threshold) if probability is not None else False
             
             # 更新相应的计数
             if is_digital:

@@ -21,7 +21,7 @@ import { preferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
 import { openWindow } from '@vben/utils';
 
-import AnalyticsVisitsSource from '../analytics/analytics-visits-source.vue';
+import AnalyticsVisitsSource from '../analytics/analytics-videos-source.vue';
 
 const userStore = useUserStore();
 
