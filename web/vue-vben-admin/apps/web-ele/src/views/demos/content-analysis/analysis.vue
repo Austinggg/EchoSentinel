@@ -587,6 +587,244 @@ const copySubtitleText = () => {
             </div>
           </div>
 
+          <!-- 事实核查内容 -->
+          <div v-else-if="activeTab === 'factcheck'" class="factcheck-container">
+            <div class="factcheck-header">
+              <h3 class="section-heading">视频事实核查</h3>
+              <div v-if="factCheckData?.timestamp" class="factcheck-timestamp">
+                核查时间: {{ formatDate(factCheckData.timestamp) }}
+              </div>
+            </div>
+
+            <!-- 加载状态 -->
+            <div v-if="factCheckLoading" class="loading-container">
+              <el-skeleton :rows="10" animated />
+            </div>
+
+            <!-- 错误状态 -->
+            <el-result
+              v-else-if="factCheckError"
+              icon="error"
+              :title="factCheckError"
+              sub-title="无法获取事实核查数据"
+            >
+              <template #extra>
+                <el-button type="primary" @click="loadFactCheckData">重试</el-button>
+              </template>
+            </el-result>
+
+            <!-- 正在处理状态 -->
+            <el-result
+              v-else-if="factCheckData?.status === 'processing'"
+              icon="info"
+              title="事实核查正在进行中"
+              sub-title="这可能需要几分钟时间，请稍后刷新"
+            >
+              <template #extra>
+                <el-button type="primary" @click="loadFactCheckData">刷新</el-button>
+              </template>
+            </el-result>
+
+            <!-- 事实核查结果展示 -->
+            <div v-else-if="factCheckData?.worth_checking" class="factcheck-result">
+              <!-- 核查状态卡片 -->
+              <el-card
+                class="status-card"
+                :class="`border-${factCheckStatusInfo.class}`"
+              >
+                <div class="status-header">
+                  <div class="status-info">
+                    <el-tag
+                      :type="factCheckStatusInfo.class"
+                      size="large"
+                      effect="dark"
+                      class="status-tag"
+                    >
+                      {{ factCheckStatusInfo.text }}
+                    </el-tag>
+                    <span class="worth-checking-label">值得核查</span>
+                  </div>
+                  <div class="action-buttons">
+                    <el-button
+                      type="primary"
+                      @click="generateFactCheck"
+                      :icon="Refresh"
+                      size="small"
+                    >
+                      重新核查
+                    </el-button>
+                  </div>
+                </div>
+                <div class="reason-text">
+                  {{ factCheckData.reason }}
+                </div>
+              </el-card>
+
+              <!-- 断言列表 -->
+              <div v-if="factCheckData.claims && factCheckData.claims.length > 0">
+                <h4 class="claims-heading">
+                  共发现 {{ factCheckData.claims.length }} 条需要核查的断言：
+                </h4>
+
+                <!-- 核查结果统计信息 -->
+                <div v-if="factCheckData.search_summary" class="summary-stats">
+                  <div class="stat-item" style="color: #67c23a">
+                    <div class="stat-value">
+                      {{ factCheckData.search_summary.true_claims }}
+                    </div>
+                    <div class="stat-label">属实</div>
+                  </div>
+                  <div class="stat-item" style="color: #f56c6c">
+                    <div class="stat-value">
+                      {{ factCheckData.search_summary.false_claims }}
+                    </div>
+                    <div class="stat-label">不实</div>
+                  </div>
+                  <div class="stat-item" style="color: #909399">
+                    <div class="stat-value">
+                      {{ factCheckData.search_summary.uncertain_claims }}
+                    </div>
+                    <div class="stat-label">未确定</div>
+                  </div>
+                </div>
+
+                <!-- 断言和核查结果列表 -->
+                <div class="claims-list">
+                  <el-card
+                    v-for="(result, index) in factCheckData.fact_check_results"
+                    :key="index"
+                    class="claim-card"
+                    :class="{
+                      'claim-true': result.is_true === '是',
+                      'claim-false': result.is_true === '否',
+                      'claim-uncertain':
+                        result.is_true !== '是' && result.is_true !== '否',
+                    }"
+                  >
+                    <div class="claim-header">
+                      <el-tag
+                        :type="
+                          result.is_true === '是'
+                            ? 'success'
+                            : result.is_true === '否'
+                              ? 'danger'
+                              : 'info'
+                        "
+                        effect="dark"
+                        size="small"
+                        class="claim-tag"
+                      >
+                        {{
+                          result.is_true === '是'
+                            ? '属实'
+                            : result.is_true === '否'
+                              ? '不实'
+                              : '未确定'
+                        }}
+                      </el-tag>
+                      <div class="claim-text">{{ result.claim }}</div>
+                    </div>
+
+                    <div class="claim-body">
+                      <div class="conclusion-text markdown-body">
+                        <strong>核查结论：</strong>
+                        <div v-html="md.render(result.conclusion)"></div>
+                      </div>
+
+                      <!-- 搜索详情折叠面板 -->
+                      <el-collapse v-if="result.search_details">
+                        <el-collapse-item title="查看搜索详情">
+                          <div class="search-details">
+                            <div class="search-info">
+                              <span class="search-label">搜索关键词：</span>
+                              <span class="search-value">{{
+                                result.search_details.keywords
+                              }}</span>
+                            </div>
+
+                            <div class="search-info">
+                              <span class="search-label">搜索用时：</span>
+                              <span class="search-value">{{
+                                result.search_duration?.toFixed(2)
+                              }} 秒</span>
+                            </div>
+
+                            <!-- 相关搜索结果列表 -->
+                            <div
+                              v-if="result.search_details.top_results?.length"
+                              class="search-results"
+                            >
+                              <div class="results-heading">相关结果：</div>
+                              <div
+                                v-for="(searchResult, sIdx) in result.search_details.top_results"
+                                :key="sIdx"
+                                class="search-result-item"
+                              >
+                                <div class="result-title">
+                                  <strong>{{ searchResult.title }}</strong>
+                                </div>
+                                <div class="result-snippet">
+                                  {{ searchResult.snippet }}
+                                </div>
+                                <a
+                                  :href="searchResult.url"
+                                  target="_blank"
+                                  class="result-url"
+                                >{{ searchResult.url }}</a>
+                              </div>
+                            </div>
+                          </div>
+                        </el-collapse-item>
+                      </el-collapse>
+                    </div>
+                  </el-card>
+                </div>
+              </div>
+            </div>
+
+            <!-- 不值得核查状态 -->
+            <div
+              v-else-if="factCheckData && factCheckData.status === 'completed'"
+              class="not-worth-checking"
+            >
+              <el-card>
+                <div class="not-worth-header">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>该视频内容不需要进行事实核查</span>
+                </div>
+                <div class="reason-text">
+                  {{
+                    factCheckData.reason ||
+                    '该内容没有包含需要核查的重要事实断言。'
+                  }}
+                </div>
+                <el-button
+                  type="primary"
+                  @click="generateFactCheck"
+                  size="small"
+                  class="retry-button"
+                >
+                  重新尝试核查
+                </el-button>
+              </el-card>
+            </div>
+
+            <!-- 没有事实核查数据时的初始状态 -->
+            <div v-else>
+              <el-result
+                icon="info"
+                title="暂无事实核查结果"
+                sub-title="系统尚未对此视频进行事实核查，点击下方按钮开始核查。"
+              >
+                <template #extra>
+                  <el-button type="primary" @click="generateFactCheck">
+                    开始事实核查
+                  </el-button>
+                </template>
+              </el-result>
+            </div>
+          </div>
+
           <!-- 威胁报告内容 -->
           <div v-else-if="activeTab === 'threat'">
             <div class="threat-report-header">
@@ -609,275 +847,10 @@ const copySubtitleText = () => {
               sub-title="无法获取分析报告数据"
             >
               <template #extra>
-                <el-button type="primary" @click="loadAnalysisReport"
-                  >重试</el-button
-                >
+                <el-button type="primary" @click="loadAnalysisReport">重试</el-button>
               </template>
             </el-result>
-            <!-- 事实核查内容 -->
-            <div
-              v-else-if="activeTab === 'factcheck'"
-              class="factcheck-container"
-            >
-              <div class="factcheck-header">
-                <h3 class="section-heading">视频事实核查</h3>
-                <div
-                  v-if="factCheckData?.timestamp"
-                  class="factcheck-timestamp"
-                >
-                  核查时间: {{ formatDate(factCheckData.timestamp) }}
-                </div>
-              </div>
 
-              <!-- 加载状态 -->
-              <div v-if="factCheckLoading" class="loading-container">
-                <el-skeleton :rows="10" animated />
-              </div>
-
-              <!-- 错误状态 -->
-              <el-result
-                v-else-if="factCheckError"
-                icon="error"
-                :title="factCheckError"
-                sub-title="无法获取事实核查数据"
-              >
-                <template #extra>
-                  <el-button type="primary" @click="loadFactCheckData"
-                    >重试</el-button
-                  >
-                </template>
-              </el-result>
-
-              <!-- 正在处理状态 -->
-              <el-result
-                v-else-if="factCheckData?.status === 'processing'"
-                icon="info"
-                title="事实核查正在进行中"
-                sub-title="这可能需要几分钟时间，请稍后刷新"
-              >
-                <template #extra>
-                  <el-button type="primary" @click="loadFactCheckData"
-                    >刷新</el-button
-                  >
-                </template>
-              </el-result>
-
-              <!-- 事实核查结果展示 -->
-              <div
-                v-else-if="factCheckData?.worth_checking"
-                class="factcheck-result"
-              >
-                <!-- 核查状态卡片 -->
-                <el-card
-                  class="status-card"
-                  :class="`border-${factCheckStatusInfo.class}`"
-                >
-                  <div class="status-header">
-                    <div class="status-info">
-                      <el-tag
-                        :type="factCheckStatusInfo.class"
-                        size="large"
-                        effect="dark"
-                        class="status-tag"
-                      >
-                        {{ factCheckStatusInfo.text }}
-                      </el-tag>
-                      <span class="worth-checking-label">值得核查</span>
-                    </div>
-                    <div class="action-buttons">
-                      <el-button
-                        type="primary"
-                        @click="generateFactCheck"
-                        :icon="Refresh"
-                        size="small"
-                      >
-                        重新核查
-                      </el-button>
-                    </div>
-                  </div>
-                  <div class="reason-text">
-                    {{ factCheckData.reason }}
-                  </div>
-                </el-card>
-
-                <!-- 断言列表 -->
-                <div
-                  v-if="factCheckData.claims && factCheckData.claims.length > 0"
-                >
-                  <h4 class="claims-heading">
-                    共发现 {{ factCheckData.claims.length }} 条需要核查的断言：
-                  </h4>
-
-                  <!-- 核查结果统计信息 -->
-                  <div
-                    v-if="factCheckData.search_summary"
-                    class="summary-stats"
-                  >
-                    <div class="stat-item" style="color: #67c23a">
-                      <div class="stat-value">
-                        {{ factCheckData.search_summary.true_claims }}
-                      </div>
-                      <div class="stat-label">属实</div>
-                    </div>
-                    <div class="stat-item" style="color: #f56c6c">
-                      <div class="stat-value">
-                        {{ factCheckData.search_summary.false_claims }}
-                      </div>
-                      <div class="stat-label">不实</div>
-                    </div>
-                    <div class="stat-item" style="color: #909399">
-                      <div class="stat-value">
-                        {{ factCheckData.search_summary.uncertain_claims }}
-                      </div>
-                      <div class="stat-label">未确定</div>
-                    </div>
-                  </div>
-
-                  <!-- 断言和核查结果列表 -->
-                  <div class="claims-list">
-                    <el-card
-                      v-for="(
-                        result, index
-                      ) in factCheckData.fact_check_results"
-                      :key="index"
-                      class="claim-card"
-                      :class="{
-                        'claim-true': result.is_true === '是',
-                        'claim-false': result.is_true === '否',
-                        'claim-uncertain':
-                          result.is_true !== '是' && result.is_true !== '否',
-                      }"
-                    >
-                      <div class="claim-header">
-                        <el-tag
-                          :type="
-                            result.is_true === '是'
-                              ? 'success'
-                              : result.is_true === '否'
-                                ? 'danger'
-                                : 'info'
-                          "
-                          effect="dark"
-                          size="small"
-                          class="claim-tag"
-                        >
-                          {{
-                            result.is_true === '是'
-                              ? '属实'
-                              : result.is_true === '否'
-                                ? '不实'
-                                : '未确定'
-                          }}
-                        </el-tag>
-                        <div class="claim-text">{{ result.claim }}</div>
-                      </div>
-
-                      <div class="claim-body">
-                        <div class="conclusion-text markdown-body">
-                          <strong>核查结论：</strong>
-                          <div v-html="md.render(result.conclusion)"></div>
-                        </div>
-
-                        <!-- 搜索详情折叠面板 -->
-                        <el-collapse v-if="result.search_details">
-                          <el-collapse-item title="查看搜索详情">
-                            <div class="search-details">
-                              <div class="search-info">
-                                <span class="search-label">搜索关键词：</span>
-                                <span class="search-value">{{
-                                  result.search_details.keywords
-                                }}</span>
-                              </div>
-
-                              <div class="search-info">
-                                <span class="search-label">搜索用时：</span>
-                                <span class="search-value"
-                                  >{{
-                                    result.search_duration?.toFixed(2)
-                                  }}
-                                  秒</span
-                                >
-                              </div>
-
-                              <!-- 相关搜索结果列表 -->
-                              <div
-                                v-if="result.search_details.top_results?.length"
-                                class="search-results"
-                              >
-                                <div class="results-heading">相关结果：</div>
-                                <div
-                                  v-for="(searchResult, sIdx) in result
-                                    .search_details.top_results"
-                                  :key="sIdx"
-                                  class="search-result-item"
-                                >
-                                  <div class="result-title">
-                                    <strong>{{ searchResult.title }}</strong>
-                                  </div>
-                                  <div class="result-snippet">
-                                    {{ searchResult.snippet }}
-                                  </div>
-                                  <a
-                                    :href="searchResult.url"
-                                    target="_blank"
-                                    class="result-url"
-                                    >{{ searchResult.url }}</a
-                                  >
-                                </div>
-                              </div>
-                            </div>
-                          </el-collapse-item>
-                        </el-collapse>
-                      </div>
-                    </el-card>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 不值得核查状态 -->
-              <div
-                v-else-if="
-                  factCheckData && factCheckData.status === 'completed'
-                "
-                class="not-worth-checking"
-              >
-                <el-card>
-                  <div class="not-worth-header">
-                    <el-icon><InfoFilled /></el-icon>
-                    <span>该视频内容不需要进行事实核查</span>
-                  </div>
-                  <div class="reason-text">
-                    {{
-                      factCheckData.reason ||
-                      '该内容没有包含需要核查的重要事实断言。'
-                    }}
-                  </div>
-                  <el-button
-                    type="primary"
-                    @click="generateFactCheck"
-                    size="small"
-                    class="retry-button"
-                  >
-                    重新尝试核查
-                  </el-button>
-                </el-card>
-              </div>
-
-              <!-- 没有事实核查数据时的初始状态 -->
-              <div v-else>
-                <el-result
-                  icon="info"
-                  title="暂无事实核查结果"
-                  sub-title="系统尚未对此视频进行事实核查，点击下方按钮开始核查。"
-                >
-                  <template #extra>
-                    <el-button type="primary" @click="generateFactCheck">
-                      开始事实核查
-                    </el-button>
-                  </template>
-                </el-result>
-              </div>
-            </div>
             <!-- 报告数据显示 -->
             <div v-else-if="reportData" class="analysis-report">
               <!-- 风险等级信息 -->
@@ -935,8 +908,8 @@ const copySubtitleText = () => {
                   ></div>
                 </div>
               </el-card>
-              <!-- 评分摘要 -->
             </div>
+            
             <!-- 没有报告时显示 -->
             <div v-else>
               <el-result icon="info" title="暂无分析报告">

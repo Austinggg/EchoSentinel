@@ -169,6 +169,7 @@ def fact_check_video_transcript(file_id):
     try:
         from utils.database import VideoFile, VideoTranscript, FactCheckResult, db
         import datetime
+        import logging
         
         # 查询数据库获取视频转录信息
         transcript = db.session.query(VideoTranscript).filter(VideoTranscript.video_id == file_id).first()
@@ -222,24 +223,46 @@ def fact_check_video_transcript(file_id):
             transcript.worth_checking = result.get('worth_checking', False)
             transcript.worth_checking_reason = result.get('reason', '')
             transcript.claims = result.get('claims', [])
-            transcript.fact_check_results = result.get('fact_check_results', [])
             
-            # 保存搜索结果
-            transcript.search_results = result.get('search_results', [])
-            transcript.search_keywords = result.get('search_keywords', '')
-            transcript.search_grade = result.get('search_grade', 0)
+            # 提取关键词和搜索分数
+            all_keywords = []
+            total_grade = 0
             
-            # 保存搜索摘要和元数据（新增）
+            # 处理每个核查结果，提取关键词和分数
+            for check_result in result.get('fact_check_results', []):
+                if 'search_details' in check_result and check_result['search_details']:
+                    # 提取关键词
+                    if 'keywords' in check_result['search_details']:
+                        keywords = check_result['search_details']['keywords']
+                        if keywords:
+                            if isinstance(keywords, str):
+                                all_keywords.extend(keywords.split())
+                            elif isinstance(keywords, list):
+                                all_keywords.extend(keywords)
+                    
+                    # 提取分数
+                    if 'grade' in check_result['search_details']:
+                        total_grade += check_result['search_details']['grade']
+            
+            # 计算平均分数
+            avg_grade = total_grade / len(result.get('fact_check_results', [])) if result.get('fact_check_results', []) else 0
+            unique_keywords = list(set(all_keywords))
+            
+            # 创建搜索摘要
             search_summary = {
                 "total_claims": len(result.get('fact_check_results', [])),
                 "true_claims": sum(1 for r in result.get('fact_check_results', []) if r.get("is_true") == "是"),
                 "false_claims": sum(1 for r in result.get('fact_check_results', []) if r.get("is_true") == "否"),
                 "uncertain_claims": sum(1 for r in result.get('fact_check_results', []) if r.get("is_true") not in ["是", "否", "错误"]),
                 "error_claims": sum(1 for r in result.get('fact_check_results', []) if r.get("is_true") == "错误"),
-                "keywords": list(set(result.get('search_keywords', '').split() if result.get('search_keywords') else [])),
-                "average_search_grade": result.get('search_grade', 0)
+                "keywords": unique_keywords,
+                "average_search_grade": avg_grade
             }
             
+            # 保存到视频转录表中
+            transcript.fact_check_results = result.get('fact_check_results', [])  # 兼容性保留
+            transcript.search_keywords = " ".join(unique_keywords) if unique_keywords else ""
+            transcript.search_grade = avg_grade
             transcript.search_summary = search_summary
             transcript.total_search_duration = total_duration
             transcript.search_metadata = {
@@ -248,9 +271,9 @@ def fact_check_video_transcript(file_id):
                 "total_duration": total_duration
             }
             
-            # 保存每个断言的详细结果（如果使用了新表）
-            if hasattr(db.Model, 'FactCheckResult'):
-                # 清除旧的核查结果
+            # 使用 FactCheckResult 表存储详细结果
+            try:
+                # 清除现有结果
                 db.session.query(FactCheckResult).filter_by(transcript_id=transcript.id).delete()
                 
                 # 添加新的核查结果
@@ -265,10 +288,14 @@ def fact_check_video_transcript(file_id):
                         search_details=check_result.get('search_details', {})
                     )
                     db.session.add(fact_check)
+                    
+                logging.info(f"已将 {len(result.get('fact_check_results', []))} 条核查结果保存到 FactCheckResult 表")
+            except Exception as table_err:
+                logging.warning(f"保存到 FactCheckResult 表失败，将结果保存到主表: {str(table_err)}")
             
             db.session.commit()
             
-            # 构造响应数据，添加更丰富的信息
+            # 构造响应数据
             response_data = {
                 "video_id": file_id,
                 "filename": video.filename if video else "Unknown",
@@ -277,9 +304,8 @@ def fact_check_video_transcript(file_id):
                     "reason": result.get('reason', ''),
                     "claims": result.get('claims', []),
                     "fact_check_results": result.get('fact_check_results', []),
-                    "search_results": result.get('search_results', []),
-                    "search_keywords": result.get('search_keywords', ''),
-                    "search_grade": result.get('search_grade', 0),
+                    "search_keywords": " ".join(unique_keywords) if unique_keywords else "",
+                    "search_grade": avg_grade,
                     "search_summary": search_summary,
                     "metadata": {
                         "timestamp": datetime.datetime.utcnow().isoformat(),
@@ -296,6 +322,7 @@ def fact_check_video_transcript(file_id):
             transcript.fact_check_status = "failed"
             transcript.fact_check_error = str(check_err)
             db.session.commit()
+            logging.error(f"事实核查失败: {str(check_err)}")
             raise check_err
     
     except Exception as e:
@@ -304,9 +331,9 @@ def fact_check_video_transcript(file_id):
 
 @transcribe_api.route('/api/videos/<file_id>/factcheck/result', methods=['GET'])
 def get_fact_check_result(file_id):
-    """获取视频的事实核查结果"""
+    """获取视频的事实核查结果，从新的FactCheckResult表获取详细数据"""
     try:
-        from utils.database import VideoTranscript, VideoFile, db
+        from utils.database import VideoTranscript, VideoFile, FactCheckResult, db
         
         # 查询数据库获取视频转录信息
         transcript = db.session.query(VideoTranscript).filter(VideoTranscript.video_id == file_id).first()
@@ -316,11 +343,10 @@ def get_fact_check_result(file_id):
         # 获取关联的视频信息
         video = db.session.query(VideoFile).filter(VideoFile.id == file_id).first()
         
-        # 如果尚未进行事实核查
+        # 状态检查
         if transcript.fact_check_status == "pending":
             return error_response(404, "该视频尚未进行事实核查")
             
-        # 如果事实核查正在进行中
         if transcript.fact_check_status == "processing":
             return success_response({
                 "video_id": file_id,
@@ -329,9 +355,12 @@ def get_fact_check_result(file_id):
                 "message": "事实核查正在进行中"
             })
             
-        # 如果事实核查失败
         if transcript.fact_check_status == "failed":
             return error_response(500, f"事实核查失败: {transcript.fact_check_error}")
+        
+        # 从FactCheckResult表查询详细结果
+        fact_check_results = db.session.query(FactCheckResult).filter_by(transcript_id=transcript.id).all()
+        detailed_results = [result.to_dict() for result in fact_check_results]
             
         # 构造完整的结果响应
         response_data = {
@@ -343,11 +372,12 @@ def get_fact_check_result(file_id):
             "reason": transcript.worth_checking_reason,
             "context": transcript.fact_check_context,
             "claims": transcript.claims,
-            "fact_check_results": transcript.fact_check_results,
-            # 添加搜索结果
-            "search_results": transcript.search_results,
-            "search_keywords": transcript.search_keywords,
-            "search_grade": transcript.search_grade
+            "fact_check_results": detailed_results,  # 使用新表中的详细结果
+            
+            # 使用VideoTranscript表中保存的汇总信息
+            "search_summary": transcript.search_summary,
+            "total_search_duration": transcript.total_search_duration,
+            "search_metadata": transcript.search_metadata
         }
         
         return success_response(response_data)
