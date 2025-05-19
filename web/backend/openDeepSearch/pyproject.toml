@@ -18,7 +18,6 @@ dependencies = [
     "wikipedia-api>=0.8.1",
     "pillow>=10.4.0",
     "smolagents>=1.9.2",
-    "gradio==5.20.1",
     "loguru>=0.7.3",
     "nest-asyncio>=1.6.0",
     "requests",

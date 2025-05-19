@@ -137,7 +137,8 @@ class VideoFile(db.Model):
         }
 
 
-# 视频转录表
+# 修改 VideoTranscript 类，添加事实核查相关字段
+
 class VideoTranscript(db.Model):
     __tablename__ = "video_transcripts"
 
@@ -150,12 +151,62 @@ class VideoTranscript(db.Model):
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
 
+    # 事实核查相关字段
+    fact_check_status = db.Column(db.String(20), default="pending")  # pending, processing, completed, failed
+    fact_check_timestamp = db.Column(db.DateTime, nullable=True)  # 事实核查执行时间
+    worth_checking = db.Column(db.Boolean, nullable=True)  # 是否值得核查
+    worth_checking_reason = db.Column(db.Text, nullable=True)  # 判断原因
+    claims = db.Column(db.JSON, default=[])  # 提取的断言列表
+    fact_check_results = db.Column(db.JSON, default=[])  # 核查结果列表
+    fact_check_context = db.Column(db.Text, nullable=True)  # 核查时的上下文信息
+    fact_check_error = db.Column(db.Text, nullable=True)  # 如果有错误，记录错误信息
+    # 添加新字段用于存储搜索结果
+    search_summary = db.Column(db.JSON, default={})  # 存储搜索摘要（true_claims, false_claims, keywords等）
+    total_search_duration = db.Column(db.Float, nullable=True)  # 事实核查总耗时
+    search_metadata = db.Column(db.JSON, default={})  # 存储元数据（timestamp等）
     # 关联的视频
     video = db.relationship(
         "VideoFile", backref=db.backref("transcript_data", uselist=False)
     )
 
+    def to_dict(self):
+        """转换为字典，方便API返回，增加新字段"""
+        base_dict = super().to_dict()  # 保留原有基础结构
+        
+        # 添加新的事实核查字段
+        base_dict["fact_check"]["search_summary"] = self.search_summary
+        base_dict["fact_check"]["total_duration"] = self.total_search_duration
+        base_dict["fact_check"]["metadata"] = self.search_metadata
+        
+        return base_dict
 
+# 添加新表：单个断言核查结果（可选，用于细粒度跟踪）
+class FactCheckResult(db.Model):
+    """存储单个断言的核查结果详情"""
+    __tablename__ = "fact_check_results"
+
+    id = db.Column(db.Integer, primary_key=True)
+    transcript_id = db.Column(db.Integer, db.ForeignKey("video_transcripts.id"), nullable=False)
+    claim = db.Column(db.Text, nullable=False)  # 断言内容
+    is_true = db.Column(db.String(20), nullable=False)  # 是/否/未确定/错误
+    conclusion = db.Column(db.Text)  # 结论解释
+    search_duration = db.Column(db.Float)  # 搜索耗时
+    search_query = db.Column(db.Text)  # 搜索查询
+    search_details = db.Column(db.JSON)  # 搜索细节（keywords, grade等）
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    def to_dict(self):
+        """转换为字典"""
+        return {
+            "id": self.id,
+            "claim": self.claim,
+            "is_true": self.is_true,
+            "conclusion": self.conclusion,
+            "search_duration": self.search_duration,
+            "search_query": self.search_query,
+            "search_details": self.search_details,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+        }
 class ContentAnalysis(db.Model):
     __tablename__ = "content_analysis"
 

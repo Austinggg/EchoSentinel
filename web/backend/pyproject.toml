@@ -17,14 +17,17 @@ dependencies = [
     "opencv-python-headless>=4.11.0.86",
     "pandas>=2.2.3",
     "pillow>=11.2.1",
-    "pymysql>=1.1.1",
+    "pymysql>=1.1.1"
     "requests>=2.32.3",
     "scikit-learn>=1.6.1",
     "sqlalchemy>=2.0.40",
     "torch>=2.6.0",
     "torchvision>=0.21.0",
     "waitress>=3.0.2",
-    "opendeepsearch @ file:./openDeepSearch"
+    "opendeepsearch @ file://${PROJECT_ROOT}/openDeepSearch",
+    "aisearch @ file://${PROJECT_ROOT}/AISearch",
+    "langchain-huggingface>=0.2.0",
+    "playwright>=1.52.0",
 ]
 [tool.uv]
 index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"

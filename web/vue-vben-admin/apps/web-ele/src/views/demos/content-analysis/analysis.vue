@@ -23,6 +23,8 @@ import {
   ElProgress,
   ElResult,
   ElMessageBox,
+  ElCollapse, 
+  ElCollapseItem,
 } from 'element-plus';
 // 定义评估项的语义映射
 // 创建markdown-it实例
@@ -122,6 +124,100 @@ const assessmentItems = computed(() => {
       reasoning: item.reasoning,
     }));
 });
+// 事实核查数据状态
+const factCheckLoading = ref(false);
+const factCheckData = ref(null);
+const factCheckError = ref(null);
+
+// 加载事实核查数据
+const loadFactCheckData = async () => {
+  try {
+    factCheckLoading.value = true;
+    factCheckError.value = null;
+    
+    const videoId = route.query.id as string;
+    if (!videoId) {
+      throw new Error('未提供视频ID');
+    }
+    
+    const response = await axios.get(`/api/videos/${videoId}/factcheck/result`);
+    
+    if (response.data.code === 200) {
+      factCheckData.value = response.data.data;
+      
+      // 如果状态是processing，设置定时器轮询
+      if (factCheckData.value.status === 'processing') {
+        setTimeout(() => loadFactCheckData(), 5000); // 5秒后重新查询
+      }
+    } else {
+      throw new Error(response.data.message || '获取事实核查结果失败');
+    }
+  } catch (error) {
+    console.error('加载事实核查数据失败:', error);
+    factCheckError.value = error.message || '加载事实核查数据失败';
+  } finally {
+    factCheckLoading.value = false;
+  }
+};
+
+// 生成事实核查结果
+const generateFactCheck = async () => {
+  try {
+    factCheckLoading.value = true;
+    factCheckError.value = null;
+    
+    const videoId = route.query.id as string;
+    if (!videoId) {
+      throw new Error('未提供视频ID');
+    }
+    
+    ElMessage.info('正在启动事实核查，这可能需要几分钟时间...');
+    
+    // 调用事实核查API
+    const response = await axios.post(`/api/videos/${videoId}/factcheck`);
+    
+    if (response.data.code === 200) {
+      factCheckData.value = response.data.data;
+      ElMessage.success('事实核查已完成');
+    } else {
+      throw new Error(response.data.message || '事实核查请求失败');
+    }
+  } catch (error) {
+    console.error('生成事实核查失败:', error);
+    factCheckError.value = error.message || '生成事实核查失败';
+    ElMessage.error('生成事实核查失败: ' + error.message);
+  } finally {
+    factCheckLoading.value = false;
+  }
+};
+
+// 获取事实核查状态标签的样式
+const factCheckStatusInfo = computed(() => {
+  if (!factCheckData.value) return { class: 'info', text: '未核查' };
+  
+  switch (factCheckData.value.status) {
+    case 'completed':
+      return { class: 'success', text: '已完成' };
+    case 'processing':
+      return { class: 'warning', text: '进行中' };
+    case 'failed':
+      return { class: 'danger', text: '失败' };
+    default:
+      return { class: 'info', text: '未核查' };
+  }
+});
+
+// 修改菜单选择处理函数，添加事实核查标签页的处理
+const handleTabChange = (key: string) => {
+  activeTab.value = key;
+
+  // 加载对应标签页的数据
+  if (key === 'threat' && !reportData.value && route.query.id) {
+    loadReportDataOnly(route.query.id as string);
+  } else if (key === 'factcheck' && !factCheckData.value && route.query.id) {
+    loadFactCheckData();
+  }
+};
 // 修改loadVideoData函数，从分析接口获取所有数据
 const loadVideoData = async () => {
   try {
@@ -235,17 +331,9 @@ const exportReport = () => {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url); // 清理创建的对象URL
+  URL.revokeObjectURL(url); 
 };
-// 修改菜单选择处理函数
-const handleTabChange = (key: string) => {
-  activeTab.value = key;
 
-  // 当切换到威胁报告标签时，如果没有报告数据则加载
-  if (key === 'threat' && !reportData.value && route.query.id) {
-    loadReportDataOnly(route.query.id as string);
-  }
-};
 // 页面加载时获取数据
 onMounted(() => {
   loadVideoData();
@@ -369,6 +457,7 @@ const copySubtitleText = () => {
           <el-menu-item index="summary">总结摘要</el-menu-item>
           <el-menu-item index="subtitles">字幕列表</el-menu-item>
           <el-menu-item index="process">分析过程</el-menu-item>
+          <el-menu-item index="factcheck">事实核查</el-menu-item>
           <el-menu-item index="threat">威胁报告</el-menu-item>
         </el-menu>
 
@@ -525,7 +614,270 @@ const copySubtitleText = () => {
                 >
               </template>
             </el-result>
+            <!-- 事实核查内容 -->
+            <div
+              v-else-if="activeTab === 'factcheck'"
+              class="factcheck-container"
+            >
+              <div class="factcheck-header">
+                <h3 class="section-heading">视频事实核查</h3>
+                <div
+                  v-if="factCheckData?.timestamp"
+                  class="factcheck-timestamp"
+                >
+                  核查时间: {{ formatDate(factCheckData.timestamp) }}
+                </div>
+              </div>
 
+              <!-- 加载状态 -->
+              <div v-if="factCheckLoading" class="loading-container">
+                <el-skeleton :rows="10" animated />
+              </div>
+
+              <!-- 错误状态 -->
+              <el-result
+                v-else-if="factCheckError"
+                icon="error"
+                :title="factCheckError"
+                sub-title="无法获取事实核查数据"
+              >
+                <template #extra>
+                  <el-button type="primary" @click="loadFactCheckData"
+                    >重试</el-button
+                  >
+                </template>
+              </el-result>
+
+              <!-- 正在处理状态 -->
+              <el-result
+                v-else-if="factCheckData?.status === 'processing'"
+                icon="info"
+                title="事实核查正在进行中"
+                sub-title="这可能需要几分钟时间，请稍后刷新"
+              >
+                <template #extra>
+                  <el-button type="primary" @click="loadFactCheckData"
+                    >刷新</el-button
+                  >
+                </template>
+              </el-result>
+
+              <!-- 事实核查结果展示 -->
+              <div
+                v-else-if="factCheckData?.worth_checking"
+                class="factcheck-result"
+              >
+                <!-- 核查状态卡片 -->
+                <el-card
+                  class="status-card"
+                  :class="`border-${factCheckStatusInfo.class}`"
+                >
+                  <div class="status-header">
+                    <div class="status-info">
+                      <el-tag
+                        :type="factCheckStatusInfo.class"
+                        size="large"
+                        effect="dark"
+                        class="status-tag"
+                      >
+                        {{ factCheckStatusInfo.text }}
+                      </el-tag>
+                      <span class="worth-checking-label">值得核查</span>
+                    </div>
+                    <div class="action-buttons">
+                      <el-button
+                        type="primary"
+                        @click="generateFactCheck"
+                        :icon="Refresh"
+                        size="small"
+                      >
+                        重新核查
+                      </el-button>
+                    </div>
+                  </div>
+                  <div class="reason-text">
+                    {{ factCheckData.reason }}
+                  </div>
+                </el-card>
+
+                <!-- 断言列表 -->
+                <div
+                  v-if="factCheckData.claims && factCheckData.claims.length > 0"
+                >
+                  <h4 class="claims-heading">
+                    共发现 {{ factCheckData.claims.length }} 条需要核查的断言：
+                  </h4>
+
+                  <!-- 核查结果统计信息 -->
+                  <div
+                    v-if="factCheckData.search_summary"
+                    class="summary-stats"
+                  >
+                    <div class="stat-item" style="color: #67c23a">
+                      <div class="stat-value">
+                        {{ factCheckData.search_summary.true_claims }}
+                      </div>
+                      <div class="stat-label">属实</div>
+                    </div>
+                    <div class="stat-item" style="color: #f56c6c">
+                      <div class="stat-value">
+                        {{ factCheckData.search_summary.false_claims }}
+                      </div>
+                      <div class="stat-label">不实</div>
+                    </div>
+                    <div class="stat-item" style="color: #909399">
+                      <div class="stat-value">
+                        {{ factCheckData.search_summary.uncertain_claims }}
+                      </div>
+                      <div class="stat-label">未确定</div>
+                    </div>
+                  </div>
+
+                  <!-- 断言和核查结果列表 -->
+                  <div class="claims-list">
+                    <el-card
+                      v-for="(
+                        result, index
+                      ) in factCheckData.fact_check_results"
+                      :key="index"
+                      class="claim-card"
+                      :class="{
+                        'claim-true': result.is_true === '是',
+                        'claim-false': result.is_true === '否',
+                        'claim-uncertain':
+                          result.is_true !== '是' && result.is_true !== '否',
+                      }"
+                    >
+                      <div class="claim-header">
+                        <el-tag
+                          :type="
+                            result.is_true === '是'
+                              ? 'success'
+                              : result.is_true === '否'
+                                ? 'danger'
+                                : 'info'
+                          "
+                          effect="dark"
+                          size="small"
+                          class="claim-tag"
+                        >
+                          {{
+                            result.is_true === '是'
+                              ? '属实'
+                              : result.is_true === '否'
+                                ? '不实'
+                                : '未确定'
+                          }}
+                        </el-tag>
+                        <div class="claim-text">{{ result.claim }}</div>
+                      </div>
+
+                      <div class="claim-body">
+                        <div class="conclusion-text markdown-body">
+                          <strong>核查结论：</strong>
+                          <div v-html="md.render(result.conclusion)"></div>
+                        </div>
+
+                        <!-- 搜索详情折叠面板 -->
+                        <el-collapse v-if="result.search_details">
+                          <el-collapse-item title="查看搜索详情">
+                            <div class="search-details">
+                              <div class="search-info">
+                                <span class="search-label">搜索关键词：</span>
+                                <span class="search-value">{{
+                                  result.search_details.keywords
+                                }}</span>
+                              </div>
+
+                              <div class="search-info">
+                                <span class="search-label">搜索用时：</span>
+                                <span class="search-value"
+                                  >{{
+                                    result.search_duration?.toFixed(2)
+                                  }}
+                                  秒</span
+                                >
+                              </div>
+
+                              <!-- 相关搜索结果列表 -->
+                              <div
+                                v-if="result.search_details.top_results?.length"
+                                class="search-results"
+                              >
+                                <div class="results-heading">相关结果：</div>
+                                <div
+                                  v-for="(searchResult, sIdx) in result
+                                    .search_details.top_results"
+                                  :key="sIdx"
+                                  class="search-result-item"
+                                >
+                                  <div class="result-title">
+                                    <strong>{{ searchResult.title }}</strong>
+                                  </div>
+                                  <div class="result-snippet">
+                                    {{ searchResult.snippet }}
+                                  </div>
+                                  <a
+                                    :href="searchResult.url"
+                                    target="_blank"
+                                    class="result-url"
+                                    >{{ searchResult.url }}</a
+                                  >
+                                </div>
+                              </div>
+                            </div>
+                          </el-collapse-item>
+                        </el-collapse>
+                      </div>
+                    </el-card>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 不值得核查状态 -->
+              <div
+                v-else-if="
+                  factCheckData && factCheckData.status === 'completed'
+                "
+                class="not-worth-checking"
+              >
+                <el-card>
+                  <div class="not-worth-header">
+                    <el-icon><InfoFilled /></el-icon>
+                    <span>该视频内容不需要进行事实核查</span>
+                  </div>
+                  <div class="reason-text">
+                    {{
+                      factCheckData.reason ||
+                      '该内容没有包含需要核查的重要事实断言。'
+                    }}
+                  </div>
+                  <el-button
+                    type="primary"
+                    @click="generateFactCheck"
+                    size="small"
+                    class="retry-button"
+                  >
+                    重新尝试核查
+                  </el-button>
+                </el-card>
+              </div>
+
+              <!-- 没有事实核查数据时的初始状态 -->
+              <div v-else>
+                <el-result
+                  icon="info"
+                  title="暂无事实核查结果"
+                  sub-title="系统尚未对此视频进行事实核查，点击下方按钮开始核查。"
+                >
+                  <template #extra>
+                    <el-button type="primary" @click="generateFactCheck">
+                      开始事实核查
+                    </el-button>
+                  </template>
+                </el-result>
+              </div>
+            </div>
             <!-- 报告数据显示 -->
             <div v-else-if="reportData" class="analysis-report">
               <!-- 风险等级信息 -->
@@ -1166,5 +1518,231 @@ const copySubtitleText = () => {
   font-size: 14px;
   color: #909399;
   font-style: italic;
+}
+/* 事实核查样式 */
+.factcheck-container {
+  height: 100%;
+  overflow: auto;
+}
+
+.factcheck-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.factcheck-timestamp {
+  font-size: 14px;
+  color: #909399;
+  font-style: italic;
+}
+
+.status-card {
+  margin-bottom: 16px;
+  border-top-width: 4px;
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.status-info {
+  display: flex;
+  align-items: center;
+}
+
+.status-tag {
+  margin-right: 12px;
+}
+
+.worth-checking-label {
+  background-color: #f0f9eb;
+  color: #67C23A;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.reason-text {
+  color: #606266;
+  background-color: #f5f7fa;
+  padding: 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.claims-heading {
+  font-size: 16px;
+  margin: 24px 0 16px;
+}
+
+.summary-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  background-color: #f5f7fa;
+  padding: 16px;
+  border-radius: 6px;
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+  padding: 12px;
+  border-radius: 4px;
+  background-color: white;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.stat-label {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.claims-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.claim-card {
+  border-left-width: 4px;
+  border-left-style: solid;
+}
+
+.claim-true {
+  border-left-color: #67C23A;
+}
+
+.claim-false {
+  border-left-color: #F56C6C;
+}
+
+.claim-uncertain {
+  border-left-color: #909399;
+}
+
+.claim-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.claim-text {
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.claim-body {
+  margin-top: 8px;
+}
+
+.conclusion-text {
+  margin-bottom: 16px;
+  line-height: 1.6;
+  background-color: #f8f9fa;
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.search-details {
+  padding: 8px 0;
+}
+
+.search-info {
+  margin-bottom: 8px;
+}
+
+.search-label {
+  font-weight: 500;
+  color: #606266;
+  margin-right: 8px;
+}
+
+.search-value {
+  color: #303133;
+}
+
+.search-results {
+  margin-top: 16px;
+}
+
+.results-heading {
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.search-result-item {
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  background-color: white;
+}
+
+.result-title {
+  margin-bottom: 6px;
+  color: #303133;
+}
+
+.result-snippet {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 6px;
+}
+
+.result-url {
+  font-size: 12px;
+  color: #909399;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.not-worth-checking {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.not-worth-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.retry-button {
+  margin-top: 16px;
+}
+
+.border-success {
+  border-top-color: #67c23a;
+}
+
+.border-warning {
+  border-top-color: #e6a23c;
+}
+
+.border-danger {
+  border-top-color: #f56c6c;
+}
+
+.border-info {
+  border-top-color: #909399;
 }
 </style>
