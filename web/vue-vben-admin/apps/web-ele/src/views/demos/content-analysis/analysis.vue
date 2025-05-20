@@ -23,7 +23,7 @@ import {
   ElProgress,
   ElResult,
   ElMessageBox,
-  ElCollapse, 
+  ElCollapse,
   ElCollapseItem,
 } from 'element-plus';
 // 定义评估项的语义映射
@@ -128,23 +128,24 @@ const assessmentItems = computed(() => {
 const factCheckLoading = ref(false);
 const factCheckData = ref(null);
 const factCheckError = ref(null);
+const factCheckNotFound = ref(false); // 新增：标记是否尚未进行核查
 
 // 加载事实核查数据
 const loadFactCheckData = async () => {
   try {
     factCheckLoading.value = true;
     factCheckError.value = null;
-    
+
     const videoId = route.query.id as string;
     if (!videoId) {
       throw new Error('未提供视频ID');
     }
-    
+
     const response = await axios.get(`/api/videos/${videoId}/factcheck/result`);
-    
+
     if (response.data.code === 200) {
       factCheckData.value = response.data.data;
-      
+
       // 如果状态是processing，设置定时器轮询
       if (factCheckData.value.status === 'processing') {
         setTimeout(() => loadFactCheckData(), 5000); // 5秒后重新查询
@@ -165,6 +166,7 @@ const generateFactCheck = async () => {
   try {
     factCheckLoading.value = true;
     factCheckError.value = null;
+    factCheckNotFound.value = false;
     
     const videoId = route.query.id as string;
     if (!videoId) {
@@ -177,8 +179,17 @@ const generateFactCheck = async () => {
     const response = await axios.post(`/api/videos/${videoId}/factcheck`);
     
     if (response.data.code === 200) {
-      factCheckData.value = response.data.data;
-      ElMessage.success('事实核查已完成');
+      // 核查已启动，设置状态为处理中
+      if (response.data.data && response.data.data.fact_check_result) {
+        factCheckData.value = response.data.data.fact_check_result;
+        ElMessage.success('事实核查已启动，请等待结果');
+        // 5秒后开始轮询结果
+        setTimeout(() => loadFactCheckData(), 5000);
+      } else {
+        factCheckData.value = response.data.data;
+        // 如果直接返回了完整结果
+        ElMessage.success('事实核查已完成');
+      }
     } else {
       throw new Error(response.data.message || '事实核查请求失败');
     }
@@ -194,7 +205,7 @@ const generateFactCheck = async () => {
 // 获取事实核查状态标签的样式
 const factCheckStatusInfo = computed(() => {
   if (!factCheckData.value) return { class: 'info', text: '未核查' };
-  
+
   switch (factCheckData.value.status) {
     case 'completed':
       return { class: 'success', text: '已完成' };
@@ -331,7 +342,7 @@ const exportReport = () => {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url); 
+  URL.revokeObjectURL(url);
 };
 
 // 页面加载时获取数据
@@ -588,7 +599,10 @@ const copySubtitleText = () => {
           </div>
 
           <!-- 事实核查内容 -->
-          <div v-else-if="activeTab === 'factcheck'" class="factcheck-container">
+          <div
+            v-else-if="activeTab === 'factcheck'"
+            class="factcheck-container"
+          >
             <div class="factcheck-header">
               <h3 class="section-heading">视频事实核查</h3>
               <div v-if="factCheckData?.timestamp" class="factcheck-timestamp">
@@ -609,7 +623,12 @@ const copySubtitleText = () => {
               sub-title="无法获取事实核查数据"
             >
               <template #extra>
-                <el-button type="primary" @click="loadFactCheckData">重试</el-button>
+                <el-button type="primary" @click="loadFactCheckData"
+                  >重试</el-button
+                >
+                <el-button type="success" @click="generateFactCheck"
+                  >重新核查</el-button
+                >
               </template>
             </el-result>
 
@@ -621,12 +640,29 @@ const copySubtitleText = () => {
               sub-title="这可能需要几分钟时间，请稍后刷新"
             >
               <template #extra>
-                <el-button type="primary" @click="loadFactCheckData">刷新</el-button>
+                <el-button type="primary" @click="loadFactCheckData"
+                  >刷新</el-button
+                >
               </template>
             </el-result>
-
+            <!-- 尚未进行核查的状态 -->
+            <el-result
+              v-else-if="factCheckNotFound"
+              icon="info"
+              title="暂无事实核查结果"
+              sub-title="该视频尚未进行事实核查，点击下方按钮开始核查。"
+            >
+              <template #extra>
+                <el-button type="primary" @click="generateFactCheck">
+                  开始事实核查
+                </el-button>
+              </template>
+            </el-result>
             <!-- 事实核查结果展示 -->
-            <div v-else-if="factCheckData?.worth_checking" class="factcheck-result">
+            <div
+              v-else-if="factCheckData?.worth_checking"
+              class="factcheck-result"
+            >
               <!-- 核查状态卡片 -->
               <el-card
                 class="status-card"
@@ -661,7 +697,9 @@ const copySubtitleText = () => {
               </el-card>
 
               <!-- 断言列表 -->
-              <div v-if="factCheckData.claims && factCheckData.claims.length > 0">
+              <div
+                v-if="factCheckData.claims && factCheckData.claims.length > 0"
+              >
                 <h4 class="claims-heading">
                   共发现 {{ factCheckData.claims.length }} 条需要核查的断言：
                 </h4>
@@ -744,9 +782,12 @@ const copySubtitleText = () => {
 
                             <div class="search-info">
                               <span class="search-label">搜索用时：</span>
-                              <span class="search-value">{{
-                                result.search_duration?.toFixed(2)
-                              }} 秒</span>
+                              <span class="search-value"
+                                >{{
+                                  result.search_duration?.toFixed(2)
+                                }}
+                                秒</span
+                              >
                             </div>
 
                             <!-- 相关搜索结果列表 -->
@@ -756,7 +797,8 @@ const copySubtitleText = () => {
                             >
                               <div class="results-heading">相关结果：</div>
                               <div
-                                v-for="(searchResult, sIdx) in result.search_details.top_results"
+                                v-for="(searchResult, sIdx) in result
+                                  .search_details.top_results"
                                 :key="sIdx"
                                 class="search-result-item"
                               >
@@ -770,7 +812,8 @@ const copySubtitleText = () => {
                                   :href="searchResult.url"
                                   target="_blank"
                                   class="result-url"
-                                >{{ searchResult.url }}</a>
+                                  >{{ searchResult.url }}</a
+                                >
                               </div>
                             </div>
                           </div>
@@ -847,7 +890,9 @@ const copySubtitleText = () => {
               sub-title="无法获取分析报告数据"
             >
               <template #extra>
-                <el-button type="primary" @click="loadAnalysisReport">重试</el-button>
+                <el-button type="primary" @click="loadAnalysisReport"
+                  >重试</el-button
+                >
               </template>
             </el-result>
 
@@ -909,7 +954,7 @@ const copySubtitleText = () => {
                 </div>
               </el-card>
             </div>
-            
+
             <!-- 没有报告时显示 -->
             <div v-else>
               <el-result icon="info" title="暂无分析报告">
@@ -1534,7 +1579,7 @@ const copySubtitleText = () => {
 
 .worth-checking-label {
   background-color: #f0f9eb;
-  color: #67C23A;
+  color: #67c23a;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 14px;
@@ -1595,11 +1640,11 @@ const copySubtitleText = () => {
 }
 
 .claim-true {
-  border-left-color: #67C23A;
+  border-left-color: #67c23a;
 }
 
 .claim-false {
-  border-left-color: #F56C6C;
+  border-left-color: #f56c6c;
 }
 
 .claim-uncertain {
