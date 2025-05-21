@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify
 from sqlalchemy import func, and_, distinct, cast, Date
 
 from utils.database import (
-    UserAnalysisTask, db, VideoFile, ContentAnalysis, VideoProcessingTask, 
+    UserAnalysisTask, VideoTranscript, db, VideoFile, ContentAnalysis, VideoProcessingTask, 
     UserProfile, DouyinVideo, ProcessingLog
 )
 from utils.HttpResponse import success_response, error_response
@@ -300,4 +300,136 @@ def get_risk_distribution():
         
     except Exception as e:
         logger.exception(f"获取风险分布数据失败: {str(e)}")
+        return error_response(500, f"服务器内部错误: {str(e)}")    
+# 在文件末尾添加以下API端点
+@analytics_api.route('/api/analytics/risk-monitor', methods=['GET'])
+def get_risk_monitor_data():
+    """获取风险监控数据，包括高风险视频、错误事实核查和高风险用户"""
+    try:
+        # 1. 获取最近的高风险视频（限制10条）
+        high_risk_videos = db.session.query(
+            VideoFile.id,
+            VideoFile.filename,
+            VideoFile.source_platform,
+            VideoFile.digital_human_probability,
+            VideoFile.upload_time,
+            VideoFile.summary
+        ).filter(
+            VideoFile.risk_level == 'high'
+        ).order_by(VideoFile.upload_time.desc()).limit(10).all()
+        
+        # 构建高风险视频数据
+        recent_risk_videos = []
+        for video in high_risk_videos:
+            recent_risk_videos.append({
+                'id': video.id,
+                'filename': video.filename,
+                'platform': video.source_platform or '上传',
+                'digital_human_probability': video.digital_human_probability or 0,
+                'upload_time': video.upload_time.isoformat() if video.upload_time else None,
+                'summary': video.summary
+            })
+        
+        # 2. 获取包含不实信息的事实核查结果（限制10条）
+        # 这里需要从VideoTranscript表中找出包含假信息的记录
+        # 因为fact_check_results是JSON字段，我们需要在应用层面处理
+        recent_transcripts = db.session.query(
+            VideoTranscript.id,
+            VideoTranscript.video_id,
+            VideoTranscript.fact_check_results,
+            VideoTranscript.fact_check_timestamp,
+            VideoFile.filename
+        ).join(
+            VideoFile, VideoTranscript.video_id == VideoFile.id
+        ).filter(
+            VideoTranscript.fact_check_status == 'completed',
+            VideoTranscript.fact_check_results.isnot(None)
+        ).order_by(VideoTranscript.fact_check_timestamp.desc()).limit(30).all()
+        
+        # 处理事实核查结果，找出包含不实信息的记录
+        falsehoods = []
+        for transcript in recent_transcripts:
+            if not transcript.fact_check_results:
+                continue
+                
+            results = transcript.fact_check_results
+            for result in results:
+                if result.get('is_true') == 'false':  # 找出被标记为不实的断言
+                    falsehoods.append({
+                        'claim': result.get('claim', ''),
+                        'conclusion': result.get('conclusion', ''),
+                        'video_id': transcript.video_id,
+                        'video_name': transcript.filename,
+                        'check_time': transcript.fact_check_timestamp.isoformat() if transcript.fact_check_timestamp else None
+                    })
+                    if len(falsehoods) >= 10:  # 最多保留10条记录
+                        break
+            
+            if len(falsehoods) >= 10:
+                break
+        
+        # 3. 获取高风险用户排行（根据digital_human_probability和risk_level排序）
+        high_risk_users = db.session.query(
+            UserAnalysisTask.platform,
+            UserAnalysisTask.platform_user_id,
+            UserAnalysisTask.nickname,
+            UserAnalysisTask.avatar,
+            UserAnalysisTask.digital_human_probability,
+            UserAnalysisTask.risk_level,
+            UserAnalysisTask.completed_at
+        ).filter(
+            UserAnalysisTask.risk_level == 'high',
+            UserAnalysisTask.status == 'completed'
+        ).order_by(
+            UserAnalysisTask.digital_human_probability.desc(),
+            UserAnalysisTask.completed_at.desc()
+        ).limit(10).all()
+        
+        risk_users_data = []
+        for user in high_risk_users:
+            risk_users_data.append({
+                'platform': user.platform,
+                'platform_user_id': user.platform_user_id,
+                'nickname': user.nickname,
+                'avatar': user.avatar,
+                'digital_human_probability': user.digital_human_probability,
+                'risk_level': user.risk_level,
+                'completed_at': user.completed_at.isoformat() if user.completed_at else None
+            })
+            
+        # 4. 获取最近检测出的疑似数字人用户（概率>=0.7）
+        digital_human_users = db.session.query(
+            UserAnalysisTask.platform,
+            UserAnalysisTask.platform_user_id,
+            UserAnalysisTask.nickname,
+            UserAnalysisTask.avatar,
+            UserAnalysisTask.digital_human_probability,
+            UserAnalysisTask.completed_at
+        ).filter(
+            UserAnalysisTask.digital_human_probability >= 0.7,
+            UserAnalysisTask.status == 'completed'
+        ).order_by(
+            UserAnalysisTask.completed_at.desc()
+        ).limit(10).all()
+        
+        dh_users_data = []
+        for user in digital_human_users:
+            dh_users_data.append({
+                'platform': user.platform,
+                'platform_user_id': user.platform_user_id,
+                'nickname': user.nickname,
+                'avatar': user.avatar,
+                'digital_human_probability': user.digital_human_probability,
+                'completed_at': user.completed_at.isoformat() if user.completed_at else None
+            })
+            
+        return success_response({
+            'high_risk_videos': recent_risk_videos,
+            'falsehoods': falsehoods,
+            'high_risk_users': risk_users_data,
+            'digital_human_users': dh_users_data,
+        })
+        
+    except Exception as e:
+        logger.exception(f"获取风险监控数据失败: {str(e)}")
         return error_response(500, f"服务器内部错误: {str(e)}")

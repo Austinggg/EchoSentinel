@@ -56,6 +56,15 @@ const routes: RouteRecordRaw[] = [
           },
         ],
       },
+      {
+        path: 'user-profile',
+        name: 'UserProfile',
+        component: () => import('#/views/mainpage/user-profile.vue'),
+        meta: {
+          title: '用户画像',
+          icon: 'heroicons-outline:user-circle',
+        },
+      },
       // 知识图谱
       {
         meta: {

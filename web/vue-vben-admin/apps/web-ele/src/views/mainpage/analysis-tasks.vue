@@ -180,11 +180,11 @@ const probabilityMarks = {
   0.7: {
     style: {
       color: '#F56C6C',
-      fontWeight: 'bold'
+      fontWeight: 'bold',
     },
-    label: '70%'
+    label: '70%',
   },
-  1: '100%'
+  1: '100%',
 };
 // 获取风险等级显示名称
 const getRiskLevelName = (level) => {
@@ -234,7 +234,12 @@ const resetFilters = () => {
   currentPage.value = 1;
   loadTasks();
 };
-
+// 查看用户画像
+const viewUserProfile = (row) => {
+  router.push(
+    `/main/user-profile?platform=${row.platform}&userId=${row.platform_user_id}`,
+  );
+};
 // 查看用户内容
 const viewUserContent = (row) => {
   // 修改为子路由路径
@@ -500,6 +505,10 @@ onMounted(() => {
                 <el-icon><View /></el-icon> 查看内容
               </el-button>
 
+              <el-button type="info" link @click="viewUserProfile(row)">
+                <el-icon><User /></el-icon> 用户画像
+              </el-button>
+
               <el-tooltip
                 content="查看分析报告"
                 v-if="row.status === 'completed'"
@@ -699,7 +708,7 @@ onMounted(() => {
 
 .slider-value {
   font-size: 13px;
-  color: #409EFF;
+  color: #409eff;
   font-weight: 500;
 }
 
