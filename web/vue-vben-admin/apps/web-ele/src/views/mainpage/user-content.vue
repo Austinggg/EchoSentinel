@@ -1016,7 +1016,6 @@ onBeforeUnmount(() => {
         v-loading="loading"
         @selection-change="handleSelectionChange"
         @sort-change="handleSortChange"
-        @row-click="handleRowClick"
       >
         <el-table-column type="selection" width="55" />
 

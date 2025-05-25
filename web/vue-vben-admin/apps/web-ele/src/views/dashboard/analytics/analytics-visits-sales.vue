@@ -22,7 +22,7 @@ onMounted(() => {
         data: [
           { name: '教育科普型', value: 500 },
           { name: '情感鸡汤型', value: 310 },
-          { name: '虚拟偶像/娱乐型', value: 274 },
+          { name: '虚拟娱乐型', value: 274 },
           { name: '带货营销型', value: 400 },
         ].sort((a, b) => {
           return a.value - b.value;

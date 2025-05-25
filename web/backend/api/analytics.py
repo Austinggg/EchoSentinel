@@ -313,7 +313,12 @@ def get_risk_monitor_data():
             VideoFile.source_platform,
             VideoFile.digital_human_probability,
             VideoFile.upload_time,
-            VideoFile.summary
+            VideoFile.summary,
+            VideoFile.source_id,  # 增加原始视频ID字段
+            DouyinVideo.cover_url  # 增加封面URL字段
+        ).outerjoin(
+            DouyinVideo, 
+            VideoFile.id == DouyinVideo.video_file_id  # 通过外键关联
         ).filter(
             VideoFile.risk_level == 'high'
         ).order_by(VideoFile.upload_time.desc()).limit(10).all()
@@ -327,7 +332,9 @@ def get_risk_monitor_data():
                 'platform': video.source_platform or '上传',
                 'digital_human_probability': video.digital_human_probability or 0,
                 'upload_time': video.upload_time.isoformat() if video.upload_time else None,
-                'summary': video.summary
+                'summary': video.summary,
+                'cover_url': video.cover_url,  # 添加封面URL
+                'source_id': video.source_id  # 添加原始视频ID
             })
         
         # 2. 获取包含不实信息的事实核查结果（限制10条）
@@ -354,7 +361,8 @@ def get_risk_monitor_data():
                 
             results = transcript.fact_check_results
             for result in results:
-                if result.get('is_true') == 'false':  # 找出被标记为不实的断言
+                # 改为使用中文"否"判断不实信息
+                if result.get('is_true') == '否':  # 修改这行
                     falsehoods.append({
                         'claim': result.get('claim', ''),
                         'conclusion': result.get('conclusion', ''),
@@ -364,9 +372,6 @@ def get_risk_monitor_data():
                     })
                     if len(falsehoods) >= 10:  # 最多保留10条记录
                         break
-            
-            if len(falsehoods) >= 10:
-                break
         
         # 3. 获取高风险用户排行（根据digital_human_probability和risk_level排序）
         high_risk_users = db.session.query(
