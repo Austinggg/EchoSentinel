@@ -306,6 +306,7 @@ class OLsh:
 
         # 3. 对所有找到的邻居按得分排序，返回前 k 个
         neighbors.sort(key=lambda x: x[1], reverse=True)
+        # print(neighbors[:k])
         return neighbors[:k]
 
 

@@ -124,7 +124,7 @@ class ResBlock(nn.Module):
         return F.relu(self.block(x) + residual)
 
 
-def infer(user_feature, cover_feature):
+def infer_loss(user_feature, cover_feature):
     model = V4Model().to(device)
     model.load_state_dict(torch.load("userAnalyse/best_model.pth", map_location=device))
     model.eval()
@@ -148,3 +148,18 @@ def infer(user_feature, cover_feature):
     # Calculate average reconstruction error
     avg_error = total_error
     return avg_error
+
+
+def infer_8features(user_feature, cover_feature):
+    model = V4Model().to(device)
+    model.load_state_dict(torch.load("userAnalyse/best_model.pth", map_location=device))
+    model.eval()
+    with torch.no_grad():
+        user_feature = user_feature.to(device)
+        cover_feature = cover_feature.to(device)
+
+        fused_cover = model.cover_adapter(cover_feature)
+
+        feature8 = model.encoder(torch.cat([user_feature, fused_cover], dim=1))
+
+    return feature8

@@ -1,13 +1,15 @@
-from flask import Blueprint, request, jsonify
-from sqlalchemy.exc import SQLAlchemyError
 import hashlib
-from datetime import datetime, timedelta
-# 在现有的导入中添加
-import requests
 import re
 import time
-from utils.database import DouyinVideo, db, UserProfile, UserAnalysisTask
-import json
+from datetime import datetime, timedelta
+
+# 在现有的导入中添加
+import requests
+from flask import Blueprint, jsonify, request
+from sqlalchemy.exc import SQLAlchemyError
+
+from utils.database import DouyinVideo, UserAnalysisTask, UserProfile, db
+
 account_api = Blueprint('account_api', __name__)
 
 # 现有的add_account函数处理已经基本完善
@@ -170,7 +172,7 @@ def analyze_douyin_video(aweme_id):
         
         # 调用下载并分析API
         download_analyze_response = requests.get(
-            f"http://localhost:8000/api/download_and_analyze",
+            "http://localhost:8000/api/download_and_analyze",
             params={
                 "url": video_url,
                 "prefix": "false",
@@ -248,7 +250,7 @@ def get_video_processing_details(aweme_id):
             })
         
         # 查询处理任务
-        from utils.database import VideoProcessingTask, VideoFile, ProcessingLog
+        from utils.database import ProcessingLog, VideoFile, VideoProcessingTask
         
         # 获取视频文件信息
         video_file = VideoFile.query.get(video.video_file_id)
@@ -563,7 +565,7 @@ def get_douyin_video_analysis_status(aweme_id):
             })
         
         # 查询分析状态
-        from utils.database import VideoProcessingTask, ContentAnalysis
+        from utils.database import ContentAnalysis, VideoProcessingTask
         
         content_analysis = ContentAnalysis.query.filter_by(
             video_id=video.video_file_id
@@ -662,7 +664,7 @@ def get_account_stats(profile_id):
         risk_counts = {"low": 0, "medium": 0, "high": 0, "unknown": 0}
         
         # 查询分析结果
-        from utils.database import VideoFile, ContentAnalysis
+        from utils.database import ContentAnalysis
         
         for video in videos:
             if video.video_file_id:
