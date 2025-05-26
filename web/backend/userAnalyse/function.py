@@ -1,17 +1,20 @@
 import hashlib
 import json
 from pathlib import Path
+from typing import Annotated, Tuple
 
 import numpy as np
 import pandas as pd
 import torch
 from sklearn.manifold import TSNE
+from sqlalchemy import select
 
-from userAnalyse.AEModel import infer
+from userAnalyse.AEModel import infer_8features, infer_loss
 from userAnalyse.CoverFeature import ImageFeatureExtractor
 from userAnalyse.data_processor import DataProcessor
 from userAnalyse.OLSH import OLsh
 from utils.database import UserProfile
+from utils.extensions import db
 
 columns_order = [
     "sec_uid",
@@ -34,24 +37,35 @@ columns_order = [
 ]
 
 
-def cal_loss(userProfile):
-    covers = json.loads(userProfile.covers).values()
-    covers = [x for x in covers if x is not None and not isinstance(x, float)]
-    features = extract_cover_features(covers)
-    cover_features = torch.stack(features).mean(dim=0)
+def cal_loss(userProfile: UserProfile) -> float:
+    """计算重构损失"""
+    user_features, cover_features = get_2features_by_UserProfile(userProfile)
+    return infer_loss(user_features, cover_features)
 
+
+def get_2features_by_UserProfile(
+    userProfile: UserProfile,
+) -> Annotated[Tuple[torch.Tensor, torch.Tensor], "[1,21],[1,2048]"]:
+    """
+    根据UserProfile返回user feature与cover feature
+    """
     df = userProfile_dataFrame(userProfile)
     df = preprocess(df)
-    # print(df)
     df = df.drop(columns=["sec_uid"])
     df = df.astype(np.float32).values
     user_features = torch.tensor(df)
-    # print(cover_features.shape, user_features.shape)
-    # print(infer(user_features, cover_features))
-    return infer(user_features, cover_features)
+    if userProfile.covers:
+        covers = json.loads(userProfile.covers).values()
+        covers = [x for x in covers if x is not None and not isinstance(x, float)]
+        features = extract_cover_features(covers)
+        cover_features = torch.stack(features).mean(dim=0)
+    else:
+        cover_features = torch.zeros([1, 2048])
+    return user_features, cover_features
 
 
-def userProfile_dataFrame(userProfile: UserProfile):
+def userProfile_dataFrame(userProfile: UserProfile) -> pd.DataFrame:
+    """根据UserProfile返回DataFrame"""
     pd.set_option("display.max_columns", None)  # 显示所有列
     data_for_df = {col: [getattr(userProfile, col, None)] for col in columns_order}
     df = pd.DataFrame(data_for_df, columns=columns_order)
@@ -59,14 +73,15 @@ def userProfile_dataFrame(userProfile: UserProfile):
     return df
 
 
-def preprocess(df):
+def preprocess(df) -> pd.DataFrame:
+    """预处理UserProfile转化的DataFrame,确保所有数据得到相同的处理"""
     processor = DataProcessor.load("userAnalyse/data_processor.pkl")
     processed_test = processor.transform(df)
     return processed_test
     # print(processed_test)
 
 
-def extract_cover_features(covers):
+def extract_cover_features(covers) -> Annotated[torch.Tensor, "shape: [1, 2048]"]:
     extractor = ImageFeatureExtractor()
     cover_path = [f"data/userAnalyse/video_covers/{x}.jpg" for x in covers]
     cover_features = [extractor(extractor.preprocess(x)) for x in cover_path]
@@ -143,10 +158,22 @@ def plot_data():
     return combined_data
 
 
-def get_feature_by_uid(sec_uid: str):
+def get_feature_by_uid(sec_uid: str) -> np.ndarray:
     """根据id获取特征向量"""
     hash_sec_uid = hashlib.md5(sec_uid.encode()).hexdigest()
     df = pd.read_csv("userAnalyse/output8.csv")
     row = df[df["hash_sec_uid"] == hash_sec_uid]
-    features = row[[f"feature_{i}" for i in range(8)]].values[0]
+    if not row.empty:
+        features = row[[f"feature_{i}" for i in range(8)]].values[0]
+    else:
+        userProfile = get_UserProfile_by_uid(sec_uid)
+        user_features, cover_features = get_2features_by_UserProfile(userProfile)
+        features = infer_8features(user_features, cover_features)
+        features = features.detach().cpu().numpy()
     return features
+
+
+def get_UserProfile_by_uid(sec_uid: str) -> UserProfile:
+    stmt = select(UserProfile).where(UserProfile.sec_uid == sec_uid)
+    userProfile = db.session.execute(stmt).scalars().first()
+    return userProfile

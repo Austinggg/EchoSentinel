@@ -83,6 +83,7 @@ class UserProfile(db.Model):
                 f"http://localhost:8000/api/userAnalyse/getCover/{x}.jpg"
                 for x in covers_data.values()
             ],
+            "avatar_medium":self.avatar_medium
         }
 
 

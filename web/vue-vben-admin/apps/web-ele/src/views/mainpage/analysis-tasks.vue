@@ -1,40 +1,37 @@
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+
+import {
+  Calendar,
+  CircleCheck,
+  CircleClose,
+  Loading,
+  Refresh,
+  Search,
+  View,
+} from '@element-plus/icons-vue';
 import axios from 'axios';
 import {
   ElAlert,
   ElAvatar,
   ElButton,
   ElCard,
+  ElDatePicker,
   ElEmpty,
   ElIcon,
-  ElLoading,
+  ElInput,
   ElMessage,
+  ElOption,
   ElPagination,
+  ElProgress,
+  ElSelect,
+  ElSlider,
   ElTable,
   ElTableColumn,
   ElTag,
   ElTooltip,
-  ElInput,
-  ElSelect,
-  ElOption,
-  ElDatePicker,
-  ElSlider,
-  ElProgress,
 } from 'element-plus';
-import {
-  Search,
-  CircleCheck,
-  CircleClose,
-  Loading,
-  MoreFilled,
-  Calendar,
-  Sort,
-  Warning,
-  View,
-  Refresh,
-} from '@element-plus/icons-vue';
 
 const router = useRouter();
 
@@ -91,9 +88,9 @@ const loadTasks = async () => {
     } else {
       throw new Error(response.data.message || '获取任务列表失败');
     }
-  } catch (err) {
-    console.error('加载任务列表失败:', err);
-    error.value = err.message || '获取任务列表失败';
+  } catch (error_) {
+    console.error('加载任务列表失败:', error_);
+    error.value = error_.message || '获取任务列表失败';
     ElMessage.error(error.value);
   } finally {
     loading.value = false;
@@ -118,7 +115,7 @@ const formatDate = (timestamp) => {
   try {
     const date = new Date(timestamp);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-  } catch (e) {
+  } catch {
     return timestamp;
   }
 };
@@ -136,16 +133,21 @@ const getPlatformName = (platform) => {
 // 获取状态标签类型
 const getStatusType = (status) => {
   switch (status) {
-    case 'completed':
+    case 'completed': {
       return 'success';
-    case 'processing':
-      return 'primary';
-    case 'pending':
-      return 'info';
-    case 'failed':
+    }
+    case 'failed': {
       return 'danger';
-    default:
+    }
+    case 'pending': {
       return 'info';
+    }
+    case 'processing': {
+      return 'primary';
+    }
+    default: {
+      return 'info';
+    }
   }
 };
 
@@ -163,14 +165,18 @@ const getStatusName = (status) => {
 // 获取风险等级标签类型
 const getRiskLevelType = (level) => {
   switch (level) {
-    case 'high':
+    case 'high': {
       return 'danger';
-    case 'medium':
-      return 'warning';
-    case 'low':
+    }
+    case 'low': {
       return 'success';
-    default:
+    }
+    case 'medium': {
+      return 'warning';
+    }
+    default: {
       return 'info';
+    }
   }
 };
 const probabilityMarks = {
@@ -266,19 +272,19 @@ onMounted(() => {
       v-if="$route.path === '/main/analysis-tasks'"
       class="analysis-tasks-container"
     >
-      <el-card class="filter-card">
+      <ElCard class="filter-card">
         <div class="filter-header">
           <h2 class="page-title">用户分析任务</h2>
           <div class="filter-actions">
-            <el-button type="primary" plain @click="refreshData">
-              <el-icon><Refresh /></el-icon> 刷新
-            </el-button>
+            <ElButton type="primary" plain @click="refreshData">
+              <ElIcon><Refresh /></ElIcon> 刷新
+            </ElButton>
           </div>
         </div>
 
         <!-- 筛选条件 -->
         <div class="filters">
-          <el-input
+          <ElInput
             v-model="searchText"
             placeholder="搜索用户名称"
             class="filter-item"
@@ -286,34 +292,34 @@ onMounted(() => {
             @keyup.enter="handleSearch"
           >
             <template #prefix>
-              <el-icon><Search /></el-icon>
+              <ElIcon><Search /></ElIcon>
             </template>
-          </el-input>
+          </ElInput>
 
-          <el-select
+          <ElSelect
             v-model="platformFilter"
             placeholder="平台"
             clearable
             class="filter-item"
           >
-            <el-option label="抖音" value="douyin" />
-            <el-option label="TikTok" value="tiktok" />
-            <el-option label="Bilibili" value="bilibili" />
-          </el-select>
+            <ElOption label="抖音" value="douyin" />
+            <ElOption label="TikTok" value="tiktok" />
+            <ElOption label="Bilibili" value="bilibili" />
+          </ElSelect>
 
-          <el-select
+          <ElSelect
             v-model="statusFilter"
             placeholder="状态"
             clearable
             class="filter-item"
           >
-            <el-option label="等待中" value="pending" />
-            <el-option label="处理中" value="processing" />
-            <el-option label="已完成" value="completed" />
-            <el-option label="失败" value="failed" />
-          </el-select>
+            <ElOption label="等待中" value="pending" />
+            <ElOption label="处理中" value="processing" />
+            <ElOption label="已完成" value="completed" />
+            <ElOption label="失败" value="failed" />
+          </ElSelect>
 
-          <el-date-picker
+          <ElDatePicker
             v-model="dateRange"
             type="daterange"
             range-separator="至"
@@ -324,12 +330,10 @@ onMounted(() => {
           <div class="filter-item probability-slider">
             <div class="slider-header">
               <span class="slider-label">数字人概率:</span>
-              <span class="slider-value"
-                >{{ probabilityRange[0] * 100 }}% -
-                {{ probabilityRange[1] * 100 }}%</span
-              >
+              <span class="slider-value">{{ probabilityRange[0] * 100 }}% -
+                {{ probabilityRange[1] * 100 }}%</span>
             </div>
-            <el-slider
+            <ElSlider
               v-model="probabilityRange"
               range
               :step="0.1"
@@ -341,14 +345,14 @@ onMounted(() => {
             />
           </div>
           <div class="filter-buttons">
-            <el-button type="primary" @click="handleSearch">查询</el-button>
-            <el-button @click="resetFilters">重置</el-button>
+            <ElButton type="primary" @click="handleSearch">查询</ElButton>
+            <ElButton @click="resetFilters">重置</ElButton>
           </div>
         </div>
-      </el-card>
+      </ElCard>
 
       <!-- 错误提示 -->
-      <el-alert
+      <ElAlert
         v-if="error"
         :title="error"
         type="error"
@@ -358,8 +362,8 @@ onMounted(() => {
       />
 
       <!-- 任务列表表格 -->
-      <el-card class="task-table-card">
-        <el-table
+      <ElCard class="task-table-card">
+        <ElTable
           :data="taskList"
           border
           stripe
@@ -368,72 +372,72 @@ onMounted(() => {
           @sort-change="handleSortChange"
         >
           <!-- 序号列 -->
-          <el-table-column type="index" width="50" label="#" />
+          <ElTableColumn type="index" width="50" label="#" />
 
           <!-- 平台列 -->
-          <el-table-column label="平台" prop="platform" width="100">
+          <ElTableColumn label="平台" prop="platform" width="100">
             <template #default="{ row }">
-              <el-tag size="small">{{ getPlatformName(row.platform) }}</el-tag>
+              <ElTag size="small">{{ getPlatformName(row.platform) }}</ElTag>
             </template>
-          </el-table-column>
+          </ElTableColumn>
 
           <!-- 用户信息列 -->
-          <el-table-column label="用户信息" min-width="200">
+          <ElTableColumn label="用户信息" min-width="200">
             <template #default="{ row }">
               <div class="user-info-cell">
-                <el-avatar :size="40" :src="row.avatar">
+                <ElAvatar :size="40" :src="row.avatar">
                   {{ row.nickname?.charAt(0) || '?' }}
-                </el-avatar>
+                </ElAvatar>
                 <div class="user-detail">
                   <div class="user-nickname">{{ row.nickname }}</div>
                   <div class="user-id">ID: {{ row.platform_user_id }}</div>
                 </div>
               </div>
             </template>
-          </el-table-column>
+          </ElTableColumn>
 
           <!-- 状态列 -->
-          <el-table-column
+          <ElTableColumn
             label="状态"
             prop="status"
             width="120"
             sortable="custom"
           >
             <template #default="{ row }">
-              <el-tooltip
+              <ElTooltip
                 :content="row.error"
                 placement="top"
                 :disabled="row.status !== 'failed'"
               >
                 <div class="status-cell">
-                  <el-tag :type="getStatusType(row.status)">
-                    <el-icon v-if="row.status === 'processing'"
-                      ><Loading
-                    /></el-icon>
-                    <el-icon v-if="row.status === 'completed'"
-                      ><CircleCheck
-                    /></el-icon>
-                    <el-icon v-if="row.status === 'failed'"
-                      ><CircleClose
-                    /></el-icon>
+                  <ElTag :type="getStatusType(row.status)">
+                    <ElIcon v-if="row.status === 'processing'">
+                      <Loading />
+                    </ElIcon>
+                    <ElIcon v-if="row.status === 'completed'">
+                      <CircleCheck />
+                    </ElIcon>
+                    <ElIcon v-if="row.status === 'failed'">
+                      <CircleClose />
+                    </ElIcon>
                     {{ getStatusName(row.status) }}
-                  </el-tag>
+                  </ElTag>
                   <div class="progress-text" v-if="row.status === 'processing'">
                     {{ Math.floor(row.progress) }}%
                   </div>
                 </div>
-              </el-tooltip>
+              </ElTooltip>
             </template>
-          </el-table-column>
+          </ElTableColumn>
           <!-- 添加数字人概率列 -->
-          <el-table-column
+          <ElTableColumn
             label="数字人概率"
             prop="digital_human_probability"
             width="120"
             sortable="custom"
           >
             <template #default="{ row }">
-              <el-progress
+              <ElProgress
                 :percentage="(row.digital_human_probability || 0) * 100"
                 :color="getDigitalHumanColor(row.digital_human_probability)"
                 :stroke-width="8"
@@ -441,36 +445,36 @@ onMounted(() => {
                 :format="() => formatProbability(row.digital_human_probability)"
               />
             </template>
-          </el-table-column>
+          </ElTableColumn>
           <!-- 风险等级列 -->
-          <el-table-column
+          <ElTableColumn
             label="风险等级"
             prop="risk_level"
             width="120"
             sortable="custom"
           >
             <template #default="{ row }">
-              <el-tag
+              <ElTag
                 v-if="row.risk_level"
                 :type="getRiskLevelType(row.risk_level)"
               >
                 {{ getRiskLevelName(row.risk_level) }}
-              </el-tag>
+              </ElTag>
               <span v-else>-</span>
             </template>
-          </el-table-column>
+          </ElTableColumn>
 
           <!-- 分析类型列 -->
-          <el-table-column label="分析类型" prop="analysis_type" width="120">
+          <ElTableColumn label="分析类型" prop="analysis_type" width="120">
             <template #default="{ row }">
-              <el-tag size="small" effect="plain">{{
-                row.analysis_type
-              }}</el-tag>
+              <ElTag size="small" effect="plain">
+                {{ row.analysis_type }}
+              </ElTag>
             </template>
-          </el-table-column>
+          </ElTableColumn>
 
           <!-- 创建时间列 -->
-          <el-table-column
+          <ElTableColumn
             label="创建时间"
             prop="created_at"
             width="180"
@@ -478,14 +482,14 @@ onMounted(() => {
           >
             <template #default="{ row }">
               <div class="time-cell">
-                <el-icon><Calendar /></el-icon>
+                <ElIcon><Calendar /></ElIcon>
                 <span>{{ formatDate(row.created_at) }}</span>
               </div>
             </template>
-          </el-table-column>
+          </ElTableColumn>
 
           <!-- 完成时间列 -->
-          <el-table-column
+          <ElTableColumn
             label="完成时间"
             prop="completed_at"
             width="180"
@@ -496,24 +500,27 @@ onMounted(() => {
                 row.completed_at ? formatDate(row.completed_at) : '-'
               }}</span>
             </template>
-          </el-table-column>
+          </ElTableColumn>
 
           <!-- 操作列 -->
-          <el-table-column label="操作" width="180" fixed="right">
+          <ElTableColumn label="操作" width="180" fixed="right">
             <template #default="{ row }">
-              <el-button type="primary" link @click="viewUserContent(row)">
-                <el-icon><View /></el-icon> 查看内容
-              </el-button>
+              <ElButton type="primary" link @click="viewUserContent(row)">
+                <ElIcon><View /></ElIcon> 查看内容
+              </ElButton>
 
-              <el-button type="info" link @click="viewUserProfile(row)">
-                <el-icon><User /></el-icon> 用户画像
-              </el-button>
+              <ElButton type="info" link @click="viewUserProfile(row)">
+                <ElIcon>
+                  <!-- <User /> -->
+                </ElIcon>
+                用户画像
+              </ElButton>
 
-              <el-tooltip
+              <ElTooltip
                 content="查看分析报告"
                 v-if="row.status === 'completed'"
               >
-                <el-button
+                <ElButton
                   type="success"
                   link
                   @click="
@@ -521,15 +528,15 @@ onMounted(() => {
                   "
                 >
                   查看报告
-                </el-button>
-              </el-tooltip>
+                </ElButton>
+              </ElTooltip>
             </template>
-          </el-table-column>
-        </el-table>
+          </ElTableColumn>
+        </ElTable>
 
         <!-- 分页组件 -->
         <div class="pagination-container" v-if="totalItems > 0">
-          <el-pagination
+          <ElPagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             :page-sizes="[10, 20, 50, 100]"
@@ -541,15 +548,15 @@ onMounted(() => {
         </div>
 
         <!-- 空状态 -->
-        <el-empty
+        <ElEmpty
           v-if="taskList.length === 0 && !loading"
           description="暂无分析任务"
         >
-          <el-button type="primary" @click="router.push('/main/add-account')">
+          <ElButton type="primary" @click="router.push('/main/add-account')">
             添加账号
-          </el-button>
-        </el-empty>
-      </el-card>
+          </ElButton>
+        </ElEmpty>
+      </ElCard>
     </div>
 
     <!-- 当访问子路由时渲染子路由组件 -->
