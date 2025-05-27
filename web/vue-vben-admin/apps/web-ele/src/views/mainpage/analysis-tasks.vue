@@ -10,6 +10,8 @@ import {
   Refresh,
   Search,
   View,
+  User,          
+  Document      
 } from '@element-plus/icons-vue';
 import axios from 'axios';
 import {
@@ -503,33 +505,26 @@ onMounted(() => {
           </ElTableColumn>
 
           <!-- 操作列 -->
-          <ElTableColumn label="操作" width="180" fixed="right">
+          <ElTableColumn label="操作" width="200" fixed="right">
             <template #default="{ row }">
-              <ElButton type="primary" link @click="viewUserContent(row)">
-                <ElIcon><View /></ElIcon> 查看内容
-              </ElButton>
-
-              <ElButton type="info" link @click="viewUserProfile(row)">
-                <ElIcon>
-                  <!-- <User /> -->
-                </ElIcon>
-                用户画像
-              </ElButton>
-
-              <ElTooltip
-                content="查看分析报告"
-                v-if="row.status === 'completed'"
-              >
+              <div class="action-buttons">
+                <ElButton type="primary" link @click="viewUserContent(row)">
+                  <ElIcon><View /></ElIcon> 查看内容
+                </ElButton>
+          
+                <ElButton type="info" link @click="viewUserProfile(row)">
+                  <ElIcon><User /></ElIcon> 用户画像
+                </ElButton>
+          
                 <ElButton
+                  v-if="row.status === 'completed'"
                   type="success"
                   link
-                  @click="
-                    router.push(`/main/analysis-report?task_id=${row.id}`)
-                  "
+                  @click="router.push(`/main/analysis-report?task_id=${row.id}`)"
                 >
-                  查看报告
+                  <ElIcon><Document /></ElIcon> 查看报告
                 </ElButton>
-              </ElTooltip>
+              </div>
             </template>
           </ElTableColumn>
         </ElTable>
@@ -729,5 +724,21 @@ onMounted(() => {
 .probability-slider :deep(.el-slider__marks-text) {
   font-size: 12px;
   padding-top: 4px;
+}
+/* 操作按钮样式 */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 居中对齐 */
+  gap: 5px;
+}
+
+.action-buttons .el-button {
+  padding: 4px 0;
+  margin-left: 0;
+}
+
+.action-buttons .el-button + .el-button {
+  margin-left: 0;
 }
 </style>
