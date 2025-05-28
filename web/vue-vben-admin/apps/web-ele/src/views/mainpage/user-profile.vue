@@ -715,7 +715,7 @@ onMounted(() => {
 .user-profile-container {
   flex: 1;
   padding: 20px;
-  transition: margin-left 0.3s;z
+  transition: margin-left 0.3s;
 }
 
 .user-profile-container.with-sidebar {

@@ -3,8 +3,15 @@ import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { useRoute, useRouter } from 'vue-router';
 import MarkdownIt from 'markdown-it';
-import { ElMessage, ElMenu, ElMenuItem, ElCard } from 'element-plus';
-
+import {
+  ElMessage,
+  ElMenu,
+  ElMenuItem,
+  ElCard,
+  ElIcon, // 添加这个
+  ElTag, // 添加这个
+  ElResult, // 添加这个
+} from 'element-plus';
 // 创建markdown-it实例
 const md = new MarkdownIt({
   html: true,
@@ -183,7 +190,7 @@ const regenerateReport = async () => {
     }
 
     const reportResponse = await axios.post(
-      `/api/videos/${videoId}/generate-report`, 
+      `/api/videos/${videoId}/generate-report`,
     );
 
     if (reportResponse.data.code === 200) {
@@ -373,12 +380,11 @@ onMounted(() => {
         >
           <el-menu-item index="summary">总结摘要</el-menu-item>
           <el-menu-item index="subtitles">字幕列表</el-menu-item>
-          <el-menu-item index="process">分析过程</el-menu-item>
           <el-menu-item index="digitalhuman">数字人检测</el-menu-item>
+          <el-menu-item index="process">分析过程</el-menu-item>
           <el-menu-item index="factcheck">事实核查</el-menu-item>
           <el-menu-item index="threat">威胁报告</el-menu-item>
         </el-menu>
-
         <!-- 内容区域，可滚动 -->
         <div class="content-area">
           <!-- 总结摘要内容 -->
@@ -464,7 +470,7 @@ onMounted(() => {
 /* 主容器布局 */
 .content-container {
   display: flex;
-  height: calc(100vh - 120px);
+  height: calc(100vh);
   flex-direction: column;
   gap: 1rem;
   padding: 1rem;
