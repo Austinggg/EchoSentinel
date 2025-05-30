@@ -344,6 +344,7 @@ onMounted(() => {
 @media (min-width: 768px) {
   .detection-content {
     flex-direction: row;
+    align-items: flex-start; /* 添加这行，确保对齐方式 */
   }
 
   .image-section {
@@ -365,7 +366,8 @@ onMounted(() => {
 .image-card,
 .score-card,
 .digital-human-card {
-  height: 100%;
+  /* 移除固定高度，让内容自然撑开 */
+  min-height: auto;
 }
 
 .image-title {
@@ -417,12 +419,17 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  /* 确保有足够的空间显示所有项目 */
+  min-height: auto;
+  overflow: visible;
 }
 
 .detail-score-item {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  /* 确保每个项目都有足够的空间 */
+  margin-bottom: 0.5rem;
 }
 
 .detail-name-container {
@@ -435,10 +442,15 @@ onMounted(() => {
   font-weight: 500;
   font-size: 0.875rem;
   color: #606266;
+  /* 确保文字不会被截断 */
+  white-space: nowrap;
+  overflow: visible;
 }
 
 .digital-human-card {
   margin-top: 1rem;
+  /* 确保卡片有足够的空间 */
+  flex-shrink: 0;
 }
 
 .digital-human-header {
@@ -472,5 +484,24 @@ onMounted(() => {
 
 .error-text {
   margin-top: 8px;
+}
+
+/* 添加深度选择器，确保 Element Plus 组件内部样式正确 */
+:deep(.el-card__body) {
+  padding: 20px;
+  /* 移除高度限制，让内容自然撑开 */
+  height: auto !important;
+  min-height: auto !important;
+  overflow: visible !important;
+}
+
+/* 确保进度条组件有足够的空间 */
+:deep(.el-progress) {
+  margin-bottom: 0.5rem;
+}
+
+/* 确保分割线不会影响布局 */
+:deep(.el-divider) {
+  margin: 1rem 0;
 }
 </style>

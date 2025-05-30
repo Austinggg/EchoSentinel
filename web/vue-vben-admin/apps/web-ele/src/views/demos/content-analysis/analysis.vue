@@ -8,10 +8,19 @@ import {
   ElMenu,
   ElMenuItem,
   ElCard,
-  ElIcon, // 添加这个
-  ElTag, // 添加这个
-  ElResult, // 添加这个
+  ElIcon,
+  ElTag,
+  ElResult,
+  ElButton,
+  ElLoading
 } from 'element-plus';
+import {
+  Close,
+  VideoPlay,
+  Expand,
+  Fold,
+} from '@element-plus/icons-vue';
+
 // 创建markdown-it实例
 const md = new MarkdownIt({
   html: true,
@@ -23,7 +32,7 @@ const md = new MarkdownIt({
 // 导入拆分出的标签页组件
 import SummaryTab from './components/SummaryTab.vue';
 import SubtitlesTab from './components/SubtitlesTab.vue';
-import DigitalHumanTab from './components/DigitalHumanTab.vue'; // 添加这一行
+import DigitalHumanTab from './components/DigitalHumanTab.vue';
 import ProcessTab from './components/ProcessTab.vue';
 import FactCheckTab from './components/FactCheckTab.vue';
 import ThreatReportTab from './components/ThreatReportTab.vue';
@@ -31,6 +40,11 @@ import ThreatReportTab from './components/ThreatReportTab.vue';
 const router = useRouter();
 const route = useRoute();
 const activeTab = ref('summary');
+
+// 新增：视频面板收起状态
+const isVideoCollapsed = ref(false);
+const videoDuration = ref(0);
+const videoPlayer = ref(null);
 
 // 数据状态
 const loading = ref(true);
@@ -47,6 +61,26 @@ const factCheckNotFound = ref(false);
 const reportLoading = ref(false);
 const reportData = ref(null);
 const reportError = ref(null);
+
+// 新增：切换视频面板显示/隐藏
+const toggleVideoPanel = () => {
+  isVideoCollapsed.value = !isVideoCollapsed.value;
+};
+
+// 新增：视频加载完成事件
+const onVideoLoaded = () => {
+  if (videoPlayer.value) {
+    videoDuration.value = videoPlayer.value.duration;
+  }
+};
+
+// 新增：格式化时长
+const formatDuration = (seconds) => {
+  if (!seconds) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 // 跳转到评估理由详情页
 const goToReasoning = (itemKey) => {
@@ -332,178 +366,349 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- 加载状态 -->
-  <div v-if="loading" class="loading-container">
-    <div class="loading-content">
-      <el-icon class="loading-icon">
-        <i class="el-icon-loading" />
-      </el-icon>
-      <div>加载数据中...</div>
-    </div>
-  </div>
+  <div class="analysis-page">
+    <!-- 如果有子路由被激活，显示子路由内容 -->
+    <router-view v-if="$route.path.includes('/reason')" />
 
-  <!-- 如果有子路由被激活，显示子路由内容 -->
-  <router-view v-else-if="$route.path.includes('/reason')" />
-
-  <!-- 视频分析内容，仅在数据加载后显示 -->
-  <div v-else class="content-container">
-    <!-- 左侧卡片 - 视频播放区域 -->
-    <el-card class="side-card">
-      <div class="card-content">
-        <div class="video-container">
-          <video controls :src="videoSrc" style="max-height: 100%"></video>
-        </div>
-        <!-- 视频标题和标签 -->
-        <div class="video-info">
-          <h3 class="video-title">{{ videoData.video.title }}</h3>
-          <div class="video-tags">
-            <el-tag
-              v-for="tag in videoData.video.tags"
-              :key="tag"
-              size="small"
-              >{{ tag }}</el-tag
-            >
+    <!-- 主要内容区域 -->
+    <div v-else>
+      <!-- 页面头部 -->
+      <div class="page-header">
+        <div class="header-left">
+          <h2 class="page-title">视频内容分析</h2>
+          <div class="breadcrumb" v-if="videoData?.video?.title">
+            <span class="breadcrumb-item">{{ videoData.video.title }}</span>
           </div>
         </div>
-      </div>
-    </el-card>
-
-    <!-- 右侧卡片 - 分析内容区域 -->
-    <el-card class="main-card">
-      <div class="card-content">
-        <!-- 顶部导航菜单 -->
-        <el-menu
-          :default-active="activeTab"
-          class="analysis-tabs border-0"
-          mode="horizontal"
-          @select="handleTabChange"
-        >
-          <el-menu-item index="summary">总结摘要</el-menu-item>
-          <el-menu-item index="subtitles">字幕列表</el-menu-item>
-          <el-menu-item index="digitalhuman">数字人检测</el-menu-item>
-          <el-menu-item index="process">分析过程</el-menu-item>
-          <el-menu-item index="factcheck">事实核查</el-menu-item>
-          <el-menu-item index="threat">威胁报告</el-menu-item>
-        </el-menu>
-        <!-- 内容区域，可滚动 -->
-        <div class="content-area">
-          <!-- 总结摘要内容 -->
-          <SummaryTab
-            v-if="activeTab === 'summary'"
-            :summary="summary"
-            :loading="summaryLoading"
-            @regenerate="regenerateSummary"
-          />
-
-          <!-- 字幕列表内容 -->
-          <SubtitlesTab
-            v-else-if="activeTab === 'subtitles'"
-            :subtitles-data="subtitlesData"
-            @copy-text="copySubtitleText"
-          />
-          <!-- 数字人检测内容 -->
-          <DigitalHumanTab
-            v-else-if="activeTab === 'digitalhuman'"
-            :video-data="videoData"
-          />
-          <!-- 分析过程内容 -->
-          <ProcessTab
-            v-else-if="activeTab === 'process'"
-            :assessment-data="assessmentData"
-            @view-reasoning="goToReasoning"
-          />
-          <!-- 事实核查内容 -->
-          <FactCheckTab
-            v-else-if="activeTab === 'factcheck'"
-            :fact-check-data="factCheckData"
-            :loading="factCheckLoading"
-            :error="factCheckError"
-            :not-found="factCheckNotFound"
-            @load-data="loadFactCheckData"
-            @generate-check="generateFactCheck"
-          />
-
-          <!-- 威胁报告内容 -->
-          <ThreatReportTab
-            v-else-if="activeTab === 'threat'"
-            :report-data="reportData"
-            :loading="reportLoading"
-            :error="reportError"
-            :video-title="videoData?.video?.title"
-            @regenerate="regenerateReport"
-            @export="exportReport"
-          />
+        <div class="header-controls">
+          <el-button 
+            :icon="isVideoCollapsed ? Expand : Fold" 
+            @click="toggleVideoPanel"
+            type="primary"
+            :text="true"
+            size="small"
+          >
+            {{ isVideoCollapsed ? '展开视频' : '收起视频' }}
+          </el-button>
         </div>
       </div>
-    </el-card>
+
+      <!-- 内容容器 -->
+      <div class="content-container" :class="{ 'video-collapsed': isVideoCollapsed }">
+        <!-- 左侧视频面板 -->
+        <transition name="slide-fade">
+          <div v-show="!isVideoCollapsed" class="video-panel">
+            <el-card class="video-card" shadow="hover">
+              <!-- 收起按钮 -->
+              <template #header>
+                <div class="card-header">
+                  <span class="card-title">
+                    <el-icon><VideoPlay /></el-icon>
+                    视频播放
+                  </span>
+                  <el-button 
+                    :icon="Close" 
+                    @click="toggleVideoPanel" 
+                    type="danger" 
+                    :text="true"
+                    circle
+                    size="small"
+                  />
+                </div>
+              </template>
+              
+              <!-- 视频播放器 -->
+              <div class="video-container">
+                <video 
+                  ref="videoPlayer"
+                  controls 
+                  :src="videoSrc" 
+                  class="video-player"
+                  @loadedmetadata="onVideoLoaded"
+                >
+                  您的浏览器不支持视频播放
+                </video>
+              </div>
+
+              <!-- 视频信息 -->
+              <div class="video-info">
+                <h3 class="video-title">{{ videoData?.video?.title || '未知标题' }}</h3>
+                <div class="video-meta">
+                  <el-tag type="info" size="small" v-if="videoDuration">
+                    <el-icon><VideoPlay /></el-icon>
+                    {{ formatDuration(videoDuration) }}
+                  </el-tag>
+                  <el-tag type="success" size="small" v-if="videoData?.video?.platform">
+                    {{ videoData.video.platform }}
+                  </el-tag>
+                </div>
+                <div class="video-tags" v-if="videoData?.video?.tags?.length">
+                  <el-tag
+                    v-for="tag in videoData.video.tags.slice(0, 3)"
+                    :key="tag"
+                    size="small"
+                    class="tag-item"
+                  >
+                    {{ tag }}
+                  </el-tag>
+                  <span v-if="videoData.video.tags.length > 3" class="more-tags">
+                    +{{ videoData.video.tags.length - 3 }}
+                  </span>
+                </div>
+              </div>
+            </el-card>
+          </div>
+        </transition>
+
+        <!-- 右侧分析面板 -->
+        <div class="analysis-panel" :class="{ 'full-width': isVideoCollapsed }">
+          <el-card class="analysis-card" shadow="hover">
+            <template #header>
+              <div class="card-header">
+                <span class="card-title">分析结果</span>
+                <el-button 
+                  v-if="isVideoCollapsed"
+                  :icon="VideoPlay" 
+                  @click="toggleVideoPanel" 
+                  type="primary" 
+                  :text="true"
+                  size="small"
+                >
+                  查看视频
+                </el-button>
+              </div>
+            </template>
+            
+            <div class="card-content">
+              <!-- 顶部导航菜单 -->
+              <el-menu
+                :default-active="activeTab"
+                class="analysis-tabs"
+                mode="horizontal"
+                @select="handleTabChange"
+              >
+                <el-menu-item index="summary">总结摘要</el-menu-item>
+                <el-menu-item index="subtitles">字幕列表</el-menu-item>
+                <el-menu-item index="digitalhuman">数字人检测</el-menu-item>
+                <el-menu-item index="process">分析过程</el-menu-item>
+                <el-menu-item index="factcheck">事实核查</el-menu-item>
+                <el-menu-item index="threat">威胁报告</el-menu-item>
+              </el-menu>
+              
+              <!-- 内容区域，可滚动 -->
+              <div class="content-area">
+                <!-- 总结摘要内容 -->
+                <SummaryTab
+                  v-if="activeTab === 'summary'"
+                  :summary="summary"
+                  :loading="summaryLoading"
+                  @regenerate="regenerateSummary"
+                />
+
+                <!-- 字幕列表内容 -->
+                <SubtitlesTab
+                  v-else-if="activeTab === 'subtitles'"
+                  :subtitles-data="subtitlesData"
+                  @copy-text="copySubtitleText"
+                />
+
+                <!-- 数字人检测内容 -->
+                <DigitalHumanTab
+                  v-else-if="activeTab === 'digitalhuman'"
+                  :video-data="videoData"
+                />
+
+                <!-- 分析过程内容 -->
+                <ProcessTab
+                  v-else-if="activeTab === 'process'"
+                  :assessment-data="assessmentData"
+                  @view-reasoning="goToReasoning"
+                />
+
+                <!-- 事实核查内容 -->
+                <FactCheckTab
+                  v-else-if="activeTab === 'factcheck'"
+                  :fact-check-data="factCheckData"
+                  :loading="factCheckLoading"
+                  :error="factCheckError"
+                  :not-found="factCheckNotFound"
+                  @load-data="loadFactCheckData"
+                  @generate-check="generateFactCheck"
+                />
+
+                <!-- 威胁报告内容 -->
+                <ThreatReportTab
+                  v-else-if="activeTab === 'threat'"
+                  :report-data="reportData"
+                  :loading="reportLoading"
+                  :error="reportError"
+                  :video-title="videoData?.video?.title"
+                  @regenerate="regenerateReport"
+                  @export="exportReport"
+                />
+              </div>
+            </div>
+          </el-card>
+        </div>
+      </div>
+
+      <!-- 悬浮切换按钮（视频收起时显示） -->
+      <transition name="fade">
+        <div v-show="isVideoCollapsed" class="floating-toggle">
+          <el-button 
+            :icon="VideoPlay" 
+            @click="toggleVideoPanel"
+            type="primary"
+            circle
+            size="large"
+          />
+        </div>
+      </transition>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* 加载状态 */
-.loading-container {
+.analysis-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 20px;
+}
+
+.page-header {
   display: flex;
-  height: 100%;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.loading-content {
-  text-align: center;
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.loading-icon {
-  font-size: 2.25rem;
-  margin-bottom: 1rem;
-  animation: spin 2s linear infinite;
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.breadcrumb {
+  font-size: 14px;
+  color: #8492a6;
 }
 
-/* 主容器布局 */
+.breadcrumb-item {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+
 .content-container {
   display: flex;
-  height: calc(100vh);
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
-  box-sizing: border-box;
-  overflow: hidden;
+  gap: 20px;
+  min-height: calc(100vh - 120px);
+  transition: all 0.3s ease;
 }
 
-@media (min-width: 768px) {
-  .content-container {
-    flex-direction: row;
-  }
+.content-container.video-collapsed {
+  gap: 0;
 }
 
-/* 卡片样式 */
-.side-card,
-.main-card {
+.video-panel {
+  flex: 0 0 400px;
+  transition: all 0.3s ease;
+}
+
+.analysis-panel {
+  flex: 1;
+  transition: all 0.3s ease;
+}
+
+.analysis-panel.full-width {
+  flex: 1;
+  max-width: 100%;
+}
+
+.video-card, .analysis-card {
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-@media (min-width: 768px) {
-  .side-card {
-    width: 35%;
-  }
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
-  .main-card {
-    width: 65%;
-  }
+.card-title {
+  font-weight: 600;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-container {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.video-player {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;
+}
+
+.video-info {
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.video-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.video-meta {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.video-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tag-item {
+  border-radius: 12px;
+}
+
+.more-tags {
+  font-size: 12px;
+  color: #909399;
+  background: #f4f4f5;
+  padding: 2px 6px;
+  border-radius: 10px;
 }
 
 .card-content {
@@ -513,58 +718,118 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* 视频区域样式 */
-.video-container {
-  overflow: hidden;
-  border-radius: 0.5rem;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.analysis-tabs {
+  border-bottom: 1px solid #e4e7ed;
+  margin-bottom: 20px;
 }
 
-.video-info {
-  margin-top: 1rem;
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
-}
-
-.video-title {
-  font-size: 1.125rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-}
-
-.video-tags {
-  margin-top: 0.5rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-/* 内容区域 */
 .content-area {
   flex: 1;
   overflow: auto;
-  padding: 1rem;
+  padding-right: 4px;
 }
 
-/* 修复卡片内容区溢出问题 */
+/* 悬浮按钮 */
+.floating-toggle {
+  position: fixed;
+  bottom: 30px;
+  left: 30px;
+  z-index: 1000;
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 动画效果 */
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-fade-enter-from {
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* 卡片内容样式修复 */
 :deep(.el-card__body) {
   height: 100%;
-  padding: 15px;
+  padding: 20px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-/* 自定义菜单样式 */
+/* 菜单样式 */
 :deep(.el-menu-item) {
   height: 48px;
   line-height: 48px;
+  border-bottom: none;
 }
 
 :deep(.el-menu--horizontal > .el-menu-item.is-active) {
   border-bottom: 2px solid #409eff;
   font-weight: 500;
+  color: #409eff;
+}
+
+:deep(.el-menu--horizontal) {
+  border-bottom: 1px solid #e4e7ed;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .analysis-page {
+    padding: 10px;
+  }
+  
+  .content-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .video-panel {
+    flex: none;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  .header-controls {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 20px;
+  }
+  
+  .breadcrumb-item {
+    max-width: 200px;
+  }
 }
 </style>

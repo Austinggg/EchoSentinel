@@ -44,15 +44,18 @@
     "@vueuse/core": "catalog:",
     "axios": "catalog:",
     "dayjs": "catalog:",
+    "docx": "^9.5.0",
     "echarts": "catalog:",
     "element-plus": "catalog:",
+    "jspdf": "^3.0.1",
     "markdown-it": "^14.1.0",
     "markdown-it-anchor": "^9.2.0",
     "markdown-it-toc-done-right": "^4.2.0",
     "marked": "^15.0.12",
     "pinia": "catalog:",
     "vue": "catalog:",
-    "vue-router": "catalog:"
+    "vue-router": "catalog:",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",

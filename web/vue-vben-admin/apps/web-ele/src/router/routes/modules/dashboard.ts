@@ -40,6 +40,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'clarity:alert-line',
         },
       },
+      {
+        path: 'system-performance',
+        name: 'SystemPerformance',
+        component: () => import('#/views/dashboard/system-performance/index.vue'),
+        meta: {
+          title: '系统性能统计',
+          icon: 'lucide:activity',
+        },
+      },
     ],
   },
 ];

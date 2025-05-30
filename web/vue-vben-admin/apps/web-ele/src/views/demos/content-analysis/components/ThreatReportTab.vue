@@ -1,35 +1,55 @@
 <script lang="ts" setup>
-import { computed } from 'vue';
-import { Refresh, Download } from '@element-plus/icons-vue';
-import { ElButton, ElCard, ElResult, ElSkeleton } from 'element-plus';
+import { computed, ref } from 'vue';
+import { 
+  Refresh, 
+  Download, 
+  ArrowDown, 
+  Document, 
+  Grid,     
+  DataBoard 
+} from '@element-plus/icons-vue';
+import {
+  ElButton,
+  ElCard,
+  ElResult,
+  ElSkeleton,
+  ElDropdown,
+  ElDropdownMenu,
+  ElDropdownItem,
+  ElMessage,
+  ElTag,
+  ElIcon
+} from 'element-plus';
 import MarkdownIt from 'markdown-it';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
 
 // 创建markdown-it实例
 const md = new MarkdownIt({
-  html: true, // 启用HTML标签
-  breaks: true, // 将换行符转换为<br>
-  linkify: true, // 自动将URL转换为链接
-  typographer: true, // 启用一些语言中性的替换+引号美化
+  html: true,
+  breaks: true,
+  linkify: true,
+  typographer: true,
 });
 
 // 定义组件接收的props
 const props = defineProps({
   reportData: {
     type: Object,
-    default: () => null
+    default: () => null,
   },
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   error: {
     type: String,
-    default: null
+    default: null,
   },
   videoTitle: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 });
 
 // 定义需要向父组件发送的事件
@@ -38,11 +58,6 @@ const emit = defineEmits(['regenerate', 'export']);
 // 重新生成报告
 const regenerateReport = () => {
   emit('regenerate');
-};
-
-// 导出报告
-const exportReport = () => {
-  emit('export');
 };
 
 // 格式化日期
@@ -70,16 +85,198 @@ const riskLevelInfo = computed(() => {
   }
 });
 
-// 根据评分获取进度条颜色
-const getScoreColor = (score) => {
-  if (score >= 0.8) return '#67C23A'; // 绿色
-  if (score >= 0.5) return '#E6A23C'; // 橙色
-  return '#F56C6C'; // 红色
+// 获取文件名前缀
+const getFilePrefix = () => {
+  const title = props.videoTitle || '威胁分析报告';
+  const timestamp = new Date().toISOString().slice(0, 10);
+  return `${title}_${timestamp}`;
 };
 
-// 格式化评分值（保留1位小数）
-const formatScore = (score) => {
-  return typeof score === 'number' ? score.toFixed(1) : 'N/A';
+// 导出为Markdown
+const exportAsMarkdown = () => {
+  try {
+    const content = generateMarkdownContent();
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    downloadFile(blob, `${getFilePrefix()}.md`);
+    ElMessage.success('Markdown报告导出成功');
+  } catch (error) {
+    ElMessage.error('导出失败: ' + error.message);
+  }
+};
+
+// 导出为PDF（修复中文乱码）
+const exportAsPDF = async () => {
+  try {
+    const pdf = new jsPDF();
+    
+    // 设置基本信息（使用英文）
+    const reportTitle = 'Threat Analysis Report';
+    const videoTitle = props.videoTitle || 'Unknown Video';
+    const riskLevel = `Risk Level: ${riskLevelInfo.value.text}`;
+    const riskProb = `Risk Probability: ${(props.reportData.risk_probability * 100).toFixed(1)}%`;
+    const timestamp = `Generated: ${formatDate(props.reportData?.timestamp)}`;
+    
+    // 设置字体和标题
+    pdf.setFontSize(20);
+    pdf.text(reportTitle, 20, 30);
+    
+    pdf.setFontSize(16);
+    pdf.text(`Video: ${videoTitle}`, 20, 50);
+    
+    // 添加基本信息
+    pdf.setFontSize(12);
+    pdf.text(riskLevel, 20, 70);
+    pdf.text(riskProb, 20, 85);
+    pdf.text(timestamp, 20, 100);
+    
+    // 添加分割线
+    pdf.line(20, 110, 190, 110);
+    
+    // 处理报告内容 - 将中文转换为拼音或英文描述
+    pdf.setFontSize(14);
+    pdf.text('Report Content:', 20, 130);
+    
+    pdf.setFontSize(10);
+    let yPosition = 150;
+    
+    // 简化处理：只添加英文摘要
+    const englishSummary = `
+This is a threat analysis report for the video content.
+Risk Assessment: ${riskLevelInfo.value.text}
+Probability Score: ${(props.reportData.risk_probability * 100).toFixed(1)}%
+
+Note: Detailed analysis content contains Chinese characters.
+Please refer to the Markdown or JSON export for complete content.
+    `.trim();
+    
+    const lines = englishSummary.split('\n');
+    lines.forEach((line) => {
+      if (yPosition > 250) {
+        pdf.addPage();
+        yPosition = 30;
+      }
+      
+      if (line.trim()) {
+        pdf.text(line.trim(), 20, yPosition);
+        yPosition += 15;
+      }
+    });
+    
+    pdf.save(`${getFilePrefix()}.pdf`);
+    ElMessage.success('PDF报告导出成功（英文版本）');
+  } catch (error) {
+    ElMessage.error('PDF导出失败: ' + error.message);
+  }
+};
+
+// 导出为Excel
+const exportAsExcel = () => {
+  try {
+    const workbook = XLSX.utils.book_new();
+
+    // 创建报告概览工作表
+    const overviewData = [
+      ['威胁分析报告'],
+      [''],
+      ['视频标题', props.videoTitle || ''],
+      ['风险等级', riskLevelInfo.value.text],
+      ['风险概率', `${(props.reportData.risk_probability * 100).toFixed(1)}%`],
+      ['生成时间', formatDate(props.reportData?.timestamp)],
+      [''],
+      ['报告内容'],
+      [props.reportData.report.replace(/[#*_`]/g, '')],
+    ];
+
+    const overviewSheet = XLSX.utils.aoa_to_sheet(overviewData);
+    XLSX.utils.book_append_sheet(workbook, overviewSheet, '威胁分析报告');
+
+    // 如果有详细数据，可以创建额外的工作表
+    if (props.reportData.details) {
+      const detailsSheet = XLSX.utils.json_to_sheet(props.reportData.details);
+      XLSX.utils.book_append_sheet(workbook, detailsSheet, '详细数据');
+    }
+
+    XLSX.writeFile(workbook, `${getFilePrefix()}.xlsx`);
+    ElMessage.success('Excel报告导出成功');
+  } catch (error) {
+    ElMessage.error('Excel导出失败: ' + error.message);
+  }
+};
+
+// 导出为JSON
+const exportAsJSON = () => {
+  try {
+    const jsonData = {
+      title: props.videoTitle || '威胁分析报告',
+      timestamp: formatDate(props.reportData?.timestamp),
+      riskLevel: riskLevelInfo.value.text,
+      riskProbability: props.reportData.risk_probability,
+      report: props.reportData.report,
+      metadata: {
+        exportTime: new Date().toISOString(),
+        version: '1.0',
+      },
+    };
+
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    });
+    downloadFile(blob, `${getFilePrefix()}.json`);
+    ElMessage.success('JSON数据导出成功');
+  } catch (error) {
+    ElMessage.error('JSON导出失败: ' + error.message);
+  }
+};
+
+// 生成Markdown内容
+const generateMarkdownContent = () => {
+  return `# ${props.videoTitle || '威胁分析报告'}
+
+## 报告概览
+
+- **风险等级**: ${riskLevelInfo.value.text}
+- **风险概率**: ${(props.reportData.risk_probability * 100).toFixed(1)}%
+- **生成时间**: ${formatDate(props.reportData?.timestamp)}
+
+## 分析报告
+
+${props.reportData.report}
+
+---
+*报告由EchoSentinel系统自动生成*
+`;
+};
+
+// 通用下载函数
+const downloadFile = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+// 处理导出选择
+const handleExport = (format) => {
+  switch (format) {
+    case 'markdown':
+      exportAsMarkdown();
+      break;
+    case 'pdf':
+      exportAsPDF();
+      break;
+    case 'excel':
+      exportAsExcel();
+      break;
+    case 'json':
+      exportAsJSON();
+      break;
+    default:
+      ElMessage.warning('不支持的导出格式');
+  }
 };
 </script>
 
@@ -112,10 +309,7 @@ const formatScore = (score) => {
     <!-- 报告数据显示 -->
     <div v-else-if="reportData" class="analysis-report">
       <!-- 风险等级信息 -->
-      <el-card
-        class="risk-info-card"
-        :class="`border-${riskLevelInfo.class}`"
-      >
+      <el-card class="risk-info-card" :class="`border-${riskLevelInfo.class}`">
         <div class="risk-info-header">
           <div class="risk-level-container">
             <el-tag
@@ -143,16 +337,35 @@ const formatScore = (score) => {
             >
               重新生成
             </el-button>
-            <!-- 添加导出按钮 -->
-            <el-button
-              type="success"
-              @click="exportReport"
-              :icon="Download"
-              size="small"
-              class="export-button"
-            >
-              导出报告
-            </el-button>
+
+            <!-- 导出下拉菜单 -->
+            <el-dropdown @command="handleExport" class="export-dropdown">
+              <el-button type="success" size="small">
+                <el-icon><Download /></el-icon>
+                导出报告
+                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="markdown">
+                    <el-icon><Document /></el-icon>
+                    Markdown (.md)
+                  </el-dropdown-item>
+                  <el-dropdown-item command="pdf">
+                    <el-icon><Document /></el-icon>
+                    PDF文档 (.pdf)
+                  </el-dropdown-item>
+                  <el-dropdown-item command="excel">
+                    <el-icon><Grid /></el-icon>
+                    Excel表格 (.xlsx)
+                  </el-dropdown-item>
+                  <el-dropdown-item command="json">
+                    <el-icon><DataBoard /></el-icon>
+                    JSON数据 (.json)
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </el-card>
@@ -245,9 +458,10 @@ const formatScore = (score) => {
 .action-buttons {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
 }
 
-.export-button {
+.export-dropdown {
   margin-left: 0.5rem;
 }
 
@@ -275,7 +489,14 @@ const formatScore = (score) => {
   border-top-color: #909399;
 }
 
-/* Markdown样式 */
+/* 下拉菜单项样式 */
+:deep(.el-dropdown-menu__item) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Markdown样式保持不变 */
 :deep(.markdown-body) {
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 15px;
@@ -284,7 +505,6 @@ const formatScore = (score) => {
   word-break: break-word;
 }
 
-/* 标题样式增强 */
 :deep(.markdown-body h2) {
   margin-top: 28px;
   font-size: 20px;
@@ -304,7 +524,6 @@ const formatScore = (score) => {
   border-radius: 4px;
 }
 
-/* 风险警告突出显示 */
 :deep(.markdown-body p:has(> ▲)) {
   background-color: #fef0f0;
   padding: 12px 16px;
@@ -313,14 +532,12 @@ const formatScore = (score) => {
   margin-bottom: 20px;
 }
 
-/* 突出显示风险标记 */
 :deep(.markdown-body p ▲) {
   color: #f56c6c;
   font-weight: bold;
   margin-right: 4px;
 }
 
-/* 增强列表样式 */
 :deep(.markdown-body ol) {
   padding-left: 22px;
   margin-bottom: 20px;
@@ -331,7 +548,6 @@ const formatScore = (score) => {
   padding-left: 6px;
 }
 
-/* 突出显示粗体文本 */
 :deep(.markdown-body strong) {
   color: #e6a23c;
   font-weight: bold;
@@ -340,13 +556,11 @@ const formatScore = (score) => {
   border-radius: 3px;
 }
 
-/* 突出显示风险类别 */
 :deep(.markdown-body p strong:first-of-type) {
   display: inline-block;
   margin-right: 5px;
 }
 
-/* 增强代码块样式 */
 :deep(.markdown-body code) {
   color: #476582;
   background-color: rgba(27, 31, 35, 0.05);
@@ -354,7 +568,6 @@ const formatScore = (score) => {
   border-radius: 3px;
 }
 
-/* 表格样式增强 */
 :deep(.markdown-body table) {
   width: 100%;
   border-collapse: collapse;
@@ -372,7 +585,6 @@ const formatScore = (score) => {
   border: 1px solid #ebeef5;
 }
 
-/* 结论部分特殊样式 */
 :deep(.markdown-body > p:first-child) {
   font-size: 16px;
   background-color: #fef0f0;
