@@ -7,3 +7,13 @@
 # Ignore egg-info files
 *.egg-info/
 __pycache__/
+
+# 忽略所有 .log 文件
+*.log
+
+# 如果您想忽略特定的 app.log 文件
+app.log
+
+# 如果您想忽略所有 log 目录
+logs/
+*.log/

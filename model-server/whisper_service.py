@@ -29,8 +29,8 @@ def init_whisper(app):
             torch_dtype=torch_dtype,
             device=app.whisper_device,
             return_timestamps=True,
-            chunk_length_s=20,  # 添加分块长度
-            stride_length_s=4   # 添加帧长度
+            chunk_length_s=30,  # 添加分块长度
+            stride_length_s=2   # 添加帧长度
         )
         
         app.whisper_ready = True

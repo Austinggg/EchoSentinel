@@ -84,7 +84,7 @@ class ContentClassifier:
             return {
                 "label": pred_label,
                 "probability": probability,
-                "class_name": "真实信息" if pred_label == 1 else "虚假信息"
+                "class_name": "high" if pred_label == 1 else "low"
             }
     
     def get_rules(self, threshold=0.5):
@@ -145,7 +145,7 @@ class ContentClassifier:
         report.append("\n## 最终决策逻辑")
         for cls, rule in rules["disjuncts"].items():
             if "∅" not in rule:
-                cls_name = "虚假信息" if cls == 0 else "真实信息"
+                cls_name = "low" if cls == 0 else "high"
                 report.append(f"### {cls_name}判定条件")
                 report.append(f"满足以下任一条件即判定为{cls_name}：")
                 
@@ -196,7 +196,7 @@ class ContentClassifier:
         decision_rules = {}
         for cls, rule in rules["disjuncts"].items():
             if "∅" not in rule:
-                cls_name = "虚假信息" if cls == 0 else "真实信息"
+                cls_name = "low" if cls == 0 else "high"
                 decision_rules[cls_name] = []
                 
                 # 将析取规则分解为单独的条件
