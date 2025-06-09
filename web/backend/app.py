@@ -1,6 +1,6 @@
 from flask import send_from_directory
 
-from api import aigc_detection, auth, menu, user, userAnalyse, videoUpload
+from api import auth, menu, user, userAnalyse, videoUpload
 from api.account import account_api  # 导入测试API蓝图
 from api.analysisReport import report_api  # 导入分析报告API蓝图
 from api.decision import decision_api  # 导入决策API蓝图
@@ -11,6 +11,7 @@ from api.videoTranscribe import transcribe_api  # 导入转录API蓝图
 from api.workflow import workflow_api  # 导入工作流API蓝图
 from api.analytics import analytics_api  # 导入分析API蓝图
 from api.AISearch import search_api  # 导入搜索API蓝图
+from api.digitalHumanDetection import digital_human_api
 from utils.database import init_dataset
 from utils.extensions import app
 
@@ -39,6 +40,8 @@ app.register_blueprint(menu.bp)
 app.register_blueprint(user.bp)
 app.register_blueprint(userAnalyse.bp)
 app.register_blueprint(videoUpload.video_api)
-app.register_blueprint(aigc_detection.bp)
+# app.register_blueprint(aigc_detection.bp)
+app.register_blueprint(digital_human_api)
+
 if __name__ == "__main__":
     app.run(debug=True, port=8000)  # 开启调试模式（包含热重载）

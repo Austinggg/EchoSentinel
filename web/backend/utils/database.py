@@ -116,10 +116,10 @@ class VideoFile(db.Model):
     source_id = mapped_column(String(100), nullable=True)  # 平台上的原始ID
 
     # 添加数字人检测字段
-    aigc_use=mapped_column(String(50),nullable=True)
-    aigc_face = mapped_column(String(50), nullable=True)
-    aigc_body = mapped_column(String(50), nullable=True)
-    aigc_whole = mapped_column(String(50), nullable=True)
+    # aigc_use=mapped_column(String(50),nullable=True)
+    # aigc_face = mapped_column(String(50), nullable=True)
+    # aigc_body = mapped_column(String(50), nullable=True)
+    # aigc_whole = mapped_column(String(50), nullable=True)
     digital_human_probability = mapped_column(db.Float, default=0.0, nullable=False)
     def to_dict(self):
         tags_list = self.tags.split(",") if self.tags else []
@@ -362,8 +362,6 @@ class VideoProcessingTask(db.Model):
             "attempts": self.attempts,
         }
 
-
-#
 class UserAnalysisTask(db.Model):
     """用于跟踪用户分析任务的表"""
 
@@ -502,8 +500,97 @@ class DouyinVideo(db.Model):
             "fetched_at": self.fetched_at.isoformat(),
             "video_file_id": self.video_file_id
         }
+# 新增数字人检测结果表
+class DigitalHumanDetection(db.Model):
+    """数字人检测结果表"""
+    __tablename__ = "digital_human_detections"
 
-
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
+    
+    # 检测状态
+    status = db.Column(db.String(20), default="pending")  # pending, processing, completed, failed
+    
+    # 面部检测结果
+    face_ai_probability = db.Column(db.Float, nullable=True)
+    face_human_probability = db.Column(db.Float, nullable=True)
+    face_confidence = db.Column(db.Float, nullable=True)
+    face_prediction = db.Column(db.String(20), nullable=True)  # AI-Generated, Human
+    face_raw_results = db.Column(db.JSON, nullable=True)
+    
+    # 躯体检测结果
+    body_ai_probability = db.Column(db.Float, nullable=True)
+    body_human_probability = db.Column(db.Float, nullable=True)
+    body_confidence = db.Column(db.Float, nullable=True)
+    body_prediction = db.Column(db.String(20), nullable=True)
+    body_raw_results = db.Column(db.JSON, nullable=True)
+    
+    # 整体检测结果
+    overall_ai_probability = db.Column(db.Float, nullable=True)
+    overall_human_probability = db.Column(db.Float, nullable=True)
+    overall_confidence = db.Column(db.Float, nullable=True)
+    overall_prediction = db.Column(db.String(20), nullable=True)
+    overall_raw_results = db.Column(db.JSON, nullable=True)
+    
+    # 综合评估结果
+    comprehensive_ai_probability = db.Column(db.Float, nullable=True)
+    comprehensive_human_probability = db.Column(db.Float, nullable=True)
+    comprehensive_confidence = db.Column(db.Float, nullable=True)
+    comprehensive_prediction = db.Column(db.String(20), nullable=True)
+    comprehensive_consensus = db.Column(db.Boolean, nullable=True)
+    comprehensive_votes = db.Column(db.JSON, nullable=True)  # {"ai": 2, "human": 1}
+    
+    # 时间戳
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    
+    # 错误信息
+    error_message = db.Column(db.Text, nullable=True)
+    
+    # 关联视频
+    video = db.relationship("VideoFile", backref=db.backref("digital_human_detection", uselist=False))
+    
+    def to_dict(self):
+        """转换为字典"""
+        return {
+            "id": self.id,
+            "video_id": self.video_id,
+            "status": self.status,
+            "face": {
+                "ai_probability": self.face_ai_probability,
+                "human_probability": self.face_human_probability,
+                "confidence": self.face_confidence,
+                "prediction": self.face_prediction,
+                "raw_results": self.face_raw_results
+            } if self.face_ai_probability is not None else None,
+            "body": {
+                "ai_probability": self.body_ai_probability,
+                "human_probability": self.body_human_probability,
+                "confidence": self.body_confidence,
+                "prediction": self.body_prediction,
+                "raw_results": self.body_raw_results
+            } if self.body_ai_probability is not None else None,
+            "overall": {
+                "ai_probability": self.overall_ai_probability,
+                "human_probability": self.overall_human_probability,
+                "confidence": self.overall_confidence,
+                "prediction": self.overall_prediction,
+                "raw_results": self.overall_raw_results
+            } if self.overall_ai_probability is not None else None,
+            "comprehensive": {
+                "ai_probability": self.comprehensive_ai_probability,
+                "human_probability": self.comprehensive_human_probability,
+                "confidence": self.comprehensive_confidence,
+                "prediction": self.comprehensive_prediction,
+                "consensus": self.comprehensive_consensus,
+                "votes": self.comprehensive_votes
+            } if self.comprehensive_ai_probability is not None else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "error_message": self.error_message
+        }
 class ProcessingLog(db.Model):
     __tablename__ = "processing_logs"
 
