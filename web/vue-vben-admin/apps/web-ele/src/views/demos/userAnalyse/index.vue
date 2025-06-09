@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { RankInfo, UserProfile } from './types/main';
+import type { RankInfo, UserProfile } from './types';
 
 import { reactive, ref } from 'vue';
 

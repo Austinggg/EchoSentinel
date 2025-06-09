@@ -1,5 +1,6 @@
 # filepath: [extractAndSummary.py](http://_vscodecontentref_/1)
 import datetime
+import re
 from flask import Blueprint, request, jsonify
 from utils.database import db
 from utils.HttpResponse import success_response, error_response
@@ -157,6 +158,7 @@ def generate_video_summary(file_id):
     try:
         from utils.database import VideoFile, ContentAnalysis, VideoTranscript
         from services.content_analysis.summary_generator import SummaryGenerator
+        import re
 
         # 初始化摘要生成器
         summary_generator = SummaryGenerator()
@@ -184,20 +186,19 @@ def generate_video_summary(file_id):
         if not transcript or not transcript.transcript:
             return error_response(400, "视频尚未转录或没有可用的转录文本")
 
-        # 获取请求中的自定义参数（修改这里，增加容错处理）
+        # 参数处理
         try:
             data = request.get_json(silent=True) or {}
         except:
             data = {}
 
-        # 尝试从URL参数或表单数据获取max_length
         max_length = request.args.get("max_length") or request.form.get("max_length")
         if max_length and str(max_length).isdigit():
             max_length = int(max_length)
         else:
             max_length = data.get("max_length", 500)  # 默认值
 
-        # 从分析表中提取意图和陈述
+        # 从分析表中提取信息
         extracted_info = {"intent": analysis.intent, "statements": analysis.statements}
 
         # 生成摘要
@@ -205,19 +206,69 @@ def generate_video_summary(file_id):
             transcript.transcript, extracted_info, max_length
         )
 
-        # 更新内容分析表
+        # 更新内容分析表 - 保留完整markdown格式
         analysis.summary = summary
         analysis.updated_at = datetime.datetime.utcnow()
 
-        # 更新视频记录中的简要摘要
-        video.summary = summary[:200] + "..." if len(summary) > 200 else summary
+        # 处理用于表格显示的纯文本摘要
+        plain_summary = clean_markdown_for_table(summary)
+        
+        # 更新视频记录中的简要摘要 - 使用纯文本格式
+        video.summary = plain_summary[:200] + "..." if len(plain_summary) > 200 else plain_summary
         db.session.commit()
 
         # 返回结果
         return success_response(
-            {"video_id": file_id, "filename": video.filename, "summary": summary}
+            {
+                "video_id": file_id, 
+                "filename": video.filename, 
+                "summary": summary,
+                "plain_summary": plain_summary[:200] + "..." if len(plain_summary) > 200 else plain_summary
+            }
         )
 
     except Exception as e:
         logging.exception("摘要生成异常")
         return error_response(500, f"处理失败: {str(e)}")
+
+
+def clean_markdown_for_table(text):
+    """
+    清理Markdown标记和标题，提取纯文本内容用于表格展示
+    
+    Args:
+        text: 原始Markdown格式文本
+        
+    Returns:
+        清理后的纯文本
+    """
+    if not text:
+        return ""
+    
+    # 移除Markdown标题标记 (## 和 ###)
+    text = re.sub(r'^#+\s+.*$', '', text, flags=re.MULTILINE)
+    
+    # 移除常见标题词 ("内容摘要", "主题", "意图", "核心内容" 等)
+    title_patterns = [
+        r'内容摘要', r'主题', r'意图', r'核心内容', 
+        r'📝.*?[:：]?', r'💡.*?[:：]?', r'✅.*?[:：]?'
+    ]
+    for pattern in title_patterns:
+        text = re.sub(pattern, '', text)
+    
+    # 移除emoji和其他特殊符号
+    text = re.sub(r'[📌📝💡✅🌟]', '', text)
+    
+    # 移除多余空行
+    text = re.sub(r'\n\s*\n', '\n', text)
+    
+    # 移除行首空白
+    text = re.sub(r'^\s+', '', text, flags=re.MULTILINE)
+    
+    # 连接所有段落成为一段纯文本
+    text = re.sub(r'\n+', ' ', text)
+    
+    # 移除多余空格
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text

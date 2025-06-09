@@ -5,7 +5,7 @@ import { $t } from '#/locales';
 const routes: RouteRecordRaw[] = [
   {
     meta: {
-      icon: 'ic:baseline-view-in-ar',
+      icon: 'ic:baseline-view-in-ar',  // 保持原有图标
       keepAlive: true,
       order: 1000,
       title: $t('demos.title'),
@@ -16,6 +16,7 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           title: $t('demos.elementPlus'),
+          icon: 'ep:element-plus',  // Element Plus图标
           hideInMenu: true,
         },
         name: 'NaiveDemos',
@@ -25,35 +26,37 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           title: $t('demos.form'),
+          icon: 'mdi:form-select',  // 表单图标
           hideInMenu: true,
         },
         name: 'BasicForm',
         path: '/demos/form',
         component: () => import('#/views/demos/form/basic.vue'),
       },
-      // 数字人检测
-      {
-        meta: {
-          title: $t('demos.aigcDetection'),
-        },
-        name: 'AIGCdetection',
-        path: '/demos/AIGC-detection',
-        component: () => import('#/views/demos/AIGC-detection/index.vue'),
-      },
-      // 视频上传
       {
         meta: {
           title: $t('demos.videoUpload'),
+          icon: 'mdi:video-plus',  // 视频上传图标
         },
         name: 'VideoUpload',
         path: '/demos/video-upload',
         component: () => import('#/views/demos/content-analysis/index.vue'),
       },
+      // 数字人检测
+      {
+        meta: {
+          title: $t('demos.aigcDetection'),
+          icon: 'mdi:robot-outline',  // AI/机器人图标
+        },
+        name: 'AIGCdetection',
+        path: '/demos/AIGC-detection',
+        component: () => import('#/views/demos/AIGC-detection/index.vue'),
+      },
       // 分析记录 - 现在作为父路由
-      // 分析记录路由
       {
         meta: {
           title: $t('demos.analysisRecords'),
+          icon: 'mdi:file-document-multiple',  // 文档记录图标
         },
         name: 'AnalysisRecords',
         path: '/demos/analysis-records',
@@ -64,6 +67,7 @@ const routes: RouteRecordRaw[] = [
           {
             meta: {
               title: $t('demos.contentAnalysis'),
+              icon: 'mdi:text-search',  // 文本分析图标
               hideInMenu: true,
             },
             name: 'contentAnalysis',
@@ -75,10 +79,11 @@ const routes: RouteRecordRaw[] = [
               {
                 meta: {
                   title: '评估理由详情',
+                  icon: 'mdi:clipboard-text-search',  // 评估详情图标
                   hideInMenu: true,
                 },
                 name: 'AssessmentReason',
-                path: 'reason', // 相对路径，实际为/demos/analysis-records/analysis/reason
+                path: 'reason',
                 component: () =>
                   import('#/views/demos/content-analysis/reason.vue'),
               },
@@ -89,7 +94,8 @@ const routes: RouteRecordRaw[] = [
       // 知识图谱
       {
         meta: {
-          title: $t('demos.KnowledgeGraph'),
+          title: '事实核查',
+          icon: 'mdi:graph',  // 知识图谱图标
         },
         name: 'KnowledgeGraph',
         path: '/demos/KnowledgeGraph',
@@ -98,6 +104,7 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           title: $t('demos.userAnalyse'),
+          icon: 'mdi:account-search',  // 用户分析图标
         },
         name: 'userAnalyse',
         path: '/demos/userAnalyse',

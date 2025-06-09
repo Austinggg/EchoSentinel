@@ -9,6 +9,7 @@ from userAnalyse.function import (
     cal_loss,
     get_anomaly_score,
     get_feature_by_uid,
+    get_UserProfile_by_uid,
     plot_data,
 )
 from userAnalyse.OLSH import find_most_similar_cluster, find_most_similar_user
@@ -56,9 +57,8 @@ def userAnalyse_demo():
 def userAnalyse_getProfile():
     """返回用户信息"""
     sec_uid = request.get_json().get("sec_uid")
-    stmt = select(UserProfile).where(UserProfile.sec_uid == sec_uid)
-    userProfile = db.session.execute(stmt).scalars().first()
-    return HttpResponse.success(data=userProfile.to_dict())
+
+    return HttpResponse.success(data=get_UserProfile_by_uid(sec_uid).to_dict())
 
 
 @bp.route("/api/userAnalyse/getCover/<filename>", methods=["GET"])
@@ -106,6 +106,7 @@ def userAnalyse_similarCluster():
         {
             "cluster_id": cluster_id,
             "avatar_list": [users[h].avatar_medium for h in hash_list],
+            "sec_uids": [users[h].sec_uid for h in hash_list],
         }
         for cluster_id, hash_list in similarCluster.items()
     ]
@@ -125,7 +126,7 @@ def userAnalyse_similarUser():
     return_users = [
         {
             "hash_sec_uid": item[0],
-            "similarity": round(item[1],2),
+            "similarity": round(item[1], 3),
             "avatar_medium": users[item[0]].avatar_medium,
             "nickname": users[item[0]].nickname,
             "sec_uid": users[item[0]].sec_uid,

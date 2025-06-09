@@ -31,6 +31,24 @@ const routes: RouteRecordRaw[] = [
           title: $t('page.dashboard.workspace'),
         },
       },
+      {
+        path: 'risk-monitor',
+        name: 'RiskMonitor',
+        component: () => import('#/views/dashboard/risk-monitor/index.vue'),
+        meta: {
+          title: '风险监控中心',
+          icon: 'clarity:alert-line',
+        },
+      },
+      {
+        path: 'system-performance',
+        name: 'SystemPerformance',
+        component: () => import('#/views/dashboard/system-performance/index.vue'),
+        meta: {
+          title: '系统性能统计',
+          icon: 'lucide:activity',
+        },
+      },
     ],
   },
 ];

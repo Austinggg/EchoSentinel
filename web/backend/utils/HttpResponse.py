@@ -17,11 +17,11 @@ class HttpResponse(Response):
         super().__init__(response=content, content_type="application/json")
 
     @classmethod
-    def success(cls, data, message="success"):
+    def success(cls, data="", message="success"):
         return cls(code=0, data=data, message=message)
 
     @classmethod
-    def error(cls, data, message="error"):
+    def error(cls, data="", message="error"):
         return cls(code=-1, data=data, message=message)
 
 

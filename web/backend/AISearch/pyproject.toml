@@ -1,0 +1,37 @@
+[project]
+name = "AISearch"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+# 简化依赖并使用兼容版本
+dependencies = [
+    # 核心依赖，使用最低版本要求而非精确版本
+    "langchain>=0.3.14",
+    "langchain-community>=0.3.14",
+    "langchain-core>=0.3.29",
+    "openai>=1.59.3",
+    "scikit-learn>=1.6.0",  # 兼容backend的 >=1.6.1
+    "pandas>=2.2.3",        # 兼容backend的要求
+    "numpy>=1.26.4",        # 可兼容backend的 >=2.2.4
+    "flask-cors>=5.0.0",
+    "jieba>=0.42.1",        # 中文分词库
+    "nltk>=3.9.1",
+    "sentence-transformers>=3.3.1",
+    "rank-bm25>=0.2.2",
+    "baidusearch==1.0.3",
+    "PyMuPDF==1.25.1",
+    "readability-lxml==0.8.1",
+    "lxml==5.3.0",
+    "lxml_html_clean==0.4.1",
+    "faiss-cpu>=1.11.0",
+    "playwright>=1.40.0",
+]
+
+# 统一使用setuptools作为构建后端
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+# 包含所有需要的包
+[tool.setuptools]
+packages = ["utils"]
