@@ -12,11 +12,13 @@ from api.workflow import workflow_api  # 导入工作流API蓝图
 from api.analytics import analytics_api  # 导入分析API蓝图
 from api.AISearch import search_api  # 导入搜索API蓝图
 from api.digitalHumanDetection import digital_human_api
+from api.systemSettings import system_api
 from utils.database import init_dataset
+from utils.redis_client import init_redis
 from utils.extensions import app
 
 init_dataset(app)
-
+init_redis(app)  # 初始化Redis客户端
 
 @app.route("/")
 def index():
@@ -36,6 +38,7 @@ app.register_blueprint(analytics_api)  # 注册分析API蓝图
 app.register_blueprint(search_api)  # 注册搜索API蓝图
 app.register_blueprint(auth.bp)
 app.register_blueprint(menu.bp)
+app.register_blueprint(system_api)
 
 app.register_blueprint(user.bp)
 app.register_blueprint(userAnalyse.bp)

@@ -59,16 +59,31 @@ class DataProcessor(BaseEstimator, TransformerMixin):
         raise ValueError("输入必须是DataFrame、字典或字典列表")
 
     def _clean_data(self, df):
-        """数据清洗"""
-        df = df.copy()
-        # 删除冗余列
-        df = df.drop(columns=self.columns_to_drop, errors="ignore")
-
-        # 处理布尔型列
+        """清理数据"""
+        # 处理布尔列
         for col in self.bool_columns:
             if col in df.columns:
-                df[col] = df[col].astype(int)
-
+                # 先填充 None 值，再转换为 int
+                df[col] = df[col].fillna(0).astype(int)
+        
+        # 处理数值列的 None 值
+        numeric_columns = ['aweme_count', 'follower_count', 'following_count', 
+                        'total_favorited', 'favoriting_count', 'user_age']
+        
+        for col in numeric_columns:
+            if col in df.columns:
+                # 将 None 值填充为 0，然后转换类型
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # 处理分类列的 None 值
+        categorical_columns = ['gender', 'province']
+        for col in categorical_columns:
+            if col in df.columns:
+                df[col] = df[col].fillna('未知')
+        
+        # 删除指定列
+        df = df.drop(columns=self.columns_to_drop, errors='ignore')
+        
         return df
 
     def _feature_engineering(self, df):

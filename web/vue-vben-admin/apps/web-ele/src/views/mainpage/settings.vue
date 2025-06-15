@@ -50,7 +50,7 @@ const llmConfigs = {
     description: '用于从视频内容中提取关键信息',
   },
   assessment: {
-    label: '评估模型',
+    label: '基础评估模型',
     description: '用于评估内容风险和分类',
   },
   report: {
@@ -139,9 +139,9 @@ const formData = reactive({
       description: 'ollama格式的本地模型',
     },
     remote_openai: {
-      api_key: '',
+      api_key: 'sk-lqdncjtdqqaxrvgurqffyzcvsslqvrpczbmbiamxchewamgt',
       base_url: 'https://api.siliconflow.cn/v1',
-      model: 'Qwen/Qwen3-8B',
+      model: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
     },
   },
   assessment: {
@@ -391,7 +391,7 @@ const testLocalModel = async (modelKey) => {
     });
 
     if (response.data && response.data.code === 200) {
-      ElMessage.success(`本地${modelConfigs[modelKey].label}连接成功!`);
+      ElMessage.success(`本地${llmConfigs[modelKey].label}连接成功!`); // 修改这里：modelConfigs -> llmConfigs
     } else {
       throw new Error(response.data.message || '连接失败');
     }
@@ -401,7 +401,7 @@ const testLocalModel = async (modelKey) => {
   }
 };
 
-// 测试远程模型API
+// 测试远程模型API - 修复变量名
 const testRemoteModel = async (modelKey) => {
   try {
     ElMessage.info('正在测试远程API连接...');
@@ -413,7 +413,7 @@ const testRemoteModel = async (modelKey) => {
     });
 
     if (response.data && response.data.code === 200) {
-      ElMessage.success(`远程${modelConfigs[modelKey].label}API连接成功!`);
+      ElMessage.success(`远程${llmConfigs[modelKey].label}API连接成功!`); // 修改这里：modelConfigs -> llmConfigs
     } else {
       throw new Error(response.data.message || '连接失败');
     }
@@ -422,7 +422,6 @@ const testRemoteModel = async (modelKey) => {
     ElMessage.error(`测试失败: ${error.message || '连接错误'}`);
   }
 };
-
 // 测试平台Cookie
 const testPlatformConnection = async (platform) => {
   try {

@@ -7,7 +7,7 @@ import type {
 
 import { computed, onMounted, reactive, ref, watch } from 'vue'; // 添加watch
 import { useRoute, useRouter } from 'vue-router'; // 添加useRouter
-
+import axios from 'axios'; // 添加这行
 import { Location, Share } from '@element-plus/icons-vue';
 import {
   ElAlert,
@@ -19,12 +19,16 @@ import {
   ElDivider,
   ElIcon,
   ElImage,
+  ElInput, // 添加这个
+  ElMessage, // 添加这个
+  ElPagination, // 添加这个
   ElProgress,
   ElSkeleton,
   ElSkeletonItem,
   ElTable,
   ElTableColumn,
   ElTag,
+  ElEmpty, // 添加这个
 } from 'element-plus';
 
 import { requestClient } from '#/api/request';
@@ -51,6 +55,7 @@ const searchUserKeyword = ref(''); // 用户搜索关键词
 const currentPage = ref(1); // 用户列表当前页
 const pageSize = ref(10); // 用户列表每页数量
 const totalUsers = ref(0); // 用户总数
+const initialLoad = ref(true); // 添加这行
 
 // 过滤后的用户列表
 const filteredUserList = computed(() => {
@@ -67,33 +72,51 @@ const loadUserList = async () => {
   try {
     userListLoading.value = true;
 
-    // 构建查询参数，与analysis-tasks页面使用相同的API
     const params = {
       page: currentPage.value,
       per_page: pageSize.value,
       sort_by: 'created_at',
       sort_order: 'desc',
-      status: 'completed', // 只显示已完成分析的用户
+      status: 'completed',
     };
 
-    // 如果有指定平台，则只显示该平台的用户
     if (platform.value) {
       params.platform = platform.value;
     }
 
-    const response = await requestClient.get('/analysis/tasks', { params });
+    const response = await axios.get('/api/analysis/tasks', { params });
 
-    if (response && response.tasks) {
-      userList.value = response.tasks;
-      totalUsers.value = response.total || 0;
+    if (response.data.code === 200) {
+      userList.value = response.data.data.tasks || [];
+      totalUsers.value = response.data.data.total || 0;
+
+      // 添加这段逻辑：如果是初始加载且没有传递userId，默认选择第一个用户
+      if (initialLoad.value && !userId.value && userList.value.length > 0) {
+        const firstUser = userList.value[0];
+        await router.replace({
+          path: '/main/user-profile',
+          query: {
+            platform: firstUser.platform,
+            userId: firstUser.platform_user_id,
+          },
+        });
+        initialLoad.value = false;
+        return; // 等待路由更新后再加载用户画像
+      }
+
+      initialLoad.value = false;
+    } else {
+      throw new Error(response.data.message || '获取用户列表失败');
     }
   } catch (err) {
     console.error('加载用户列表失败:', err);
+    userList.value = [];
+    totalUsers.value = 0;
+    initialLoad.value = false;
   } finally {
     userListLoading.value = false;
   }
 };
-
 // 切换用户
 const switchUser = (newUser) => {
   if (newUser.platform_user_id === userId.value) return;
@@ -122,38 +145,64 @@ const toggleUserList = () => {
 watch(
   () => route.query.userId,
   (newId) => {
-    if (newId) {
+    if (newId && !initialLoad.value) {
+      // 添加 !initialLoad.value 条件
       loading.value = true;
       loadUserProfile();
     }
   },
 );
 
-// 修改loadUserProfile函数
+// 修改 loadUserProfile 函数
 const loadUserProfile = async () => {
-  const data = await requestClient.post<UserFullProfile>(
-    '/userAnalyse/getProfile',
-    {
-      sec_uid: userId.value,
-    },
-  );
-  userProfile.value = data;
-  loading.value = false;
-  if (userProfile.value.sec_uid) {
-    await loadRankAnalysis();
-    await loadSimilarUsers();
-    await loadSimilarClusters();
+  // 添加这个检查：如果没有userId，不执行加载
+  if (!userId.value) {
+    loading.value = false;
+    return;
+  }
+
+  try {
+    loading.value = true;
+    analyticsLoading.value = true;
+
+    const data = await requestClient.post<UserFullProfile>(
+      '/userAnalyse/getProfile',
+      {
+        sec_uid: userId.value,
+      },
+    );
+    userProfile.value = data;
+    loading.value = false;
+
+    if (userProfile.value.sec_uid) {
+      await loadRankAnalysis();
+      await loadSimilarUsers();
+      await loadSimilarClusters();
+    }
+  } catch (error) {
+    console.error('加载用户画像失败:', error);
+    error.value = '加载用户画像失败';
+    loading.value = false;
+    analyticsLoading.value = false;
   }
 };
-
 // 加载用户异常分析数据
 const loadRankAnalysis = async () => {
-  const data = await requestClient.post<RankInfo>('/userAnalyse/getRank', {
-    sec_uid: userId.value,
-  });
-  rankInfo.lossValue = data.lossValue;
-  rankInfo.anomalyScore = data.anomalyScore;
-  analyticsLoading.value = false;
+  try {
+    const data = await requestClient.post<RankInfo>('/userAnalyse/getRank', {
+      sec_uid: userId.value,
+    });
+    rankInfo.lossValue = data.lossValue;
+    rankInfo.anomalyScore = data.anomalyScore;
+    analyticsLoading.value = false;
+  } catch (error) {
+    console.error('加载用户分析数据失败:', error);
+    // 设置默认值，避免页面崩溃
+    rankInfo.lossValue = 0;
+    rankInfo.anomalyScore = 0;
+    analyticsLoading.value = false;
+    ElMessage.error('用户分析数据加载失败');
+  }
 };
 
 // 加载相似用户
@@ -236,9 +285,15 @@ const handleClusterAvatarClick = (
   const url = `https://www.douyin.com/user/${uid}`;
   window.open(url, '_blank');
 };
-onMounted(() => {
-  loadUserProfile();
-  loadUserList();
+// 修改 onMounted
+onMounted(async () => {
+  // 先加载用户列表
+  await loadUserList();
+
+  // 如果有userId且不是初始加载，再加载用户画像
+  if (userId.value && !initialLoad.value) {
+    await loadUserProfile();
+  }
 });
 </script>
 
@@ -311,282 +366,299 @@ onMounted(() => {
       </div>
     </div>
     <div class="user-profile-container">
-      <ElCard v-if="error" class="mb-5">
-        <ElAlert :title="error" type="error" show-icon />
-      </ElCard>
-
-      <!-- 用户基本信息卡片 -->
-      <ElCard v-loading="loading" class="mb-5">
-        <template #header>
-          <div class="card-header">
-            <div class="card-title">用户基本信息</div>
-            <div class="card-actions">
-              <ElButton
-                type="primary"
-                size="small"
-                plain
-                @click="openDouyinProfile"
-                v-if="userProfile && userProfile.sec_uid"
-              >
-                <ElIcon><Share /></ElIcon>
-                访问抖音主页
-              </ElButton>
-            </div>
+      <div v-if="!userId && !userListLoading" class="no-user-selected">
+        <ElCard>
+          <div class="no-user-content">
+            <ElIcon size="64" color="#c0c4cc">
+              <UserFilled />
+            </ElIcon>
+            <h3>请选择用户</h3>
+            <p>从左侧列表中选择一个用户查看详细信息</p>
           </div>
-        </template>
+        </ElCard>
+      </div>
+      <div v-else>
+        <ElCard v-if="error" class="mb-5">
+          <ElAlert :title="error" type="error" show-icon />
+        </ElCard>
 
-        <div class="profile-content" v-if="userProfile">
-          <div class="profile-header">
-            <ElAvatar
-              :size="80"
-              :src="userProfile.avatar_medium"
-              class="profile-avatar"
-            >
-              {{ userProfile.nickname?.charAt(0) || '?' }}
-            </ElAvatar>
-            <div class="profile-info">
-              <h2 class="profile-name">{{ userProfile.nickname }}</h2>
-              <div class="profile-details">
-                <span class="profile-id">ID: {{ userProfile.sec_uid }}</span>
-                <span v-if="userProfile.ip_location" class="profile-location">
-                  <ElIcon><Location /></ElIcon>
-                  IP属地: {{ userProfile.ip_location }}
-                </span>
+        <!-- 用户基本信息卡片 -->
+        <ElCard v-loading="loading" class="mb-5">
+          <template #header>
+            <div class="card-header">
+              <div class="card-title">用户基本信息</div>
+              <div class="card-actions">
+                <ElButton
+                  type="primary"
+                  size="small"
+                  plain
+                  @click="openDouyinProfile"
+                  v-if="userProfile && userProfile.sec_uid"
+                >
+                  <ElIcon><Share /></ElIcon>
+                  访问抖音主页
+                </ElButton>
               </div>
-              <div class="profile-signature" v-if="userProfile.signature">
-                {{ userProfile.signature }}
-              </div>
-            </div>
-          </div>
-
-          <ElDivider />
-
-          <ElDescriptions :column="3" border>
-            <ElDescriptionsItem label="性别">
-              {{ formatGender(userProfile.gender) }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="用户年龄">
-              {{ userProfile.user_age || '未知' }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="位置">
-              {{ userProfile.country }} {{ userProfile.province }}
-              {{ userProfile.city }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="作品数">
-              {{ formatNumber(userProfile.aweme_count) }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="获赞数">
-              {{ formatNumber(userProfile.total_favorited) }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="喜欢数">
-              {{ formatNumber(userProfile.favoriting_count) }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="粉丝数">
-              {{ formatNumber(userProfile.follower_count) }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="关注数">
-              {{ formatNumber(userProfile.following_count) }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="账号特性">
-              <ElTag v-if="userProfile.is_star" type="success" class="ml-2">
-                明星
-              </ElTag>
-              <ElTag
-                v-if="userProfile.is_gov_media_vip"
-                type="info"
-                class="ml-2"
-              >
-                政媒
-              </ElTag>
-              <ElTag v-if="userProfile.is_mix_user" type="warning" class="ml-2">
-                混合账号
-              </ElTag>
-              <ElTag
-                v-if="userProfile.is_series_user"
-                type="primary"
-                class="ml-2"
-              >
-                系列账号
-              </ElTag>
-            </ElDescriptionsItem>
-          </ElDescriptions>
-
-          <div
-            class="profile-covers"
-            v-if="userProfile.covers && userProfile.covers.length > 0"
-          >
-            <h3>用户封面</h3>
-            <div class="covers-container">
-              <div
-                v-for="(url, index) in userProfile.covers"
-                :key="index"
-                class="cover-item"
-              >
-                <ElImage
-                  :src="url"
-                  fit="cover"
-                  :preview-src-list="userProfile.covers"
-                  :initial-index="index"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <ElSkeleton v-else :loading="loading" animated>
-          <template #template>
-            <div class="skeleton-content">
-              <div class="skeleton-header">
-                <ElSkeletonItem
-                  variant="circle"
-                  style="width: 80px; height: 80px"
-                />
-                <div class="skeleton-info">
-                  <ElSkeletonItem variant="h3" style="width: 200px" />
-                  <ElSkeletonItem variant="text" style="width: 240px" />
-                  <ElSkeletonItem variant="text" style="width: 300px" />
-                </div>
-              </div>
-              <ElSkeletonItem variant="p" style="width: 100%" />
-              <ElSkeletonItem variant="p" style="width: 100%" />
-              <ElSkeletonItem variant="p" style="width: 100%" />
             </div>
           </template>
-        </ElSkeleton>
-      </ElCard>
 
-      <!-- 用户分析卡片 -->
-      <ElCard v-if="userProfile" class="mb-5" v-loading="analyticsLoading">
-        <template #header>
-          <div class="card-header">
-            <div class="card-title">用户异常分析</div>
-          </div>
-        </template>
+          <div class="profile-content" v-if="userProfile">
+            <div class="profile-header">
+              <ElAvatar
+                :size="80"
+                :src="userProfile.avatar_medium"
+                class="profile-avatar"
+              >
+                {{ userProfile.nickname?.charAt(0) || '?' }}
+              </ElAvatar>
+              <div class="profile-info">
+                <h2 class="profile-name">{{ userProfile.nickname }}</h2>
+                <div class="profile-details">
+                  <span class="profile-id">ID: {{ userProfile.sec_uid }}</span>
+                  <span v-if="userProfile.ip_location" class="profile-location">
+                    <ElIcon><Location /></ElIcon>
+                    IP属地: {{ userProfile.ip_location }}
+                  </span>
+                </div>
+                <div class="profile-signature" v-if="userProfile.signature">
+                  {{ userProfile.signature }}
+                </div>
+              </div>
+            </div>
 
-        <div class="analysis-content">
-          <div class="analysis-metrics">
-            <ElDescriptions :column="1" border>
-              <ElDescriptionsItem label="本次样本重构误差">
-                {{ rankInfo.lossValue }}
+            <ElDivider />
+
+            <ElDescriptions :column="3" border>
+              <ElDescriptionsItem label="性别">
+                {{ formatGender(userProfile.gender) }}
               </ElDescriptionsItem>
-              <ElDescriptionsItem label="异常分数说明">
-                重构损失越大，异常分数越大，越有可能是异常用户
+              <ElDescriptionsItem label="用户年龄">
+                {{ userProfile.user_age || '未知' }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="位置">
+                {{ userProfile.country }} {{ userProfile.province }}
+                {{ userProfile.city }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="作品数">
+                {{ formatNumber(userProfile.aweme_count) }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="获赞数">
+                {{ formatNumber(userProfile.total_favorited) }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="喜欢数">
+                {{ formatNumber(userProfile.favoriting_count) }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="粉丝数">
+                {{ formatNumber(userProfile.follower_count) }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="关注数">
+                {{ formatNumber(userProfile.following_count) }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="账号特性">
+                <ElTag v-if="userProfile.is_star" type="success" class="ml-2">
+                  明星
+                </ElTag>
+                <ElTag
+                  v-if="userProfile.is_gov_media_vip"
+                  type="info"
+                  class="ml-2"
+                >
+                  政媒
+                </ElTag>
+                <ElTag
+                  v-if="userProfile.is_mix_user"
+                  type="warning"
+                  class="ml-2"
+                >
+                  混合账号
+                </ElTag>
+                <ElTag
+                  v-if="userProfile.is_series_user"
+                  type="primary"
+                  class="ml-2"
+                >
+                  系列账号
+                </ElTag>
               </ElDescriptionsItem>
             </ElDescriptions>
-          </div>
 
-          <div class="analysis-gauge">
-            <ElProgress
-              type="dashboard"
-              :percentage="rankInfo.anomalyScore"
-              :color="colors"
+            <div
+              class="profile-covers"
+              v-if="userProfile.covers && userProfile.covers.length > 0"
             >
-              <template #default="{ percentage }">
-                <span class="percentage-value">{{ percentage }}%</span>
-                <span class="percentage-label">异常分数</span>
-              </template>
-            </ElProgress>
+              <h3>用户封面</h3>
+              <div class="covers-container">
+                <div
+                  v-for="(url, index) in userProfile.covers"
+                  :key="index"
+                  class="cover-item"
+                >
+                  <ElImage
+                    :src="url"
+                    fit="cover"
+                    :preview-src-list="userProfile.covers"
+                    :initial-index="index"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div v-if="rankInfo.anomalyScore >= 70" class="mt-4">
-          <ElAlert
-            title="高风险用户"
-            type="error"
-            description="该用户异常分数较高，可能存在风险行为，建议进行人工审核"
-            show-icon
-            :closable="false"
-          />
-        </div>
-        <div v-else-if="rankInfo.anomalyScore >= 50" class="mt-4">
-          <ElAlert
-            title="中风险用户"
-            type="warning"
-            description="该用户异常分数中等，建议关注其内容变化"
-            show-icon
-            :closable="false"
-          />
-        </div>
-      </ElCard>
-
-      <!-- 用户集群展示 -->
-      <!-- <ClusterScatter :sec-uid="userId" /> -->
-
-      <!-- 相似用户 -->
-      <ElCard v-if="userProfile && similarUsers.length > 0" class="mb-5">
-        <template #header>
-          <div class="card-header">
-            <div class="card-title">相似用户</div>
-          </div>
-        </template>
-
-        <ElTable
-          :data="similarUsers"
-          style="width: 100%"
-          @row-click="openSimilarUserProfile"
-        >
-          <ElTableColumn label="头像" width="80">
-            <template #default="scope">
-              <ElAvatar :src="scope.row.avatar_medium">
-                {{ scope.row.nickname?.charAt(0) || '?' }}
-              </ElAvatar>
+          <ElSkeleton v-else :loading="loading" animated>
+            <template #template>
+              <div class="skeleton-content">
+                <div class="skeleton-header">
+                  <ElSkeletonItem
+                    variant="circle"
+                    style="width: 80px; height: 80px"
+                  />
+                  <div class="skeleton-info">
+                    <ElSkeletonItem variant="h3" style="width: 200px" />
+                    <ElSkeletonItem variant="text" style="width: 240px" />
+                    <ElSkeletonItem variant="text" style="width: 300px" />
+                  </div>
+                </div>
+                <ElSkeletonItem variant="p" style="width: 100%" />
+                <ElSkeletonItem variant="p" style="width: 100%" />
+                <ElSkeletonItem variant="p" style="width: 100%" />
+              </div>
             </template>
-          </ElTableColumn>
-          <ElTableColumn prop="nickname" label="昵称" />
-          <ElTableColumn prop="similarity" label="相似度">
-            <template #default="scope">
+          </ElSkeleton>
+        </ElCard>
+
+        <!-- 用户分析卡片 -->
+        <ElCard v-if="userProfile" class="mb-5" v-loading="analyticsLoading">
+          <template #header>
+            <div class="card-header">
+              <div class="card-title">用户异常分析</div>
+            </div>
+          </template>
+
+          <div class="analysis-content">
+            <div class="analysis-metrics">
+              <ElDescriptions :column="1" border>
+                <ElDescriptionsItem label="本次样本重构误差">
+                  {{ rankInfo.lossValue }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="异常分数说明">
+                  重构损失越大，异常分数越大，越有可能是异常用户
+                </ElDescriptionsItem>
+              </ElDescriptions>
+            </div>
+
+            <div class="analysis-gauge">
               <ElProgress
-                :percentage="scope.row.similarity * 100"
-                :format="(val) => `${val.toFixed(1)}%`"
-                :stroke-width="10"
-                color="#409EFF"
-              />
-            </template>
-          </ElTableColumn>
-          <ElTableColumn label="操作" width="120">
-            <template #default="scope">
-              <ElButton
-                type="primary"
-                link
-                @click.stop="openSimilarUserProfile(scope.row)"
+                type="dashboard"
+                :percentage="rankInfo.anomalyScore"
+                :color="colors"
               >
-                查看用户
-              </ElButton>
-            </template>
-          </ElTableColumn>
-        </ElTable>
-      </ElCard>
-
-      <!-- 相似集群 -->
-      <ElCard v-if="userProfile && similarClusters.length > 0" class="mb-5">
-        <template #header>
-          <div class="card-header">
-            <div class="card-title">相似集群</div>
+                <template #default="{ percentage }">
+                  <span class="percentage-value">{{ percentage }}%</span>
+                  <span class="percentage-label">异常分数</span>
+                </template>
+              </ElProgress>
+            </div>
           </div>
-        </template>
 
-        <div class="similar-clusters">
-          <div
-            v-for="(cluster, index) in similarClusters"
-            :key="index"
-            class="cluster-item"
+          <div v-if="rankInfo.anomalyScore >= 70" class="mt-4">
+            <ElAlert
+              title="高风险用户"
+              type="error"
+              description="该用户异常分数较高，可能存在风险行为，建议进行人工审核"
+              show-icon
+              :closable="false"
+            />
+          </div>
+          <div v-else-if="rankInfo.anomalyScore >= 50" class="mt-4">
+            <ElAlert
+              title="中风险用户"
+              type="warning"
+              description="该用户异常分数中等，建议关注其内容变化"
+              show-icon
+              :closable="false"
+            />
+          </div>
+        </ElCard>
+
+        <!-- 用户集群展示 -->
+        <!-- <ClusterScatter :sec-uid="userId" /> -->
+
+        <!-- 相似用户 -->
+        <ElCard v-if="userProfile && similarUsers.length > 0" class="mb-5">
+          <template #header>
+            <div class="card-header">
+              <div class="card-title">相似用户</div>
+            </div>
+          </template>
+
+          <ElTable
+            :data="similarUsers"
+            style="width: 100%"
+            @row-click="openSimilarUserProfile"
           >
-            <div class="cluster-header">
-              <h4>集群 {{ cluster.cluster_id }}</h4>
+            <ElTableColumn label="头像" width="80">
+              <template #default="scope">
+                <ElAvatar :src="scope.row.avatar_medium">
+                  {{ scope.row.nickname?.charAt(0) || '?' }}
+                </ElAvatar>
+              </template>
+            </ElTableColumn>
+            <ElTableColumn prop="nickname" label="昵称" />
+            <ElTableColumn prop="similarity" label="相似度">
+              <template #default="scope">
+                <ElProgress
+                  :percentage="scope.row.similarity * 100"
+                  :format="(val) => `${val.toFixed(1)}%`"
+                  :stroke-width="10"
+                  color="#409EFF"
+                />
+              </template>
+            </ElTableColumn>
+            <ElTableColumn label="操作" width="120">
+              <template #default="scope">
+                <ElButton
+                  type="primary"
+                  link
+                  @click.stop="openSimilarUserProfile(scope.row)"
+                >
+                  查看用户
+                </ElButton>
+              </template>
+            </ElTableColumn>
+          </ElTable>
+        </ElCard>
+
+        <!-- 相似集群 -->
+        <ElCard v-if="userProfile && similarClusters.length > 0" class="mb-5">
+          <template #header>
+            <div class="card-header">
+              <div class="card-title">相似集群</div>
             </div>
-            <div class="avatar-group">
-              <ElAvatar
-                v-for="(avatar, i) in cluster.avatar_list"
-                @click="() => handleClusterAvatarClick(index, i)"
-                :key="i"
-                :src="avatar"
-                :size="40"
-                class="cluster-avatar"
-              />
+          </template>
+
+          <div class="similar-clusters">
+            <div
+              v-for="(cluster, index) in similarClusters"
+              :key="index"
+              class="cluster-item"
+            >
+              <div class="cluster-header">
+                <h4>集群 {{ cluster.cluster_id }}</h4>
+              </div>
+              <div class="avatar-group">
+                <ElAvatar
+                  v-for="(avatar, i) in cluster.avatar_list"
+                  @click="() => handleClusterAvatarClick(index, i)"
+                  :key="i"
+                  :src="avatar"
+                  :size="40"
+                  class="cluster-avatar"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </ElCard>
+        </ElCard>
+      </div>
     </div>
   </div>
 </template>

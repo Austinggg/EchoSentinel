@@ -545,6 +545,9 @@ class DigitalHumanDetection(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
     
+    progress = db.Column(db.Integer, default=0)  # 进度百分比 0-100
+    started_at = db.Column(db.DateTime, nullable=True)  # 开始时间
+    current_step = db.Column(db.String(50), nullable=True)  # 当前步骤
     # 错误信息
     error_message = db.Column(db.Text, nullable=True)
     

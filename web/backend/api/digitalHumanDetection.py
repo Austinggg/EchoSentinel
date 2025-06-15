@@ -1,20 +1,20 @@
 import datetime
 import logging
 import os
+import threading
 from pathlib import Path
 
 import requests
-from flask import Blueprint, request
-
+from flask import Blueprint, request, current_app  # 添加 current_app
 from utils.database import DigitalHumanDetection, VideoFile, db
 from utils.HttpResponse import error_response, success_response
-
+from utils.redis_client import get_redis_client, redis_error_handler
 logger = logging.getLogger(__name__)
 digital_human_api = Blueprint('digital_human', __name__)
 
 # 数字人检测服务配置
 DIGITAL_HUMAN_SERVICE_URL = "http://121.48.227.136:3000"
-DETECTION_TIMEOUT = 300  # 5分钟超时
+DETECTION_TIMEOUT = 1800  # 30分钟超时
 
 # 获取视频文件路径函数 (复用videoUpload.py中的逻辑)
 def get_video_file_path(video_id, extension=None):
@@ -61,81 +61,141 @@ def call_detection_service(endpoint, video_path):
     except Exception as e:
         raise Exception(f"调用检测服务失败: {str(e)}")
 
-@digital_human_api.route('/api/videos/<video_id>/digital-human/detect', methods=['POST'])
-def detect_digital_human(video_id):
-    """对指定视频进行数字人检测"""
-    try:
-        # 查询视频是否存在
-        video = VideoFile.query.filter_by(id=video_id).first()
-        if not video:
-            return error_response(404, f"未找到视频ID为 {video_id} 的视频")
-        
-        # 获取视频文件路径
-        video_path = get_video_file_path(video_id, video.extension)
-        if not video_path or not video_path.exists():
-            return error_response(404, "视频文件不存在")
-        
-        # 检查是否已存在检测记录
-        detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
-        if not detection:
-            detection = DigitalHumanDetection(video_id=video_id)
-            db.session.add(detection)
-        
-        # 更新状态为处理中
-        detection.status = "processing"
-        detection.error_message = None
-        db.session.commit()
-        
-        # 获取检测类型参数
-        detection_types = request.json.get('types', ['face', 'body', 'overall']) if request.json else ['face', 'body', 'overall']
-        comprehensive = request.json.get('comprehensive', True) if request.json else True
-        
-        results = {}
+# Redis相关工具函数
+def get_task_key(video_id: str) -> str:
+    return f"task:digital_human:{video_id}"
+
+def get_task_channel(video_id: str) -> str:
+    return f"task_updates:digital_human:{video_id}"
+
+@redis_error_handler(fallback_return=False)
+def update_task_status_redis(video_id: str, status_data: dict) -> bool:
+    """更新Redis中的任务状态"""
+    redis_client = get_redis_client()
+    if not redis_client:
+        return False
+    
+    task_key = get_task_key(video_id)
+    return redis_client.set_task_status(task_key, status_data, expire_time=7200)  # 2小时过期
+
+@redis_error_handler(fallback_return=False)
+def update_task_progress_redis(video_id: str, progress: float, current_step: str = None) -> bool:
+    """更新Redis中的任务进度"""
+    redis_client = get_redis_client()
+    if not redis_client:
+        return False
+    
+    task_key = get_task_key(video_id)
+    success = redis_client.update_task_progress(task_key, progress, current_step)
+    
+    # 发布进度更新消息
+    if success:
+        message = {
+            "video_id": video_id,
+            "progress": progress,
+            "current_step": current_step,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+        redis_client.publish_task_update(get_task_channel(video_id), message)
+    
+    return success
+
+
+
+def async_detect_digital_human(app, video_id, detection_types, comprehensive):
+    """异步执行数字人检测 - 修复应用上下文问题"""
+    
+    with app.app_context():  # 使用传入的应用实例创建上下文
+        task_key = get_task_key(video_id)
         
         try:
-            # 执行各项检测
+            # 初始化Redis任务状态
+            initial_status = {
+                "video_id": video_id,
+                "status": "processing",
+                "progress": 0,
+                "current_step": "initializing",
+                "detection_types": detection_types,
+                "comprehensive": comprehensive,
+                "started_at": datetime.datetime.utcnow().isoformat(),
+                "estimated_duration": "15-20分钟"
+            }
+            update_task_status_redis(video_id, initial_status)
+            
+            # 查询检测记录
+            detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+            video = VideoFile.query.filter_by(id=video_id).first()
+            
+            if not detection or not video:
+                raise Exception("检测记录或视频不存在")
+            
+            video_path = get_video_file_path(video_id, video.extension)
+            results = {}
+            
+            # 执行面部检测
             if 'face' in detection_types:
                 logger.info(f"开始面部检测 - 视频ID: {video_id}")
-                face_result = call_detection_service('aigc/detect/face', video_path)
+                update_task_progress_redis(video_id, 10, "face_detection")
                 
+                face_result = call_detection_service('aigc/detect/face', video_path)
                 detection.face_ai_probability = face_result['ai_probability']
                 detection.face_human_probability = face_result['human_probability']
                 detection.face_confidence = face_result['confidence']
                 detection.face_prediction = face_result['prediction']
                 detection.face_raw_results = face_result['raw_results']
-                
                 results['face'] = face_result
+                
+                # 更新数据库和Redis
+                detection.progress = 33
+                detection.current_step = "face_completed"
+                db.session.commit()
+                update_task_progress_redis(video_id, 33, "face_completed")
                 logger.info(f"面部检测完成 - 视频ID: {video_id}, 结果: {face_result['prediction']}")
-            
+                
+            # 执行躯体检测
             if 'body' in detection_types:
                 logger.info(f"开始躯体检测 - 视频ID: {video_id}")
-                body_result = call_detection_service('aigc/detect/body', video_path)
+                update_task_progress_redis(video_id, 40, "body_detection")
                 
+                body_result = call_detection_service('aigc/detect/body', video_path)
                 detection.body_ai_probability = body_result['ai_probability']
                 detection.body_human_probability = body_result['human_probability']
                 detection.body_confidence = body_result['confidence']
                 detection.body_prediction = body_result['prediction']
                 detection.body_raw_results = body_result['raw_results']
-                
                 results['body'] = body_result
+                
+                # 更新数据库和Redis
+                detection.progress = 66
+                detection.current_step = "body_completed"
+                db.session.commit()
+                update_task_progress_redis(video_id, 66, "body_completed")
                 logger.info(f"躯体检测完成 - 视频ID: {video_id}, 结果: {body_result['prediction']}")
-            
+                
+            # 执行整体检测
             if 'overall' in detection_types:
                 logger.info(f"开始整体检测 - 视频ID: {video_id}")
-                overall_result = call_detection_service('aigc/detect/overall', video_path)
+                update_task_progress_redis(video_id, 70, "overall_detection")
                 
+                overall_result = call_detection_service('aigc/detect/overall', video_path)
                 detection.overall_ai_probability = overall_result['ai_probability']
                 detection.overall_human_probability = overall_result['human_probability']
                 detection.overall_confidence = overall_result['confidence']
                 detection.overall_prediction = overall_result['prediction']
                 detection.overall_raw_results = overall_result['raw_results']
-                
                 results['overall'] = overall_result
+                
+                # 更新数据库和Redis
+                detection.progress = 90
+                detection.current_step = "overall_completed"
+                db.session.commit()
+                update_task_progress_redis(video_id, 90, "overall_completed")
                 logger.info(f"整体检测完成 - 视频ID: {video_id}, 结果: {overall_result['prediction']}")
             
-            # 如果需要综合评估且所有检测都完成
+            # 综合评估
             if comprehensive and len(detection_types) >= 2:
                 logger.info(f"开始综合评估 - 视频ID: {video_id}")
+                update_task_progress_redis(video_id, 95, "comprehensive_analysis")
                 
                 # 计算综合结果
                 weights = {"face": 0.3, "body": 0.2, "overall": 0.5}
@@ -179,7 +239,7 @@ def detect_digital_human(video_id):
                 
                 logger.info(f"综合评估完成 - 视频ID: {video_id}, 结果: {detection.comprehensive_prediction}")
             
-            # 更新VideoFile表中的数字人概率字段
+            # 更新VideoFile表
             if 'comprehensive' in results:
                 video.digital_human_probability = results['comprehensive']['ai_probability']
             elif 'overall' in results:
@@ -187,34 +247,230 @@ def detect_digital_human(video_id):
             elif 'face' in results:
                 video.digital_human_probability = results['face']['ai_probability']
             
-            # 标记检测完成
+            # 标记完成
             detection.status = "completed"
-            detection.completed_at = datetime.datetime.utcnow()
+            detection.progress = 100
+            detection.current_step = "completed"
+            detection.completed_at = datetime.datetime.utcnow()  # 修复拼写错误
             db.session.commit()
             
-            logger.info(f"数字人检测全部完成 - 视频ID: {video_id}")
-            
-            return success_response({
+            # 更新Redis状态为完成
+            final_status = {
                 "video_id": video_id,
                 "status": "completed",
-                "results": results,
-                "detection_types": detection_types,
-                "comprehensive": comprehensive
+                "progress": 100,
+                "current_step": "completed",
+                "completed_at": datetime.datetime.utcnow().isoformat(),
+                "results": detection.to_dict()
+            }
+            update_task_status_redis(video_id, final_status)
+            
+            logger.info(f"异步数字人检测完成 - 视频ID: {video_id}")
+            
+        except Exception as e:
+            # 更新数据库状态为失败
+            try:
+                detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+                if detection:
+                    detection.status = "failed"
+                    detection.error_message = str(e)
+                    detection.progress = 0
+                    detection.current_step = "failed"
+                    db.session.commit()
+            except Exception as db_error:
+                logger.error(f"更新数据库失败状态时出错: {str(db_error)}")
+            
+            # 更新Redis状态为失败
+            error_status = {
+                "video_id": video_id,
+                "status": "failed",
+                "progress": 0,
+                "current_step": "failed",
+                "error_message": str(e),
+                "failed_at": datetime.datetime.utcnow().isoformat()  # 修复拼写错误
+            }
+            update_task_status_redis(video_id, error_status)
+            
+            logger.error(f"异步数字人检测失败 - 视频ID: {video_id}, 错误: {str(e)}")
+
+@digital_human_api.route('/api/videos/<video_id>/digital-human/detect', methods=['POST'])
+def detect_digital_human(video_id):
+    """对指定视频进行数字人检测 - Redis增强版本"""
+    try:
+        # 查询视频是否存在
+        video = VideoFile.query.filter_by(id=video_id).first()
+        if not video:
+            return error_response(404, f"未找到视频ID为 {video_id} 的视频")
+        
+        # 获取视频文件路径
+        video_path = get_video_file_path(video_id, video.extension)
+        if not video_path or not video_path.exists():
+            return error_response(404, "视频文件不存在")
+        
+        # 首先检查Redis中的任务状态
+        redis_client = get_redis_client()
+        if redis_client:
+            task_key = get_task_key(video_id)
+            redis_status = redis_client.get_task_status(task_key)
+            if redis_status and redis_status.get('status') == 'processing':
+                return success_response({
+                    "video_id": video_id,
+                    "status": "processing",
+                    "message": "检测任务正在进行中",
+                    "progress": redis_status.get('progress', 0),
+                    "current_step": redis_status.get('current_step', ''),
+                    "estimated_duration": redis_status.get('estimated_duration', '15-20分钟'),
+                    "source": "redis"
+                })
+        
+        # 检查数据库中的检测记录
+        detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+        if detection and detection.status == "processing":
+            return success_response({
+                "video_id": video_id,
+                "status": "processing",
+                "message": "检测任务正在进行中",
+                "progress": getattr(detection, 'progress', 0),
+                "current_step": getattr(detection, 'current_step', ''),
+                "source": "database"
             })
-            
-        except Exception as detection_error:
-            # 标记检测失败
-            detection.status = "failed"
-            detection.error_message = str(detection_error)
-            db.session.commit()
-            
-            logger.error(f"数字人检测失败 - 视频ID: {video_id}, 错误: {str(detection_error)}")
-            raise detection_error
-            
+        
+        if not detection:
+            detection = DigitalHumanDetection(video_id=video_id)
+            db.session.add(detection)
+        
+        # 获取检测参数
+        detection_types = request.json.get('types', ['face', 'body', 'overall']) if request.json else ['face', 'body', 'overall']
+        comprehensive = request.json.get('comprehensive', True) if request.json else True
+        
+        # 更新数据库状态为处理中
+        detection.status = "processing"
+        detection.error_message = None
+        detection.progress = 0
+        detection.current_step = "initializing"
+        detection.started_at = datetime.datetime.utcnow()
+        db.session.commit()
+        
+        # 在启动线程前获取应用实例
+        app = current_app._get_current_object()
+        
+        # 启动异步任务（传递应用实例）
+        thread = threading.Thread(
+            target=async_detect_digital_human,
+            args=(app, video_id, detection_types, comprehensive)  # 添加app参数
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return success_response({
+            "video_id": video_id,
+            "status": "processing",
+            "message": "检测任务已启动，请通过状态查询API获取进度",
+            "detection_types": detection_types,
+            "comprehensive": comprehensive,
+            "estimated_duration": "15-20分钟",
+            "task_key": get_task_key(video_id)
+        })
+        
     except Exception as e:
         db.session.rollback()
-        logger.exception(f"数字人检测请求处理失败 - 视频ID: {video_id}")
-        return error_response(500, f"数字人检测失败: {str(e)}")
+        logger.exception(f"启动数字人检测失败 - 视频ID: {video_id}")
+        return error_response(500, f"启动检测失败: {str(e)}")
+@digital_human_api.route('/api/videos/<video_id>/digital-human/status', methods=['GET'])
+def get_detection_status(video_id):
+    """获取检测进度状态 - Redis优先版本"""
+    try:
+        # 优先从Redis获取状态
+        redis_client = get_redis_client()
+        if redis_client:
+            task_key = get_task_key(video_id)
+            redis_status = redis_client.get_task_status(task_key)
+            if redis_status:
+                return success_response({
+                    **redis_status,
+                    "source": "redis"
+                })
+        
+        # Redis中没有，从数据库获取
+        detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+        if not detection:
+            return error_response(404, "未找到检测记录")
+        
+        response_data = {
+            "video_id": video_id,
+            "status": detection.status,
+            "progress": getattr(detection, 'progress', 0),
+            "current_step": getattr(detection, 'current_step', ''),
+            "started_at": detection.started_at.isoformat() if detection.started_at else None,
+            "completed_at": detection.completed_at.isoformat() if detection.completed_at else None,
+            "error_message": detection.error_message,
+            "source": "database"
+        }
+        
+        # 如果完成，返回结果
+        if detection.status == "completed":
+            response_data["results"] = detection.to_dict()
+        
+        return success_response(response_data)
+        
+    except Exception as e:
+        logger.exception(f"获取检测状态失败 - 视频ID: {video_id}")
+        return error_response(500, f"获取状态失败: {str(e)}")
+
+@digital_human_api.route('/api/videos/<video_id>/digital-human/cancel', methods=['POST'])
+def cancel_detection(video_id):
+    """取消检测任务"""
+    try:
+        # 更新数据库状态
+        detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+        if detection and detection.status == "processing":
+            detection.status = "cancelled"
+            detection.error_message = "用户取消"
+            detection.current_step = "cancelled"
+            db.session.commit()
+            
+            # 更新Redis状态
+            cancel_status = {
+                "video_id": video_id,
+                "status": "cancelled",
+                "progress": 0,
+                "current_step": "cancelled",
+                "error_message": "用户取消",
+                "cancelled_at": datetime.datetime.utcnow().isoformat()
+            }
+            update_task_status_redis(video_id, cancel_status)
+            
+            return success_response({"message": "检测任务已取消"})
+        else:
+            return error_response(400, "没有正在进行的检测任务")
+    except Exception as e:
+        return error_response(500, f"取消失败: {str(e)}")
+
+@digital_human_api.route('/api/videos/<video_id>/digital-human/reset', methods=['POST'])
+def reset_detection_status(video_id):
+    """重置检测状态"""
+    try:
+        # 清理数据库状态
+        detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+        if detection:
+            detection.status = "pending"
+            detection.progress = 0
+            detection.current_step = None
+            detection.error_message = None
+            detection.started_at = None
+            detection.completed_at = None
+            db.session.commit()
+        
+        # 清理Redis状态
+        redis_client = get_redis_client()
+        if redis_client:
+            task_key = get_task_key(video_id)
+            redis_client.delete_task_status(task_key)
+        
+        return success_response({"message": "检测状态已重置"})
+        
+    except Exception as e:
+        return error_response(500, f"重置失败: {str(e)}")
 
 @digital_human_api.route('/api/videos/<video_id>/digital-human/result', methods=['GET'])
 def get_digital_human_result(video_id):
@@ -230,12 +486,44 @@ def get_digital_human_result(video_id):
         if not detection:
             return error_response(404, f"视频ID为 {video_id} 的数字人检测结果不存在")
         
+        # 检查状态
+        if detection.status == "processing":
+            return error_response(400, "检测任务仍在进行中，请等待完成后再获取结果")
+        elif detection.status == "failed":
+            return error_response(400, f"检测任务失败: {detection.error_message}")
+        elif detection.status != "completed":
+            return error_response(400, f"检测任务未完成，当前状态: {detection.status}")
+        
         # 构建响应数据
         response_data = {
             "video_id": video_id,
             "filename": video.filename,
-            "detection": detection.to_dict()
+            "status": detection.status,
+            "detection": detection.to_dict(),
+            "summary": {
+                "final_prediction": None,
+                "confidence": None,
+                "ai_probability": None,
+                "human_probability": None
+            }
         }
+        
+        # 确定最终结果的优先级：comprehensive > overall > face
+        if detection.comprehensive_ai_probability is not None:
+            response_data["summary"]["final_prediction"] = detection.comprehensive_prediction
+            response_data["summary"]["confidence"] = detection.comprehensive_confidence
+            response_data["summary"]["ai_probability"] = detection.comprehensive_ai_probability
+            response_data["summary"]["human_probability"] = detection.comprehensive_human_probability
+        elif detection.overall_ai_probability is not None:
+            response_data["summary"]["final_prediction"] = detection.overall_prediction
+            response_data["summary"]["confidence"] = detection.overall_confidence
+            response_data["summary"]["ai_probability"] = detection.overall_ai_probability
+            response_data["summary"]["human_probability"] = detection.overall_human_probability
+        elif detection.face_ai_probability is not None:
+            response_data["summary"]["final_prediction"] = detection.face_prediction
+            response_data["summary"]["confidence"] = detection.face_confidence
+            response_data["summary"]["ai_probability"] = detection.face_ai_probability
+            response_data["summary"]["human_probability"] = detection.face_human_probability
         
         return success_response(response_data)
         
@@ -243,213 +531,148 @@ def get_digital_human_result(video_id):
         logger.exception(f"获取数字人检测结果失败 - 视频ID: {video_id}")
         return error_response(500, f"获取检测结果失败: {str(e)}")
 
-@digital_human_api.route('/api/videos/<video_id>/digital-human/face', methods=['POST'])
-def detect_face_only(video_id):
-    """仅进行面部检测"""
-    try:
-        video = VideoFile.query.filter_by(id=video_id).first()
-        if not video:
-            return error_response(404, f"未找到视频ID为 {video_id} 的视频")
-        
-        video_path = get_video_file_path(video_id, video.extension)
-        if not video_path or not video_path.exists():
-            return error_response(404, "视频文件不存在")
-        
-        # 执行面部检测
-        face_result = call_detection_service('aigc/detect/face', video_path)
-        
-        # 更新或创建检测记录
-        detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
-        if not detection:
-            detection = DigitalHumanDetection(video_id=video_id)
-            db.session.add(detection)
-        
-        detection.face_ai_probability = face_result['ai_probability']
-        detection.face_human_probability = face_result['human_probability']
-        detection.face_confidence = face_result['confidence']
-        detection.face_prediction = face_result['prediction']
-        detection.face_raw_results = face_result['raw_results']
-        detection.status = "completed"
-        detection.completed_at = datetime.datetime.utcnow()
-        
-        db.session.commit()
-        
-        return success_response({
-            "video_id": video_id,
-            "type": "face",
-            "result": face_result
-        })
-        
-    except Exception as e:
-        logger.exception(f"面部检测失败 - 视频ID: {video_id}")
-        return error_response(500, f"面部检测失败: {str(e)}")
-
-@digital_human_api.route('/api/videos/<video_id>/digital-human/body', methods=['POST'])
-def detect_body_only(video_id):
-    """仅进行躯体检测"""
-    try:
-        video = VideoFile.query.filter_by(id=video_id).first()
-        if not video:
-            return error_response(404, f"未找到视频ID为 {video_id} 的视频")
-        
-        video_path = get_video_file_path(video_id, video.extension)
-        if not video_path or not video_path.exists():
-            return error_response(404, "视频文件不存在")
-        
-        # 执行躯体检测
-        body_result = call_detection_service('aigc/detect/body', video_path)
-        
-        # 更新或创建检测记录
-        detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
-        if not detection:
-            detection = DigitalHumanDetection(video_id=video_id)
-            db.session.add(detection)
-        
-        detection.body_ai_probability = body_result['ai_probability']
-        detection.body_human_probability = body_result['human_probability']
-        detection.body_confidence = body_result['confidence']
-        detection.body_prediction = body_result['prediction']
-        detection.body_raw_results = body_result['raw_results']
-        detection.status = "completed"
-        detection.completed_at = datetime.datetime.utcnow()
-        
-        db.session.commit()
-        
-        return success_response({
-            "video_id": video_id,
-            "type": "body",
-            "result": body_result
-        })
-        
-    except Exception as e:
-        logger.exception(f"躯体检测失败 - 视频ID: {video_id}")
-        return error_response(500, f"躯体检测失败: {str(e)}")
-
-@digital_human_api.route('/api/videos/<video_id>/digital-human/overall', methods=['POST'])
-def detect_overall_only(video_id):
-    """仅进行整体检测"""
-    try:
-        video = VideoFile.query.filter_by(id=video_id).first()
-        if not video:
-            return error_response(404, f"未找到视频ID为 {video_id} 的视频")
-        
-        video_path = get_video_file_path(video_id, video.extension)
-        if not video_path or not video_path.exists():
-            return error_response(404, "视频文件不存在")
-        
-        # 执行整体检测
-        overall_result = call_detection_service('aigc/detect/overall', video_path)
-        
-        # 更新或创建检测记录
-        detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
-        if not detection:
-            detection = DigitalHumanDetection(video_id=video_id)
-            db.session.add(detection)
-        
-        detection.overall_ai_probability = overall_result['ai_probability']
-        detection.overall_human_probability = overall_result['human_probability']
-        detection.overall_confidence = overall_result['confidence']
-        detection.overall_prediction = overall_result['prediction']
-        detection.overall_raw_results = overall_result['raw_results']
-        detection.status = "completed"
-        detection.completed_at = datetime.datetime.utcnow()
-        
-        db.session.commit()
-        
-        return success_response({
-            "video_id": video_id,
-            "type": "overall",
-            "result": overall_result
-        })
-        
-    except Exception as e:
-        logger.exception(f"整体检测失败 - 视频ID: {video_id}")
-        return error_response(500, f"整体检测失败: {str(e)}")
-
-@digital_human_api.route('/api/digital-human/status', methods=['GET'])
-def get_service_status():
-    """获取数字人检测服务状态"""
-    try:
-        # 检查服务是否可用
-        response = requests.get(f"{DIGITAL_HUMAN_SERVICE_URL}/aigc/status", timeout=10)
-        
-        if response.status_code == 200:
-            service_data = response.json()
-            return success_response({
-                "service_available": True,
-                "service_url": DIGITAL_HUMAN_SERVICE_URL,
-                "service_info": service_data
-            })
-        else:
-            return success_response({
-                "service_available": False,
-                "service_url": DIGITAL_HUMAN_SERVICE_URL,
-                "error": f"服务返回状态码: {response.status_code}"
-            })
-            
-    except Exception as e:
-        return success_response({
-            "service_available": False,
-            "service_url": DIGITAL_HUMAN_SERVICE_URL,
-            "error": str(e)
-        })
-
-@digital_human_api.route('/api/digital-human/batch', methods=['POST'])
-def batch_detect():
-    """批量数字人检测"""
+# 额外的辅助API - 批量查询状态
+@digital_human_api.route('/api/digital-human/batch-status', methods=['POST'])
+def get_batch_detection_status():
+    """批量查询检测状态"""
     try:
         data = request.get_json()
         if not data or 'video_ids' not in data:
             return error_response(400, "请提供视频ID列表")
         
         video_ids = data['video_ids']
-        detection_types = data.get('types', ['face', 'body', 'overall'])
-        comprehensive = data.get('comprehensive', True)
-        
         if not isinstance(video_ids, list) or len(video_ids) == 0:
             return error_response(400, "视频ID列表不能为空")
         
-        if len(video_ids) > 10:
-            return error_response(400, "批量检测最多支持10个视频")
+        if len(video_ids) > 50:
+            return error_response(400, "批量查询最多支持50个视频")
         
         results = []
-        failed_videos = []
+        redis_client = get_redis_client()
         
         for video_id in video_ids:
             try:
-                # 模拟调用单个检测API
-                # 这里可以直接调用detect_digital_human函数或通过内部API调用
-                # 为简化，我们记录需要处理的视频
-                video = VideoFile.query.filter_by(id=video_id).first()
-                if video:
-                    results.append({
-                        "video_id": video_id,
-                        "status": "queued",
-                        "message": "已加入检测队列"
-                    })
-                else:
-                    failed_videos.append({
-                        "video_id": video_id,
-                        "error": "视频不存在"
-                    })
-                    
+                # 优先从Redis获取
+                status_data = None
+                if redis_client:
+                    task_key = get_task_key(video_id)
+                    redis_status = redis_client.get_task_status(task_key)
+                    if redis_status:
+                        status_data = {**redis_status, "source": "redis"}
+                
+                # Redis中没有，从数据库获取
+                if not status_data:
+                    detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+                    if detection:
+                        status_data = {
+                            "video_id": video_id,
+                            "status": detection.status,
+                            "progress": getattr(detection, 'progress', 0),
+                            "current_step": getattr(detection, 'current_step', ''),
+                            "error_message": detection.error_message,
+                            "source": "database"
+                        }
+                    else:
+                        status_data = {
+                            "video_id": video_id,
+                            "status": "not_found",
+                            "progress": 0,
+                            "current_step": None,
+                            "error_message": "未找到检测记录",
+                            "source": "none"
+                        }
+                
+                results.append(status_data)
+                
             except Exception as e:
-                failed_videos.append({
+                results.append({
                     "video_id": video_id,
-                    "error": str(e)
+                    "status": "error",
+                    "progress": 0,
+                    "current_step": None,
+                    "error_message": str(e),
+                    "source": "error"
                 })
         
         return success_response({
             "total": len(video_ids),
-            "queued": len(results),
-            "failed": len(failed_videos),
-            "results": results,
-            "failed_videos": failed_videos,
-            "detection_types": detection_types,
-            "comprehensive": comprehensive,
-            "message": "批量检测任务已提交，请通过结果查询API获取进度"
+            "results": results
         })
         
     except Exception as e:
-        logger.exception("批量数字人检测失败")
-        return error_response(500, f"批量检测失败: {str(e)}")
+        logger.exception("批量查询检测状态失败")
+        return error_response(500, f"批量查询失败: {str(e)}")
+
+# 服务状态API
+@digital_human_api.route('/api/digital-human/service-status', methods=['GET'])
+def get_service_status():
+    """获取数字人检测服务状态"""
+    try:
+        # 检查外部检测服务是否可用
+        try:
+            response = requests.get(f"{DIGITAL_HUMAN_SERVICE_URL}/status", timeout=5)
+            external_service_available = response.status_code == 200
+            external_service_info = response.json() if external_service_available else None
+        except Exception as e:
+            external_service_available = False
+            external_service_info = {"error": str(e)}
+        
+        # 检查Redis状态
+        redis_available = False
+        redis_info = {}
+        redis_client = get_redis_client()
+        if redis_client:
+            try:
+                redis_client.redis_client.ping()
+                redis_available = True
+                redis_info = {"status": "connected"}
+            except Exception as e:
+                redis_info = {"error": str(e)}
+        
+        # 检查数据库状态
+        database_available = False
+        try:
+            db.session.execute("SELECT 1")
+            database_available = True
+            database_info = {"status": "connected"}
+        except Exception as e:
+            database_info = {"error": str(e)}
+        
+        # 统计当前任务数量
+        task_stats = {}
+        try:
+            processing_count = DigitalHumanDetection.query.filter_by(status="processing").count()
+            completed_count = DigitalHumanDetection.query.filter_by(status="completed").count()
+            failed_count = DigitalHumanDetection.query.filter_by(status="failed").count()
+            
+            task_stats = {
+                "processing": processing_count,
+                "completed": completed_count,
+                "failed": failed_count,
+                "total": processing_count + completed_count + failed_count
+            }
+        except Exception as e:
+            task_stats = {"error": str(e)}
+        
+        return success_response({
+            "service_available": external_service_available and database_available,
+            "components": {
+                "detection_service": {
+                    "available": external_service_available,
+                    "url": DIGITAL_HUMAN_SERVICE_URL,
+                    "info": external_service_info
+                },
+                "redis": {
+                    "available": redis_available,
+                    "info": redis_info
+                },
+                "database": {
+                    "available": database_available,
+                    "info": database_info
+                }
+            },
+            "task_statistics": task_stats
+        })
+        
+    except Exception as e:
+        return error_response(500, f"获取服务状态失败: {str(e)}")

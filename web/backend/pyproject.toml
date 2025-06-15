@@ -28,6 +28,7 @@ dependencies = [
     "aisearch @ file://${PROJECT_ROOT}/AISearch",
     "langchain-huggingface>=0.2.0",
     "playwright>=1.52.0",
+    "redis",
 ]
 [tool.uv]
 index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"

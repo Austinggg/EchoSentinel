@@ -3,3 +3,8 @@ HOST = "rm-bp1qb26410y2q0le8ao.mysql.rds.aliyuncs.com"
 PORT = 3306
 USER = "root"
 DB_NAME = "echo_sentinel_web"
+
+# Redis配置
+REDIS_HOST = "1.95.190.99"
+REDIS_PORT = 6379
+REDIS_DB = 0
