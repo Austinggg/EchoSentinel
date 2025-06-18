@@ -8,7 +8,16 @@ import type {
 import { computed, onMounted, reactive, ref, watch } from 'vue'; // 添加watch
 import { useRoute, useRouter } from 'vue-router'; // 添加useRouter
 import axios from 'axios'; // 添加这行
-import { Location, Share } from '@element-plus/icons-vue';
+import {
+  Location,
+  Share,
+  ArrowLeft,
+  ArrowRight,
+  UserFilled,
+  Search,
+  Fold,     // 添加收起图标
+  Expand,   // 添加展开图标
+} from '@element-plus/icons-vue'; // 添加缺失的图标
 import {
   ElAlert,
   ElAvatar,
@@ -299,32 +308,36 @@ onMounted(async () => {
 
 <template>
   <div class="user-profile-page">
-    <!-- 添加侧边栏切换按钮 -->
-    <div class="sidebar-toggle" @click="toggleUserList">
-      <ElIcon>
-        <component :is="userListVisible ? 'ArrowLeft' : 'ArrowRight'" />
-      </ElIcon>
-    </div>
-
     <!-- 用户列表侧边栏 -->
     <div class="user-list-sidebar" :class="{ collapsed: !userListVisible }">
+      <!-- 侧边栏内容保持不变 -->
       <div class="sidebar-header">
-        <h3>用户列表</h3>
+        <div class="header-title">
+          <h3>用户列表</h3>
+          <div class="sidebar-toggle" @click="toggleUserList">
+            <ElIcon>
+              <Fold v-if="userListVisible" />
+              <Expand v-else />
+            </ElIcon>
+          </div>
+        </div>
         <ElInput
           v-model="searchUserKeyword"
           placeholder="搜索用户..."
           clearable
-          prefix-icon="Search"
           size="small"
-        />
+        >
+          <template #prefix>
+            <ElIcon><Search /></ElIcon>
+          </template>
+        </ElInput>
       </div>
-
+      <!-- ... 侧边栏其他内容保持不变 ... -->
       <div class="sidebar-content" v-loading="userListLoading">
         <ElEmpty
           v-if="filteredUserList.length === 0"
           description="暂无用户数据"
         />
-
         <div v-else class="user-list">
           <div
             v-for="(user, index) in filteredUserList"
@@ -344,14 +357,23 @@ onMounted(async () => {
                   v-if="user.digital_human_probability >= 0.7"
                   size="small"
                   type="danger"
-                  >数字人</ElTag
                 >
+                  数字人
+                </ElTag>
+                <ElTag
+                  v-else-if="
+                    user.digital_human_probability !== undefined &&
+                    user.digital_human_probability < 0.7
+                  "
+                  size="small"
+                  type="success"
+                >
+                  真实人
+                </ElTag>
               </div>
             </div>
           </div>
         </div>
-
-        <!-- 分页 -->
         <div class="sidebar-pagination">
           <ElPagination
             v-if="totalUsers > pageSize"
@@ -365,6 +387,8 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+    
+    <!-- 内容区域 - 修复滚动问题 -->
     <div class="user-profile-container">
       <div v-if="!userId && !userListLoading" class="no-user-selected">
         <ElCard>
@@ -377,7 +401,9 @@ onMounted(async () => {
           </div>
         </ElCard>
       </div>
-      <div v-else>
+      
+      <!-- 关键修改：添加 profile-content-wrapper 容器 -->
+      <div v-else class="profile-content-wrapper">
         <ElCard v-if="error" class="mb-5">
           <ElAlert :title="error" type="error" show-icon />
         </ElCard>
@@ -580,9 +606,6 @@ onMounted(async () => {
           </div>
         </ElCard>
 
-        <!-- 用户集群展示 -->
-        <!-- <ClusterScatter :sec-uid="userId" /> -->
-
         <!-- 相似用户 -->
         <ElCard v-if="userProfile && similarUsers.length > 0" class="mb-5">
           <template #header>
@@ -667,7 +690,9 @@ onMounted(async () => {
 .user-profile-page {
   display: flex;
   position: relative;
-  min-height: 100%;
+  height: 100vh; /* 固定页面高度 */
+  width: 100%;
+  overflow: hidden;
 }
 
 /* 侧边栏样式 */
@@ -677,26 +702,63 @@ onMounted(async () => {
   background-color: #f8f8f8;
   display: flex;
   flex-direction: column;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
   overflow: hidden;
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  position: relative;
+  height: 100%;
+  flex-shrink: 0;
 }
 
 .user-list-sidebar.collapsed {
   width: 0;
+  transform: translateX(-300px);
 }
 
 .sidebar-header {
   padding: 16px;
   border-bottom: 1px solid #e6e6e6;
+  background-color: #ffffff;
 }
 
-.sidebar-header h3 {
-  margin: 0 0 16px 0;
+/* 标题栏样式 */
+.header-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.header-title h3 {
+  margin: 0;
   font-size: 18px;
   color: #303133;
+  font-weight: 600;
+}
+
+/* 切换按钮新样式 */
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: transparent;
+}
+
+.sidebar-toggle:hover {
+  background-color: #f2f6fc;
+}
+
+.sidebar-toggle .el-icon {
+  font-size: 16px;
+  color: #606266;
+}
+
+.sidebar-toggle:hover .el-icon {
+  color: #409eff;
 }
 
 .sidebar-content {
@@ -718,16 +780,19 @@ onMounted(async () => {
   padding: 10px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .user-list-item:hover {
   background-color: #eaeaea;
+  border-color: #d1d5db;
 }
 
 .user-list-item.active {
   background-color: #ecf5ff;
   border-left: 3px solid #409eff;
+  border-color: #409eff;
 }
 
 .user-list-info {
@@ -742,64 +807,68 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #303133;
 }
 
 .user-list-platform {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .sidebar-pagination {
   display: flex;
   justify-content: center;
   margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e6e6e6;
 }
 
-/* 侧边栏切换按钮 */
-.sidebar-toggle {
-  position: fixed;
-  top: 50%;
-  left: 300px;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 60px;
-  background-color: #ffffff;
-  border: 1px solid #e6e6e6;
-  border-left: none;
-  border-radius: 0 4px 4px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 10;
-  transition: left 0.3s;
-}
-
-.sidebar-toggle:hover {
-  background-color: #f2f6fc;
-}
-
-.user-list-sidebar.collapsed + .sidebar-toggle {
-  left: 0;
-}
-
-/* 适配带侧边栏的内容区域 */
+/* 内容区域 - 修改为固定高度和滚动 */
 .user-profile-container {
   flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 可滚动的内容包装器 */
+.profile-content-wrapper {
+  flex: 1;
+  overflow-y: auto;
   padding: 20px;
-  transition: margin-left 0.3s;
 }
 
-.user-profile-container.with-sidebar {
-  margin-left: 20px;
-}
-
-.user-profile-container {
-  max-width: 1200px;
-  margin: 0 auto;
+/* 无用户选择时的样式 */
+.no-user-selected {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
   padding: 20px;
 }
 
+.no-user-content {
+  text-align: center;
+  color: #909399;
+  padding: 40px;
+}
+
+.no-user-content h3 {
+  margin: 16px 0 8px 0;
+  color: #606266;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.no-user-content p {
+  margin: 0;
+  color: #909399;
+  font-size: 14px;
+}
+
+/* 卡片样式 */
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -839,6 +908,8 @@ onMounted(async () => {
 .profile-name {
   margin: 0 0 10px 0;
   font-size: 22px;
+  color: #303133;
+  font-weight: 600;
 }
 
 .profile-details {
@@ -860,10 +931,21 @@ onMounted(async () => {
   font-style: italic;
   color: #606266;
   line-height: 1.5;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #409eff;
 }
 
 .profile-covers {
   margin-top: 20px;
+}
+
+.profile-covers h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #303133;
+  font-weight: 600;
 }
 
 .covers-container {
@@ -878,6 +960,7 @@ onMounted(async () => {
   height: 120px;
   border-radius: 8px;
   overflow: hidden;
+  border: 1px solid #e6e6e6;
 }
 
 .cover-item :deep(.el-image) {
@@ -890,10 +973,12 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 30px;
+  align-items: flex-start;
 }
 
 .analysis-metrics {
   flex: 2;
+  min-width: 300px;
 }
 
 .analysis-gauge {
@@ -901,12 +986,14 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  min-width: 200px;
 }
 
 .percentage-value {
   display: block;
   font-size: 28px;
   font-weight: bold;
+  color: #303133;
 }
 
 .percentage-label {
@@ -929,6 +1016,13 @@ onMounted(async () => {
   padding: 15px;
   width: calc(33.33% - 20px);
   min-width: 250px;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.cluster-item:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
 }
 
 .cluster-header {
@@ -938,6 +1032,8 @@ onMounted(async () => {
 .cluster-header h4 {
   margin: 0;
   color: #303133;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .avatar-group {
@@ -949,6 +1045,13 @@ onMounted(async () => {
 .cluster-avatar {
   border: 2px solid #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cluster-avatar:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* 骨架屏样式 */
@@ -969,14 +1072,162 @@ onMounted(async () => {
   gap: 15px;
 }
 
+/* 表格样式增强 */
+.el-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.el-table .el-table__row:hover > td {
+  background-color: #f5f7fa;
+}
+
+/* 标签样式增强 */
+.el-tag {
+  margin-right: 4px;
+  margin-bottom: 4px;
+}
+
+/* 进度条样式增强 */
+.el-progress {
+  margin: 8px 0;
+}
+
+/* 右侧内容区域滚动条样式 */
+.profile-content-wrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.profile-content-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.profile-content-wrapper::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.profile-content-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 左侧侧边栏滚动条样式 */
+.sidebar-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
 /* 响应式调整 */
+@media (max-width: 1200px) {
+  .cluster-item {
+    width: calc(50% - 20px);
+  }
+}
+
 @media (max-width: 768px) {
+  .user-list-sidebar {
+    width: 280px;
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    z-index: 100;
+  }
+  
+  .user-list-sidebar.collapsed {
+    transform: translateX(-280px);
+  }
+  
+  .profile-content-wrapper {
+    padding: 10px;
+  }
+  
   .analysis-content {
     flex-direction: column;
+    gap: 20px;
+  }
+  
+  .analysis-metrics,
+  .analysis-gauge {
+    flex: none;
+    min-width: auto;
   }
 
   .cluster-item {
     width: 100%;
+    min-width: auto;
   }
+  
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 15px;
+  }
+  
+  .profile-details {
+    justify-content: center;
+  }
+  
+  .covers-container {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .user-list-sidebar {
+    width: 260px;
+  }
+  
+  .user-list-sidebar.collapsed {
+    transform: translateX(-260px);
+  }
+  
+  .profile-content-wrapper {
+    padding: 8px;
+  }
+  
+  .card-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  .profile-name {
+    font-size: 18px;
+  }
+  
+  .cover-item {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+/* 加载状态样式 */
+.el-loading-mask {
+  border-radius: 8px;
+}
+
+/* 空状态样式 */
+.el-empty {
+  padding: 40px 20px;
+}
+
+.el-empty .el-empty__description {
+  color: #909399;
+  font-size: 14px;
 }
 </style>

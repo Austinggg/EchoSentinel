@@ -16,10 +16,10 @@ from userAnalyse.OLSH import find_most_similar_cluster, find_most_similar_user
 from utils.database import UserProfile, db
 from utils.HttpResponse import HttpResponse
 
-bp = Blueprint("userAnalyse", __name__)
+user_analyse_api = Blueprint("userAnalyse", __name__)
 
 
-@bp.route("/api/userAnalyse/demo", methods=["GET"])
+@user_analyse_api.route("/api/userAnalyse/demo", methods=["GET"])
 def userAnalyse_demo():
     """返回用户分析demo数据"""
     return HttpResponse.success(
@@ -53,7 +53,7 @@ def userAnalyse_demo():
     )
 
 
-@bp.route("/api/userAnalyse/getProfile", methods=["GET", "POST"])
+@user_analyse_api.route("/api/userAnalyse/getProfile", methods=["GET", "POST"])
 def userAnalyse_getProfile():
     """返回用户信息"""
     sec_uid = request.get_json().get("sec_uid")
@@ -61,7 +61,7 @@ def userAnalyse_getProfile():
     return HttpResponse.success(data=get_UserProfile_by_uid(sec_uid).to_dict())
 
 
-@bp.route("/api/userAnalyse/getCover/<filename>", methods=["GET"])
+@user_analyse_api.route("/api/userAnalyse/getCover/<filename>", methods=["GET"])
 def userAnalyse_getCover(filename: str):
     """返回封面图片"""
     image_directory = Path("data/userAnalyse/video_covers")
@@ -70,7 +70,7 @@ def userAnalyse_getCover(filename: str):
     return send_from_directory(image_directory.resolve(), filename)
 
 
-@bp.post("/api/userAnalyse/getRank")
+@user_analyse_api.post("/api/userAnalyse/getRank")
 def userAnalyse_getRank():
     """返回用户分析数据"""
     sec_uid = request.get_json().get("sec_uid")
@@ -85,7 +85,7 @@ def userAnalyse_getRank():
     )
 
 
-@bp.route("/api/userAnalyse/similarCluster", methods=["GET", "POST"])
+@user_analyse_api.route("/api/userAnalyse/similarCluster", methods=["GET", "POST"])
 def userAnalyse_similarCluster():
     """相似集群"""
     sec_uid = request.get_json().get("sec_uid")
@@ -113,7 +113,7 @@ def userAnalyse_similarCluster():
     return HttpResponse.success(data={"similarCluster": result_clusters})
 
 
-@bp.route("/api/userAnalyse/similarUser", methods=["GET", "POST"])
+@user_analyse_api.route("/api/userAnalyse/similarUser", methods=["GET", "POST"])
 def userAnalyse_similarUser():
     """相似用户"""
     sec_uid = request.get_json().get("sec_uid")
@@ -137,7 +137,7 @@ def userAnalyse_similarUser():
     return HttpResponse.success(data={"similarUser": return_users})
 
 
-@bp.route("/api/userAnalyse/clusterPlotData", methods=["GET"])
+@user_analyse_api.route("/api/userAnalyse/clusterPlotData", methods=["GET"])
 def userAnalyse_clusterPlotData():
     sec_uid = request.args.get("sec_uid")
     if not sec_uid:

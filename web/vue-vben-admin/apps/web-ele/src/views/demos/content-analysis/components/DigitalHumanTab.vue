@@ -607,6 +607,142 @@ onUnmounted(() => {
               />
             </div>
 
+            <!-- 面部检测特征图片展示 -->
+            <el-divider>检测特征图片</el-divider>
+            <div class="detection-images">
+              <div class="images-grid">
+                <!-- 面部关键点检测图 -->
+                <div class="image-item">
+                  <div class="image-header">
+                    <span class="item-name">面部关键点检测</span>
+                    <el-tag type="primary" size="small">特征分析</el-tag>
+                  </div>
+                  <div class="image-placeholder">
+                    <el-image
+                      :src="`/api/videos/${getVideoId()}/digital-human/face-keypoints`"
+                      fit="contain"
+                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/face-keypoints`]"
+                      :hide-on-click-modal="true"
+                    >
+                      <template #error>
+                        <div class="image-error">
+                          <el-icon size="32"><Picture /></el-icon>
+                          <div class="error-text">
+                            <div>面部关键点检测图</div>
+                            <div class="error-subtitle">暂未生成</div>
+                          </div>
+                        </div>
+                      </template>
+                      <template #placeholder>
+                        <div class="image-loading">
+                          <el-icon class="loading-icon"><Refresh /></el-icon>
+                          <div>加载中...</div>
+                        </div>
+                      </template>
+                    </el-image>
+                  </div>
+                  <div class="image-description">
+                    基于深度学习模型的面部关键点定位和特征提取分析
+                  </div>
+                </div>
+
+                <!-- 面部表情分析图 -->
+                <div class="image-item">
+                  <div class="image-header">
+                    <span class="item-name">表情真实性分析</span>
+                    <el-tag type="info" size="small">表情检测</el-tag>
+                  </div>
+                  <div class="image-placeholder">
+                    <el-image
+                      :src="`/api/videos/${getVideoId()}/digital-human/face-expression`"
+                      fit="contain"
+                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/face-expression`]"
+                      :hide-on-click-modal="true"
+                    >
+                      <template #error>
+                        <div class="image-error">
+                          <el-icon size="32"><Picture /></el-icon>
+                          <div class="error-text">
+                            <div>表情真实性分析图</div>
+                            <div class="error-subtitle">暂未生成</div>
+                          </div>
+                        </div>
+                      </template>
+                      <template #placeholder>
+                        <div class="image-loading">
+                          <el-icon class="loading-icon"><Refresh /></el-icon>
+                          <div>加载中...</div>
+                        </div>
+                      </template>
+                    </el-image>
+                  </div>
+                  <div class="image-description">
+                    面部表情的自然性和协调性智能分析结果
+                  </div>
+                </div>
+
+                <!-- 纹理特征分析图 -->
+                <div class="image-item">
+                  <div class="image-header">
+                    <span class="item-name">纹理特征分析</span>
+                    <el-tag type="warning" size="small">纹理检测</el-tag>
+                  </div>
+                  <div class="image-placeholder">
+                    <el-image
+                      :src="`/api/videos/${getVideoId()}/digital-human/face-texture`"
+                      fit="contain"
+                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/face-texture`]"
+                      :hide-on-click-modal="true"
+                    >
+                      <template #error>
+                        <div class="image-error">
+                          <el-icon size="32"><Picture /></el-icon>
+                          <div class="error-text">
+                            <div>面部纹理特征图</div>
+                            <div class="error-subtitle">暂未生成</div>
+                          </div>
+                        </div>
+                      </template>
+                      <template #placeholder>
+                        <div class="image-loading">
+                          <el-icon class="loading-icon"><Refresh /></el-icon>
+                          <div>加载中...</div>
+                        </div>
+                      </template>
+                    </el-image>
+                  </div>
+                  <div class="image-description">
+                    面部皮肤纹理和细节的真实性检测分析
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 算法详情 -->
+            <el-divider>检测算法详情</el-divider>
+            <div class="algorithm-details">
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="检测模型">
+                  基于Xception深度神经网络
+                </el-descriptions-item>
+                <el-descriptions-item label="训练数据集">
+                  大规模真实/合成人脸数据集
+                </el-descriptions-item>
+                <el-descriptions-item label="特征提取">
+                  多层次面部特征深度学习
+                </el-descriptions-item>
+                <el-descriptions-item label="检测精度">
+                  高精度伪造面部识别
+                </el-descriptions-item>
+                <el-descriptions-item label="分析维度">
+                  关键点、表情、纹理、边缘
+                </el-descriptions-item>
+                <el-descriptions-item label="检测时间">
+                  {{ formatDateTime(detectionData.face?.raw_results?.metadata?.timestamp) }}
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+
             <!-- 检测结果 -->
             <el-divider>检测结果</el-divider>
             <div class="risk-assessment">
@@ -619,6 +755,11 @@ onUnmounted(() => {
               <div class="risk-info">
                 <h4>{{ detectionData.face?.prediction === 'Human' ? '真实面部' : 'AI生成面部' }}</h4>
                 <p>基于深度学习算法的面部真实性检测结果</p>
+                <div class="confidence-info">
+                  <el-tag :type="detectionData.face?.confidence > 0.7 ? 'success' : 'warning'">
+                    置信度: {{ (detectionData.face?.confidence * 100).toFixed(1) }}%
+                  </el-tag>
+                </div>
               </div>
             </div>
           </div>
@@ -766,6 +907,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 整体检测结果 -->
+      <!-- 整体检测结果 -->
       <div v-if="activeStep === 2" class="analysis-step">
         <el-card class="analysis-card">
           <template #header>
@@ -813,21 +955,200 @@ onUnmounted(() => {
               />
             </div>
 
+            <!-- 整体特征图片展示 -->
+            <el-divider>整体特征分析图片</el-divider>
+            <div class="detection-images">
+              <div class="images-grid">
+                <!-- 时空一致性分析图 -->
+                <div class="image-item">
+                  <div class="image-header">
+                    <span class="item-name">时空一致性分析</span>
+                    <el-tag type="primary" size="small">时序特征</el-tag>
+                  </div>
+                  <div class="image-placeholder">
+                    <el-image
+                      :src="`/api/videos/${getVideoId()}/digital-human/temporal-consistency`"
+                      fit="contain"
+                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/temporal-consistency`]"
+                      :hide-on-click-modal="true"
+                    >
+                      <template #error>
+                        <div class="image-error">
+                          <el-icon size="32"><Picture /></el-icon>
+                          <div class="error-text">
+                            <div>时空一致性分析图</div>
+                            <div class="error-subtitle">暂未生成</div>
+                          </div>
+                        </div>
+                      </template>
+                      <template #placeholder>
+                        <div class="image-loading">
+                          <el-icon class="loading-icon"><Refresh /></el-icon>
+                          <div>加载中...</div>
+                        </div>
+                      </template>
+                    </el-image>
+                  </div>
+                  <div class="image-description">
+                    视频帧间的时间连续性和空间一致性检测分析
+                  </div>
+                </div>
+
+                <!-- 全局纹理特征图 -->
+                <div class="image-item">
+                  <div class="image-header">
+                    <span class="item-name">全局纹理特征</span>
+                    <el-tag type="info" size="small">纹理分析</el-tag>
+                  </div>
+                  <div class="image-placeholder">
+                    <el-image
+                      :src="`/api/videos/${getVideoId()}/digital-human/global-texture`"
+                      fit="contain"
+                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/global-texture`]"
+                      :hide-on-click-modal="true"
+                    >
+                      <template #error>
+                        <div class="image-error">
+                          <el-icon size="32"><Picture /></el-icon>
+                          <div class="error-text">
+                            <div>全局纹理特征图</div>
+                            <div class="error-subtitle">暂未生成</div>
+                          </div>
+                        </div>
+                      </template>
+                      <template #placeholder>
+                        <div class="image-loading">
+                          <el-icon class="loading-icon"><Refresh /></el-icon>
+                          <div>加载中...</div>
+                        </div>
+                      </template>
+                    </el-image>
+                  </div>
+                  <div class="image-description">
+                    整体画面的纹理一致性和生成痕迹检测
+                  </div>
+                </div>
+
+                <!-- 生成痕迹检测图 -->
+                <div class="image-item">
+                  <div class="image-header">
+                    <span class="item-name">生成痕迹检测</span>
+                    <el-tag type="warning" size="small">痕迹分析</el-tag>
+                  </div>
+                  <div class="image-placeholder">
+                    <el-image
+                      :src="`/api/videos/${getVideoId()}/digital-human/generation-artifacts`"
+                      fit="contain"
+                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/generation-artifacts`]"
+                      :hide-on-click-modal="true"
+                    >
+                      <template #error>
+                        <div class="image-error">
+                          <el-icon size="32"><Picture /></el-icon>
+                          <div class="error-text">
+                            <div>生成痕迹检测图</div>
+                            <div class="error-subtitle">暂未生成</div>
+                          </div>
+                        </div>
+                      </template>
+                      <template #placeholder>
+                        <div class="image-loading">
+                          <el-icon class="loading-icon"><Refresh /></el-icon>
+                          <div>加载中...</div>
+                        </div>
+                      </template>
+                    </el-image>
+                  </div>
+                  <div class="image-description">
+                    AI生成算法特有的视觉伪影和生成痕迹识别
+                  </div>
+                </div>
+
+                <!-- 边缘一致性分析图 -->
+                <div class="image-item">
+                  <div class="image-header">
+                    <span class="item-name">边缘一致性分析</span>
+                    <el-tag type="success" size="small">边缘检测</el-tag>
+                  </div>
+                  <div class="image-placeholder">
+                    <el-image
+                      :src="`/api/videos/${getVideoId()}/digital-human/edge-consistency`"
+                      fit="contain"
+                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/edge-consistency`]"
+                      :hide-on-click-modal="true"
+                    >
+                      <template #error>
+                        <div class="image-error">
+                          <el-icon size="32"><Picture /></el-icon>
+                          <div class="error-text">
+                            <div>边缘一致性分析图</div>
+                            <div class="error-subtitle">暂未生成</div>
+                          </div>
+                        </div>
+                      </template>
+                      <template #placeholder>
+                        <div class="image-loading">
+                          <el-icon class="loading-icon"><Refresh /></el-icon>
+                          <div>加载中...</div>
+                        </div>
+                      </template>
+                    </el-image>
+                  </div>
+                  <div class="image-description">
+                    图像边缘的自然性和一致性深度学习检测
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- 检测特征 -->
-            <el-divider>检测特征</el-divider>
+            <el-divider>检测算法特征</el-divider>
+            <div class="algorithm-features">
+              <div class="feature-grid">
+                <div class="feature-card">
+                  <el-icon size="24" color="#409eff"><VideoCamera /></el-icon>
+                  <h4>时空一致性检测</h4>
+                  <p>分析视频帧间的时间连续性和空间一致性，识别生成内容的时序异常</p>
+                </div>
+                <div class="feature-card">
+                  <el-icon size="24" color="#67c23a"><Picture /></el-icon>
+                  <h4>全局纹理分析</h4>
+                  <p>检测整体画面的纹理特征，识别AI生成算法留下的纹理痕迹</p>
+                </div>
+                <div class="feature-card">
+                  <el-icon size="24" color="#e6a23c"><Warning /></el-icon>
+                  <h4>生成伪影识别</h4>
+                  <p>检测AI生成模型产生的视觉伪影和不自然的生成痕迹</p>
+                </div>
+                <div class="feature-card">
+                  <el-icon size="24" color="#f56c6c"><InfoFilled /></el-icon>
+                  <h4>多尺度特征融合</h4>
+                  <p>结合像素级、特征级和语义级的多尺度特征进行综合判断</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 检测技术详情 -->
+            <el-divider>技术详情</el-divider>
             <div class="raw-data">
               <el-descriptions :column="2" border>
-                <el-descriptions-item label="特征类型">
-                  时空一致性、纹理特征、生成痕迹
+                <el-descriptions-item label="检测算法">
+                  全局特征深度学习模型
                 </el-descriptions-item>
                 <el-descriptions-item label="分析维度">
                   像素级、特征级、语义级
                 </el-descriptions-item>
-                <el-descriptions-item label="检测算法">
-                  全局特征深度学习模型
+                <el-descriptions-item label="特征类型">
+                  时空一致性、纹理特征、生成痕迹
                 </el-descriptions-item>
                 <el-descriptions-item label="检测精度">
                   高精度智能识别
+                </el-descriptions-item>
+                <el-descriptions-item label="模型架构">
+                  深度卷积神经网络
+                </el-descriptions-item>
+                <el-descriptions-item label="训练策略">
+                  对抗性训练增强泛化能力
                 </el-descriptions-item>
               </el-descriptions>
             </div>
@@ -1010,6 +1331,75 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* 检测图片展示区域 */
+.detection-images {
+  margin: 1.5rem 0;
+}
+
+/* 算法详情 */
+.algorithm-details {
+  margin: 1.5rem 0;
+}
+
+/* 算法特征网格 */
+.algorithm-features {
+  margin: 1.5rem 0;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.feature-card {
+  padding: 1.5rem;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  text-align: center;
+  background: #fafafa;
+  transition: all 0.2s ease;
+}
+
+.feature-card:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+  background: white;
+}
+
+.feature-card h4 {
+  margin: 0.75rem 0 0.5rem 0;
+  color: #303133;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.feature-card p {
+  margin: 0;
+  color: #606266;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* 置信度信息 */
+.confidence-info {
+  margin-top: 0.75rem;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .algorithm-features {
+    margin: 1rem 0;
+  }
+  
+  .feature-card {
+    padding: 1rem;
+  }
+}
 /* 基础容器样式 */
 .digital-human-container {
   height: 100%;

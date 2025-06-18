@@ -467,10 +467,13 @@ const handleExport = (format) => {
 
 .report-content {
   margin-bottom: 1rem;
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .report-container {
-  padding: 10px 5px;
+  padding: 30px;
 }
 
 .border-success {
@@ -496,102 +499,353 @@ const handleExport = (format) => {
   gap: 8px;
 }
 
-/* Markdown样式保持不变 */
+/* 统一的Markdown样式 - 与SummaryTab保持一致 */
 :deep(.markdown-body) {
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 15px;
   line-height: 1.8;
-  color: #333;
+  color: #2c3e50;
   word-break: break-word;
 }
 
+:deep(.markdown-body h1) {
+  font-size: 24px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 3px solid #409eff;
+  position: relative;
+}
+
+:deep(.markdown-body h1::before) {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #409eff, #67c23a);
+  border-radius: 2px;
+}
+
 :deep(.markdown-body h2) {
-  margin-top: 28px;
+  margin: 32px 0 16px 0;
   font-size: 20px;
   font-weight: 600;
-  border-bottom: 2px solid #409eff;
-  padding-bottom: 8px;
-  color: #303133;
+  color: #409eff;
+  background: linear-gradient(135deg, #ecf5ff 0%, #e8f4fd 100%);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+  position: relative;
 }
 
 :deep(.markdown-body h3) {
-  margin-top: 24px;
+  margin: 24px 0 12px 0;
   font-size: 17px;
   font-weight: 600;
-  color: #409eff;
-  background-color: #ecf5ff;
-  padding: 8px 12px;
-  border-radius: 4px;
+  color: #67c23a;
+  position: relative;
+  padding-left: 20px;
 }
 
-:deep(.markdown-body p:has(> ▲)) {
-  background-color: #fef0f0;
+:deep(.markdown-body h3::before) {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 16px;
+  background: #67c23a;
+  border-radius: 2px;
+}
+
+:deep(.markdown-body p) {
+  margin-bottom: 16px;
+  line-height: 1.8;
+  text-align: justify;
+}
+
+:deep(.markdown-body ul, .markdown-body ol) {
+  padding-left: 2em;
+  margin-bottom: 16px;
+}
+
+:deep(.markdown-body li) {
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+:deep(.markdown-body li::marker) {
+  color: #409eff;
+  font-weight: bold;
+}
+
+/* 强调内容样式 */
+:deep(.markdown-body strong) {
+  color: #e6a23c;
+  font-weight: bold;
+  background: linear-gradient(135deg, rgba(255, 229, 100, 0.3), rgba(255, 239, 153, 0.3));
+  padding: 2px 6px;
+  border-radius: 4px;
+  border-bottom: 2px solid rgba(230, 162, 60, 0.3);
+}
+
+:deep(.markdown-body em) {
+  color: #909399;
+  font-style: italic;
+  background: rgba(144, 147, 153, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* 引用样式 */
+:deep(.markdown-body blockquote) {
+  margin: 20px 0;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e8 100%);
+  border-left: 4px solid #67c23a;
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  color: #67c23a;
+  position: relative;
+}
+
+:deep(.markdown-body blockquote::before) {
+  content: '"';
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  font-size: 24px;
+  color: #67c23a;
+  opacity: 0.5;
+}
+
+/* 代码样式 */
+:deep(.markdown-body code) {
+  background: #f4f4f5;
+  color: #e6a23c;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 0.9em;
+  border: 1px solid #e9ecef;
+}
+
+/* 威胁报告特殊样式 */
+:deep(.markdown-body > p:first-child) {
+  font-size: 16px;
+  background: linear-gradient(135deg, #fef0f0 0%, #fde2e2 100%);
+  padding: 20px;
+  border-radius: 10px;
+  border-left: 5px solid #f56c6c;
+  font-weight: 500;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 12px rgba(245, 108, 108, 0.1);
+  position: relative;
+}
+
+:deep(.markdown-body > p:first-child::before) {
+  content: '⚠️';
+  position: absolute;
+  left: -12px;
+  top: 20px;
+  background: white;
+  padding: 4px;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 表格样式 */
+:deep(.markdown-body table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.markdown-body table th) {
+  background: linear-gradient(135deg, #409eff 0%, #67c23a 100%);
+  color: white;
   padding: 12px 16px;
-  border-radius: 6px;
+  border: none;
+  font-weight: 600;
+  text-align: left;
+}
+
+:deep(.markdown-body table td) {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+:deep(.markdown-body table tr:hover td) {
+  background-color: #f8f9fa;
+}
+
+:deep(.markdown-body table tr:last-child td) {
+  border-bottom: none;
+}
+
+/* 威胁等级标识样式 */
+:deep(.markdown-body p:has(> ▲)) {
+  background: linear-gradient(135deg, #fef0f0 0%, #fde2e2 100%);
+  padding: 16px 20px;
+  border-radius: 8px;
   border-left: 4px solid #f56c6c;
   margin-bottom: 20px;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(245, 108, 108, 0.1);
 }
 
 :deep(.markdown-body p ▲) {
   color: #f56c6c;
   font-weight: bold;
-  margin-right: 4px;
+  margin-right: 8px;
+  font-size: 16px;
 }
 
+/* 数字列表样式增强 */
 :deep(.markdown-body ol) {
-  padding-left: 22px;
+  padding-left: 0;
   margin-bottom: 20px;
+  counter-reset: list-counter;
 }
 
 :deep(.markdown-body ol li) {
-  margin-bottom: 10px;
-  padding-left: 6px;
+  margin-bottom: 12px;
+  padding: 12px 16px 12px 50px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+  position: relative;
+  counter-increment: list-counter;
+  transition: all 0.2s ease;
 }
 
-:deep(.markdown-body strong) {
-  color: #e6a23c;
+:deep(.markdown-body ol li:hover) {
+  background: #ecf5ff;
+  border-left-color: #67c23a;
+  transform: translateX(2px);
+}
+
+:deep(.markdown-body ol li::before) {
+  content: counter(list-counter);
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(135deg, #409eff, #67c23a);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-weight: bold;
-  background-color: rgba(255, 229, 100, 0.3);
-  padding: 0 4px;
-  border-radius: 3px;
+  font-size: 12px;
 }
 
+/* 段落内强调文本增强 */
 :deep(.markdown-body p strong:first-of-type) {
   display: inline-block;
-  margin-right: 5px;
+  margin-right: 8px;
+  background: linear-gradient(135deg, #409eff, #67c23a);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
 }
 
-:deep(.markdown-body code) {
-  color: #476582;
-  background-color: rgba(27, 31, 35, 0.05);
-  padding: 2px 5px;
-  border-radius: 3px;
+/* 预格式化文本样式 */
+:deep(.markdown-body pre) {
+  background: #f6f8fa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e1e4e8;
+  overflow-x: auto;
+  margin: 16px 0;
 }
 
-:deep(.markdown-body table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 20px 0;
+:deep(.markdown-body pre code) {
+  background: none;
+  color: #24292e;
+  padding: 0;
+  border: none;
 }
 
-:deep(.markdown-body table th) {
-  background: #f2f6fc;
-  padding: 12px;
-  border: 1px solid #ebeef5;
+/* 分割线样式 */
+:deep(.markdown-body hr) {
+  border: none;
+  height: 2px;
+  background: linear-gradient(90deg, #409eff, #67c23a);
+  margin: 32px 0;
+  border-radius: 1px;
 }
 
-:deep(.markdown-body table td) {
-  padding: 12px;
-  border: 1px solid #ebeef5;
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .threat-report-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .risk-info-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .risk-level-container {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .action-buttons {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .report-container {
+    padding: 20px;
+  }
+  
+  :deep(.markdown-body) {
+    font-size: 14px;
+  }
+  
+  :deep(.markdown-body ol li) {
+    padding: 10px 12px 10px 40px;
+  }
+  
+  :deep(.markdown-body ol li::before) {
+    left: 12px;
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+  }
 }
 
-:deep(.markdown-body > p:first-child) {
-  font-size: 16px;
-  background-color: #fef0f0;
-  padding: 15px;
-  border-radius: 6px;
-  border-left: 5px solid #f56c6c;
-  font-weight: 500;
-  margin-bottom: 25px;
+@media (max-width: 480px) {
+  .section-heading {
+    font-size: 1rem;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .action-buttons .el-button {
+    width: 100%;
+  }
 }
 </style>

@@ -41,10 +41,10 @@ app.register_blueprint(menu.bp)
 app.register_blueprint(system_api)
 
 app.register_blueprint(user.bp)
-app.register_blueprint(userAnalyse.bp)
+app.register_blueprint(userAnalyse.user_analyse_api)
 app.register_blueprint(videoUpload.video_api)
 # app.register_blueprint(aigc_detection.bp)
 app.register_blueprint(digital_human_api)
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8000)  # 开启调试模式（包含热重载）
+    app.run(debug=False, port=8000)  # 开启调试模式（包含热重载）

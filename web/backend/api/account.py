@@ -38,45 +38,92 @@ def add_account():
         
         # 如果用户不存在，则创建新用户
         if not existing_profile:
-            # 创建用户资料
+            # 创建用户资料 - 在现有字段基础上添加新字段
             user_profile = UserProfile(
                 sec_uid=sec_uid,
                 hash_sec_uid=hash_sec_uid,
                 nickname=data.get('nickname'),
-                gender=data.get('gender', ''),
+                signature=data.get('signature', ''),
+                gender=data.get('gender', 0),
                 city=data.get('city', ''),
                 province=data.get('province', ''),
                 country=data.get('country', ''),
+                district=data.get('district', ''),  # 新增
                 aweme_count=data.get('aweme_count', 0),
                 follower_count=data.get('follower_count', 0),
                 following_count=data.get('following_count', 0),
                 total_favorited=data.get('total_favorited', 0),
                 favoriting_count=data.get('favoriting_count', 0),
-                user_age=data.get('user_age', 0),
-                ip_location=data.get('location', ''),
-                avatar_medium=data.get('avatar', '')
+                user_age=data.get('user_age', -1),
+                ip_location=data.get('ip_location', ''),
+                avatar_medium=data.get('avatar_medium', data.get('avatar', '')),
+                show_favorite_list=data.get('show_favorite_list', False),
+                is_gov_media_vip=data.get('is_gov_media_vip', False),
+                is_mix_user=data.get('is_mix_user', False),
+                is_star=data.get('is_star', False),
+                is_series_user=data.get('is_series_user', False),
+                # 新增的认证相关字段
+                custom_verify=data.get('custom_verify', ''),
+                enterprise_verify_reason=data.get('enterprise_verify_reason', ''),
+                verification_type=data.get('verification_type', 0)
             )
             db.session.add(user_profile)
-            db.session.flush()  # 获取ID但不提交
+            db.session.flush()
             profile_id = user_profile.id
         else:
-            # 更新现有用户信息
+            # 更新现有用户信息 - 更新更多字段
             profile_id = existing_profile.id
+            existing_profile.district = data.get('district', existing_profile.district)
+            existing_profile.custom_verify = data.get('custom_verify', existing_profile.custom_verify)
+            existing_profile.enterprise_verify_reason = data.get('enterprise_verify_reason', existing_profile.enterprise_verify_reason)
+            existing_profile.verification_type = data.get('verification_type', existing_profile.verification_type)
             existing_profile.nickname = data.get('nickname', existing_profile.nickname)
+            existing_profile.signature = data.get('signature', existing_profile.signature)
             existing_profile.aweme_count = data.get('aweme_count', existing_profile.aweme_count)
             existing_profile.follower_count = data.get('follower_count', existing_profile.follower_count)
             existing_profile.following_count = data.get('following_count', existing_profile.following_count)
             existing_profile.total_favorited = data.get('total_favorited', existing_profile.total_favorited)
-            existing_profile.avatar_medium = data.get('avatar', existing_profile.avatar_medium)
-            existing_profile.ip_location = data.get('location', existing_profile.ip_location)
+            existing_profile.favoriting_count = data.get('favoriting_count', existing_profile.favoriting_count)
+            existing_profile.avatar_medium = data.get('avatar_medium', data.get('avatar', existing_profile.avatar_medium))
+            existing_profile.ip_location = data.get('ip_location', existing_profile.ip_location)
             existing_profile.user_age = data.get('user_age', existing_profile.user_age)
+            existing_profile.gender = data.get('gender', existing_profile.gender)
+            existing_profile.city = data.get('city', existing_profile.city)
+            existing_profile.province = data.get('province', existing_profile.province)
+            existing_profile.country = data.get('country', existing_profile.country)
+            existing_profile.show_favorite_list = data.get('show_favorite_list', existing_profile.show_favorite_list)
+            existing_profile.is_gov_media_vip = data.get('is_gov_media_vip', existing_profile.is_gov_media_vip)
+            existing_profile.is_mix_user = data.get('is_mix_user', existing_profile.is_mix_user)
+            existing_profile.is_star = data.get('is_star', existing_profile.is_star)
+            existing_profile.is_series_user = data.get('is_series_user', existing_profile.is_series_user)
         
-        # 创建分析任务
+        # 检查是否已存在相同的分析任务
+        existing_task = UserAnalysisTask.query.filter_by(
+            platform=data.get('platform'),
+            platform_user_id=data.get('platform_user_id'),
+            user_profile_id=profile_id
+        ).first()
+        
+        if existing_task:
+            # 如果任务已存在，返回现有任务信息
+            db.session.commit()  # 提交用户信息的更新
+            return jsonify({
+                "code": 200,
+                "message": "账号已存在，任务信息已更新",
+                "data": {
+                    "user_id": profile_id,
+                    "task_id": existing_task.id,
+                    "status": existing_task.status,
+                    "existing": True
+                }
+            })
+        
+        # 创建新的分析任务
         analysis_task = UserAnalysisTask(
             platform=data.get('platform'),
             platform_user_id=data.get('platform_user_id'),
             nickname=data.get('nickname'),
-            avatar=data.get('avatar', ''),
+            avatar=data.get('avatar_medium', data.get('avatar', '')),
             user_profile_id=profile_id,
             status='pending',
             progress=0,
@@ -93,7 +140,8 @@ def add_account():
             "message": "账号添加成功",
             "data": {
                 "user_id": profile_id,
-                "task_id": analysis_task.id
+                "task_id": analysis_task.id,
+                "existing": False
             }
         })
         
@@ -104,8 +152,6 @@ def add_account():
     except Exception as e:
         db.session.rollback()
         return jsonify({"code": 500, "message": f"服务器错误: {str(e)}"}), 500
-
-
 # 添加在其他函数后
 @account_api.route('/api/account/<int:profile_id>/fetch_videos', methods=['POST'])
 def fetch_account_videos(profile_id):
@@ -133,7 +179,7 @@ def fetch_account_videos(profile_id):
         
     except Exception as e:
         return jsonify({"code": 500, "message": f"获取视频失败: {str(e)}"}), 500
-# 在现有函数后添加以下代码
+
 @account_api.route('/api/account/videos/<string:aweme_id>/analyze', methods=['POST'])
 def analyze_douyin_video(aweme_id):
     """分析抖音视频"""
@@ -170,13 +216,14 @@ def analyze_douyin_video(aweme_id):
         if not video_url:
             return jsonify({"code": 400, "message": "视频链接不可用，无法下载"}), 400
         
-        # 调用下载并分析API
+        # 调用下载并分析API - 使用全流程分析
         download_analyze_response = requests.get(
             "http://localhost:8000/api/download_and_analyze",
             params={
                 "url": video_url,
                 "prefix": "false",
-                "with_watermark": "false"
+                "with_watermark": "false",
+                "template": "full"  # 使用完整分析模板
             }
         )
         
@@ -215,10 +262,11 @@ def analyze_douyin_video(aweme_id):
         # 返回成功响应
         return jsonify({
             "code": 200,
-            "message": "分析任务已启动",
+            "message": "全流程分析任务已启动",
             "data": {
                 "video_id": file_id,
-                "status": "processing"
+                "status": "processing",
+                "template": "full"
             }
         })
             
@@ -227,7 +275,6 @@ def analyze_douyin_video(aweme_id):
         import traceback
         traceback.print_exc()
         return jsonify({"code": 500, "message": f"分析视频失败: {str(e)}"}), 500
-# 修改 get_video_processing_details 函数，添加最近的日志信息
 
 @account_api.route('/api/account/videos/<string:aweme_id>/processing-details', methods=['GET'])
 def get_video_processing_details(aweme_id):

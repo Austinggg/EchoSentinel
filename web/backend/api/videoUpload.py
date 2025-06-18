@@ -16,6 +16,7 @@ from utils.database import (
 )
 from utils.extensions import app
 from utils.HttpResponse import HttpResponse, error_response, success_response
+from api.workflow import start_video_workflow
 
 video_api = Blueprint("video", __name__)
 
@@ -42,6 +43,8 @@ def allowed_file(filename):
 def upload_video():
     """上传视频文件API，支持同时上传多个文件（最多3个），并且生成缩略图"""
     aigc = request.args.get("aigc", False)
+    # 新增：获取分析模板参数
+    analysis_template = request.args.get("template", "content")  # 默认使用content模板
     # 检查是否有文件上传
     if "file" not in request.files and "files[]" not in request.files:
         return HttpResponse.error("没有接收到文件", 400)
@@ -161,7 +164,8 @@ def upload_video():
                 try:
                     # 使用线程异步调用处理API，避免阻塞上传响应
                     processing_thread = threading.Thread(
-                        target=auto_process_video, args=(file_id,)
+                        target=auto_process_video, 
+                        args=(file_id, analysis_template)  # 传递模板参数
                     )
                     processing_thread.daemon = True  # 设置为守护线程
                     processing_thread.start()
@@ -677,26 +681,25 @@ def parse_crawler_filename(filename):
 
 
 # 在文件末尾添加这个函数
-def auto_process_video(video_id):
-    """上传完成后自动处理视频"""
+def auto_process_video(video_id, template="content"):
+    """
+    上传完成后自动处理视频
+    
+    Args:
+        video_id: 视频ID
+        template: 工作流模板 (full, light, content, ai_detection, fact_checking)
+    """
     try:
         # 等待1秒确保数据库事务已提交
         time.sleep(1)
 
-        # 调用处理API
-        response = requests.post(
-            url=f"http://localhost:8000/api/videos/{video_id}/process",
-            json={
-                "steps": [
-                    "transcription",
-                    "extract",
-                    "summary",
-                    "assessment",
-                    "classify",
-                    "report",
-                ]
-            },
-        )
-        print(f"视频 {video_id} 自动处理启动：{response.status_code}")
+        # 使用统一的工作流启动函数
+        response = start_video_workflow(video_id, template=template)
+        
+        if response and response.status_code == 200:
+            print(f"视频 {video_id} 自动处理启动成功：模板={template}")
+        else:
+            print(f"视频 {video_id} 自动处理启动失败")
+            
     except Exception as e:
         print(f"启动自动处理失败: {str(e)}")

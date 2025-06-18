@@ -51,7 +51,11 @@ class UserProfile(db.Model):
     is_series_user: Mapped[Optional[bool]] = mapped_column(Boolean)
     covers: Mapped[Dict] = mapped_column(JSON, default={})
     avatar_medium: Mapped[Optional[str]] = mapped_column(String(255))
-
+    # 新增加的字段
+    district: Mapped[Optional[str]] = mapped_column(String(100))  # 区/县信息
+    custom_verify: Mapped[Optional[str]] = mapped_column(String(255))  # 自定义认证信息
+    enterprise_verify_reason: Mapped[Optional[str]] = mapped_column(String(255))  # 企业认证原因
+    verification_type: Mapped[Optional[int]] = mapped_column(Integer, default=0)  # 认证类型
     # 添加与VideoFile的关系
     videos = relationship("VideoFile", back_populates="user")
 
@@ -67,11 +71,12 @@ class UserProfile(db.Model):
             "city": self.city or "未知",
             "province": self.province or "未知",
             "country": self.country or "未知",
-            "aweme_count": self.aweme_count,  # 1
-            "follower_count": self.follower_count,  # 2
-            "following_count": self.following_count,  # 3
-            "total_favorited": self.total_favorited,  # 4
-            "favoriting_count": self.favoriting_count,  # 5
+            "district": self.district or "未知",  # 添加district
+            "aweme_count": self.aweme_count,
+            "follower_count": self.follower_count,
+            "following_count": self.following_count,
+            "total_favorited": self.total_favorited,
+            "favoriting_count": self.favoriting_count,
             "user_age": self.user_age,
             "ip_location": self.ip_location,
             "show_favorite_list": self.show_favorite_list,
@@ -79,14 +84,15 @@ class UserProfile(db.Model):
             "is_mix_user": self.is_mix_user,
             "is_star": self.is_star,
             "is_series_user": self.is_series_user,
+            "custom_verify": self.custom_verify,  # 添加认证信息
+            "enterprise_verify_reason": self.enterprise_verify_reason,
+            "verification_type": self.verification_type,
             "covers": [
                 f"http://localhost:8000/api/userAnalyse/getCover/{x}.jpg"
                 for x in covers_data.values()
             ],
-            "avatar_medium":self.avatar_medium
+            "avatar_medium": self.avatar_medium
         }
-
-
 # 视频文件表(分析结果表)
 class VideoFile(db.Model):
     __tablename__ = "video_files"

@@ -129,12 +129,77 @@ const parseUserUrl = async () => {
     parsing.value = false;
   }
 };
-
+// 从用户数据中提取标签
+const generateUserTags = (userData) => {
+  const tags = [];
+  
+  // 根据认证状态添加标签
+  if (userData.custom_verify) {
+    tags.push('已认证');
+  }
+  
+  if (userData.is_gov_media_vip) {
+    tags.push('政务媒体');
+  }
+  
+  if (userData.is_star) {
+    tags.push('明星');
+  }
+  
+  // 根据粉丝数量添加标签
+  const followerCount = userData.follower_count || 0;
+  if (followerCount >= 10000000) {
+    tags.push('超级大V');
+  } else if (followerCount >= 1000000) {
+    tags.push('大V用户');
+  } else if (followerCount >= 100000) {
+    tags.push('知名用户');
+  }
+  
+  // 根据作品数量添加标签
+  const awemeCount = userData.aweme_count || 0;
+  if (awemeCount >= 1000) {
+    tags.push('高产创作者');
+  } else if (awemeCount >= 100) {
+    tags.push('活跃创作者');
+  }
+  
+  // 根据获赞数添加标签
+  const totalFavorited = userData.total_favorited || 0;
+  if (totalFavorited >= 10000000) {
+    tags.push('人气爆款');
+  } else if (totalFavorited >= 1000000) {
+    tags.push('高人气');
+  }
+  
+  // 根据地理位置添加标签
+  if (userData.ip_location) {
+    const location = userData.ip_location.replace('IP属地：', '');
+    if (location) {
+      tags.push(location);
+    }
+  }
+  
+  // 根据年龄添加标签
+  const userAge = userData.user_age;
+  if (userAge > 0) {
+    if (userAge < 25) {
+      tags.push('年轻用户');
+    } else if (userAge < 35) {
+      tags.push('青年用户');
+    } else {
+      tags.push('成熟用户');
+    }
+  }
+  
+  return tags;
+};
 // 将抖音API返回的用户数据转换为统一格式
 const convertDouyinUserData = (userData, userId) => {
   return {
     nickname: userData.nickname || '未知用户名',
     uniqueId: userId,
+    sec_uid: userData.sec_uid || userId, // 添加 sec_uid
     avatar: userData.avatar_larger?.url_list?.[0] || '',
     signature: userData.signature || '',
     verified: !!userData.custom_verify || userData.verification_type > 0,
@@ -142,45 +207,43 @@ const convertDouyinUserData = (userData, userId) => {
     followerCount: userData.follower_count || 0,
     likeCount: userData.total_favorited || 0,
     awemeCount: userData.aweme_count || 0,
+    
+    // 添加更多字段映射
+    gender: userData.gender || 0, // 0: 未知, 1: 男, 2: 女
+    city: userData.city || '',
+    province: userData.province || '',
+    country: userData.country || '',
+    district: userData.district || '',
+    favoriting_count: userData.favoriting_count || 0,
+    user_age: userData.user_age || -1,
+    ip_location: userData.ip_location || '',
+    
+    // 认证相关
+    custom_verify: userData.custom_verify || '',
+    enterprise_verify_reason: userData.enterprise_verify_reason || '',
+    verification_type: userData.verification_type || 0,
+    
+    // 布尔值字段
+    show_favorite_list: userData.show_favorite_list || false,
+    is_gov_media_vip: userData.is_gov_media_vip || false,
+    is_mix_user: userData.is_mix_user || false,
+    is_star: userData.is_star || false,
+    is_series_user: userData.is_series_user || false,
+    
+    // 其他头像链接
+    avatar_medium: userData.avatar_medium?.url_list?.[0] || '',
+    avatar_thumb: userData.avatar_thumb?.url_list?.[0] || '',
+    
     tags: generateUserTags(userData),
     location: userData.ip_location || '',
-    userAge: userData.user_age || '',
+    userAge: userData.user_age || -1,
   };
 };
 
 // 从用户数据中提取标签
-const generateUserTags = (userData) => {
-  const tags = [];
-
-  // 添加位置信息标签
-  if (userData.ip_location) {
-    tags.push(userData.ip_location);
-  }
-
-  // 添加视频数量标签
-  if (userData.aweme_count) {
-    tags.push(`${userData.aweme_count}个作品`);
-  }
-
-  // 添加认证信息标签
-  if (userData.custom_verify) {
-    tags.push(userData.custom_verify);
-  }
-
-  // 如果是企业账号
-  if (userData.enterprise_verify_reason) {
-    tags.push(userData.enterprise_verify_reason);
-  }
-
-  return tags;
-};
-
-// 开始内容分析
-// 开始内容分析
 const analyzeAccount = async () => {
   if (!accountInfo.value) return;
   
-  // 显示加载状态
   const loading = ElLoading.service({
     lock: true,
     text: '正在添加账号到分析系统...',
@@ -188,24 +251,50 @@ const analyzeAccount = async () => {
   });
   
   try {
-    // 从API响应中提取用户数据
+    // 提取完整的用户数据
     const userData = {
       platform: activePlatform.value,
       platform_user_id: accountInfo.value.uniqueId,
       sec_uid: accountInfo.value.sec_uid || accountInfo.value.uniqueId,
       nickname: accountInfo.value.nickname,
-      avatar: accountInfo.value.avatar?.medium?.url_list?.[0] || accountInfo.value.avatar,
-      gender: accountInfo.value.gender || '',
+      signature: accountInfo.value.signature || '',
+      
+      // 头像相关
+      avatar: accountInfo.value.avatar || '',
+      avatar_medium: accountInfo.value.avatar_medium || accountInfo.value.avatar || '',
+      
+      // 基础信息
+      gender: accountInfo.value.gender || 0,
+      city: accountInfo.value.city || '',
+      province: accountInfo.value.province || '',
+      country: accountInfo.value.country || '',
+      district: accountInfo.value.district || '',
+      
+      // 统计数据
       aweme_count: accountInfo.value.awemeCount || accountInfo.value.aweme_count || 0,
       follower_count: accountInfo.value.followerCount || accountInfo.value.follower_count || 0,
       following_count: accountInfo.value.followingCount || accountInfo.value.following_count || 0,
-      total_favorited: accountInfo.value.totalFavorited || accountInfo.value.total_favorited || 0,
-      user_age: accountInfo.value.userAge || accountInfo.value.user_age || 0,
-      location: accountInfo.value.ipLocation || accountInfo.value.ip_location || '',
-      signature: accountInfo.value.signature || ''
+      total_favorited: accountInfo.value.likeCount || accountInfo.value.total_favorited || 0,
+      favoriting_count: accountInfo.value.favoriting_count || 0,
+      
+      // 其他信息
+      user_age: accountInfo.value.userAge || accountInfo.value.user_age || -1,
+      ip_location: accountInfo.value.ip_location || accountInfo.value.location || '',
+      
+      // 认证信息
+      custom_verify: accountInfo.value.custom_verify || '',
+      enterprise_verify_reason: accountInfo.value.enterprise_verify_reason || '',
+      verification_type: accountInfo.value.verification_type || 0,
+      
+      // 布尔值
+      show_favorite_list: accountInfo.value.show_favorite_list || false,
+      is_gov_media_vip: accountInfo.value.is_gov_media_vip || false,
+      is_mix_user: accountInfo.value.is_mix_user || false,
+      is_star: accountInfo.value.is_star || false,
+      is_series_user: accountInfo.value.is_series_user || false,
     };
     
-    console.log('提交的用户数据:', userData);
+    console.log('提交的完整用户数据:', userData);
     
     // 发送请求到后端API添加用户
     const response = await axios.post('/api/account/add', userData);
@@ -213,29 +302,44 @@ const analyzeAccount = async () => {
     if (response.data.code === 200) {
       // 获取返回的用户ID
       const userId = response.data.data.user_id;
+      const taskId = response.data.data.task_id;
+      const isExisting = response.data.data.existing;
       
-      // 更新加载状态文本
-      loading.setText('正在获取账号视频数据...');
-      
-      // 获取视频数据
-      try {
-        const videoResponse = await axios.post(`/api/account/${userId}/fetch_videos`, {
-          max_videos: 30 // 最多获取30个视频
-        });
+      if (isExisting) {
+        // 账号已存在
+        ElMessage.warning(response.data.message);
+      } else {
+        // 新添加的账号，获取视频数据
+        loading.setText('正在获取账号视频数据...');
         
-        if (videoResponse.data.code === 200) {
-          ElMessage.success(`账号添加成功，已获取${videoResponse.data.data.videos_added}个视频`);
-        } else {
-          console.warn('获取视频数据部分失败:', videoResponse.data.message);
-          ElMessage.warning('账号添加成功，但视频数据获取不完整');
+        try {
+          const videoResponse = await axios.post(`/api/account/${userId}/fetch_videos`, {
+            max_videos: 30 // 最多获取30个视频
+          });
+          
+          if (videoResponse.data.code === 200) {
+            ElMessage.success(`账号添加成功，已获取${videoResponse.data.data.videos_added}个视频`);
+          } else {
+            console.warn('获取视频数据部分失败:', videoResponse.data.message);
+            ElMessage.warning('账号添加成功，但视频数据获取不完整');
+          }
+        } catch (videoError) {
+          console.error('获取视频数据失败:', videoError);
+          ElMessage.warning('账号添加成功，但视频数据获取失败');
         }
-      } catch (videoError) {
-        console.error('获取视频数据失败:', videoError);
-        ElMessage.warning('账号添加成功，但视频数据获取失败');
       }
       
-      // 跳转到用户内容页面
-      router.push(`/main/user-content?platform=${activePlatform.value}&userId=${userData.sec_uid}`);
+      // 延迟1秒后跳转到分析任务页面
+      setTimeout(() => {
+        router.push({
+          path: '/main/analysis-tasks',
+          query: {
+            highlight: taskId, // 高亮显示新添加的任务
+            new: !isExisting ? 'true' : 'false'
+          }
+        });
+      }, 1500);
+      
     } else {
       throw new Error(response.data.message || '添加账号失败');
     }

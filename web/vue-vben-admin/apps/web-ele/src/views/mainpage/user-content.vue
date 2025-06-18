@@ -65,6 +65,7 @@ import {
   Loading,
   ChatLineRound,
   Location,
+  UserFilled, // 添加这个图标
 } from '@element-plus/icons-vue';
 const loadingStats = ref(false);
 const statsData = ref({
@@ -82,7 +83,12 @@ const riskDistributionChart = ref(null);
 // ECharts实例
 let statusChartInstance = null;
 let riskChartInstance = null;
-
+const openDouyinProfile = () => {
+  if (accountInfo.value?.sec_uid) {
+    const url = `https://www.douyin.com/user/${accountInfo.value.sec_uid}`;
+    window.open(url, '_blank');
+  }
+};
 // 加载统计数据
 const loadStats = async () => {
   if (!accountInfo.value?.id) return;
@@ -500,7 +506,7 @@ const checkAnalysisStatus = async (row) => {
     if (response.data.code === 200) {
       const statusData = response.data.data;
       const previousStatus = row.analysis_status; // 保存之前的状态
-      
+
       // 更新状态
       row.analysis_status = statusData.status;
 
@@ -516,7 +522,7 @@ const checkAnalysisStatus = async (row) => {
         if (analysisTimers.value[row.aweme_id]) {
           clearInterval(analysisTimers.value[row.aweme_id]);
           delete analysisTimers.value[row.aweme_id];
-          
+
           // 只有当视频是从"处理中"变为"已完成"时，才显示消息
           // 或者是手动触发的分析（row.analyzing为true时）
           ElMessage.success('视频分析已完成');
@@ -821,11 +827,23 @@ onBeforeUnmount(() => {
         <div class="card-header">
           <span class="card-header-title">账号详情</span>
           <div class="card-header-actions">
+            <!-- 新增：访问抖音主页按钮 -->
+            <el-button
+              type="primary"
+              size="small"
+              plain
+              @click="openDouyinProfile"
+              v-if="accountInfo && accountInfo.sec_uid"
+            >
+              <el-icon><Share /></el-icon>
+              访问抖音主页
+            </el-button>
             <el-button
               type="primary"
               :loading="fetchingVideos"
               @click="fetchLatestVideos"
               size="small"
+              plain
             >
               <el-icon><Refresh /></el-icon>
               获取最新视频
@@ -833,6 +851,7 @@ onBeforeUnmount(() => {
             <el-button
               type="primary"
               size="small"
+              plain
               @click="loadStats"
               :loading="loadingStats"
             >
@@ -843,14 +862,14 @@ onBeforeUnmount(() => {
         </div>
       </template>
 
-      <!-- 改进的用户信息布局 -->
+      <!-- 简化的用户信息布局 -->
       <div class="user-info-container">
         <!-- 左侧：用户头像 -->
         <div class="user-avatar-section">
           <div class="account-avatar-container">
             <el-avatar
               :size="100"
-              :src="accountInfo.avatar"
+              :src="accountInfo.avatar_medium || accountInfo.avatar"
               class="account-avatar"
             />
             <div v-if="accountInfo.custom_verify" class="verified-badge">
@@ -861,11 +880,13 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 右侧：用户信息 -->
+        <!-- 右侧：基本用户信息 -->
         <div class="user-details-section">
-          <h2 class="account-name">{{ accountInfo.nickname }}</h2>
-          <div class="account-id">
-            {{ accountInfo.unique_id || accountInfo.sec_user_id }}
+          <div class="account-header">
+            <h2 class="account-name">{{ accountInfo.nickname }}</h2>
+            <div class="account-id">
+              ID: {{ accountInfo.sec_uid?.substring(0, 20) }}...
+            </div>
           </div>
 
           <div class="account-stats">
@@ -906,7 +927,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-
       <div class="analysis-section">
         <el-divider content-position="center">内容分析概览</el-divider>
         <div class="analysis-overview-section">

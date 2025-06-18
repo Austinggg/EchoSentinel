@@ -12,13 +12,17 @@ import {
   ElTag,
   ElResult,
   ElButton,
-  ElLoading
+  ElLoading,
 } from 'element-plus';
 import {
   Close,
   VideoPlay,
   Expand,
   Fold,
+  Document,
+  VideoCamera,
+  Warning,
+  TrendCharts,
 } from '@element-plus/icons-vue';
 
 // 创建markdown-it实例
@@ -61,6 +65,83 @@ const factCheckNotFound = ref(false);
 const reportLoading = ref(false);
 const reportData = ref(null);
 const reportError = ref(null);
+
+// 添加数字人检测状态跟踪
+const digitalHumanData = ref(null);
+const digitalHumanLoading = ref(false);
+
+// 数字人检测状态
+const digitalHumanStatus = computed(() => {
+  if (digitalHumanLoading.value) {
+    return { text: '检测中', color: 'warning' };
+  }
+  if (!digitalHumanData.value) {
+    return { text: '未检测', color: 'info' };
+  }
+  
+  const hasResults = digitalHumanData.value.face || digitalHumanData.value.body || digitalHumanData.value.overall;
+  if (hasResults) {
+    const isAI = digitalHumanData.value.comprehensive?.prediction === 'AI-Generated';
+    return { 
+      text: isAI ? 'AI生成' : '真实内容', 
+      color: isAI ? 'danger' : 'success' 
+    };
+  }
+  
+  return { text: '未完成', color: 'info' };
+});
+
+// 事实核查状态
+const factCheckStatus = computed(() => {
+  if (factCheckLoading.value) {
+    return { text: '核查中', color: 'warning' };
+  }
+  if (factCheckError.value) {
+    return { text: '核查失败', color: 'danger' };
+  }
+  if (!factCheckData.value) {
+    return { text: '未核查', color: 'info' };
+  }
+  
+  if (factCheckData.value.status === 'processing') {
+    return { text: '处理中', color: 'warning' };
+  }
+  if (factCheckData.value.status === 'completed') {
+    const hasIssues = factCheckData.value.results?.some(item => 
+      item.verification_result?.credibility === 'low' || 
+      item.verification_result?.accuracy === 'questionable'
+    );
+    return { 
+      text: hasIssues ? '发现问题' : '核查通过', 
+      color: hasIssues ? 'danger' : 'success' 
+    };
+  }
+  
+  return { text: '未完成', color: 'info' };
+});
+
+// 威胁报告状态
+const threatReportStatus = computed(() => {
+  if (reportLoading.value) {
+    return { text: '生成中', color: 'warning' };
+  }
+  if (reportError.value) {
+    return { text: '生成失败', color: 'danger' };
+  }
+  if (!reportData.value) {
+    return { text: '未生成', color: 'info' };
+  }
+  
+  if (reportData.value.risk_level) {
+    const level = reportData.value.risk_level;
+    return {
+      text: level === 'high' ? '高风险' : level === 'medium' ? '中风险' : '低风险',
+      color: level === 'high' ? 'danger' : level === 'medium' ? 'warning' : 'success'
+    };
+  }
+  
+  return { text: '已完成', color: 'success' };
+});
 
 // 新增：切换视频面板显示/隐藏
 const toggleVideoPanel = () => {
@@ -137,6 +218,24 @@ const copySubtitleText = () => {
       });
   } else {
     ElMessage.warning('没有可复制的文本');
+  }
+};
+
+// 加载数字人检测数据
+const loadDigitalHumanData = async () => {
+  try {
+    digitalHumanLoading.value = true;
+    const videoId = route.query.id;
+    if (!videoId) return;
+
+    const response = await axios.get(`/api/videos/${videoId}/digital-human/result`);
+    if (response.data.code === 200) {
+      digitalHumanData.value = response.data.data;
+    }
+  } catch (error) {
+    console.error('加载数字人检测数据失败:', error);
+  } finally {
+    digitalHumanLoading.value = false;
   }
 };
 
@@ -291,7 +390,14 @@ const handleTabChange = (key) => {
     loadReportDataOnly(route.query.id);
   } else if (key === 'factcheck' && !factCheckData.value && route.query.id) {
     loadFactCheckData();
+  } else if (key === 'digitalhuman' && !digitalHumanData.value && route.query.id) {
+    loadDigitalHumanData();
   }
+};
+
+// 点击统计项跳转到对应tab
+const clickStatItem = (tabKey) => {
+  handleTabChange(tabKey);
 };
 
 // 加载视频数据
@@ -381,8 +487,8 @@ onMounted(() => {
           </div>
         </div>
         <div class="header-controls">
-          <el-button 
-            :icon="isVideoCollapsed ? Expand : Fold" 
+          <el-button
+            :icon="isVideoCollapsed ? Expand : Fold"
             @click="toggleVideoPanel"
             type="primary"
             :text="true"
@@ -394,7 +500,10 @@ onMounted(() => {
       </div>
 
       <!-- 内容容器 -->
-      <div class="content-container" :class="{ 'video-collapsed': isVideoCollapsed }">
+      <div
+        class="content-container"
+        :class="{ 'video-collapsed': isVideoCollapsed }"
+      >
         <!-- 左侧视频面板 -->
         <transition name="slide-fade">
           <div v-show="!isVideoCollapsed" class="video-panel">
@@ -406,23 +515,23 @@ onMounted(() => {
                     <el-icon><VideoPlay /></el-icon>
                     视频播放
                   </span>
-                  <el-button 
-                    :icon="Close" 
-                    @click="toggleVideoPanel" 
-                    type="danger" 
+                  <el-button
+                    :icon="Close"
+                    @click="toggleVideoPanel"
+                    type="danger"
                     :text="true"
                     circle
                     size="small"
                   />
                 </div>
               </template>
-              
+
               <!-- 视频播放器 -->
               <div class="video-container">
-                <video 
+                <video
                   ref="videoPlayer"
-                  controls 
-                  :src="videoSrc" 
+                  controls
+                  :src="videoSrc"
                   class="video-player"
                   @loadedmetadata="onVideoLoaded"
                 >
@@ -432,13 +541,19 @@ onMounted(() => {
 
               <!-- 视频信息 -->
               <div class="video-info">
-                <h3 class="video-title">{{ videoData?.video?.title || '未知标题' }}</h3>
+                <h3 class="video-title">
+                  {{ videoData?.video?.title || '未知标题' }}
+                </h3>
                 <div class="video-meta">
                   <el-tag type="info" size="small" v-if="videoDuration">
                     <el-icon><VideoPlay /></el-icon>
                     {{ formatDuration(videoDuration) }}
                   </el-tag>
-                  <el-tag type="success" size="small" v-if="videoData?.video?.platform">
+                  <el-tag
+                    type="success"
+                    size="small"
+                    v-if="videoData?.video?.platform"
+                  >
                     {{ videoData.video.platform }}
                   </el-tag>
                 </div>
@@ -451,9 +566,121 @@ onMounted(() => {
                   >
                     {{ tag }}
                   </el-tag>
-                  <span v-if="videoData.video.tags.length > 3" class="more-tags">
+                  <span
+                    v-if="videoData.video.tags.length > 3"
+                    class="more-tags"
+                  >
                     +{{ videoData.video.tags.length - 3 }}
                   </span>
+                </div>
+                
+                <el-divider>分析概览</el-divider>
+
+                <div class="video-analysis-overview">
+                  <!-- 风险等级指示器 -->
+                  <div class="risk-indicator" v-if="reportData?.risk_level">
+                    <div class="risk-header">
+                      <span class="risk-label">风险等级</span>
+                      <el-tag
+                        :type="
+                          reportData.risk_level === 'high'
+                            ? 'danger'
+                            : reportData.risk_level === 'medium'
+                              ? 'warning'
+                              : 'success'
+                        "
+                        size="small"
+                      >
+                        {{
+                          reportData.risk_level === 'high'
+                            ? '高风险'
+                            : reportData.risk_level === 'medium'
+                              ? '中风险'
+                              : '低风险'
+                        }}
+                      </el-tag>
+                    </div>
+                    <el-progress
+                      :percentage="
+                        Math.round((reportData.risk_probability || 0) * 100)
+                      "
+                      :status="
+                        reportData.risk_level === 'high'
+                          ? 'exception'
+                          : reportData.risk_level === 'medium'
+                            ? 'warning'
+                            : 'success'
+                      "
+                      :stroke-width="6"
+                    />
+                  </div>
+
+                  <!-- 快速统计 -->
+                  <div class="quick-stats">
+                    <div class="stat-row">
+                      <div 
+                        class="stat-item clickable" 
+                        :data-status="'info'"
+                        @click="clickStatItem('subtitles')"
+                        title="点击查看字幕列表"
+                      >
+                        <el-icon><Document /></el-icon>
+                        <div class="stat-content">
+                          <div class="stat-value">
+                            {{ subtitlesData?.chunks?.length || 0 }}
+                          </div>
+                          <div class="stat-label">字幕段落</div>
+                        </div>
+                      </div>
+
+                      <div 
+                        class="stat-item clickable" 
+                        :data-status="digitalHumanStatus.color"
+                        @click="clickStatItem('digitalhuman')"
+                        title="点击查看数字人检测"
+                      >
+                        <el-icon><VideoCamera /></el-icon>
+                        <div class="stat-content">
+                          <div class="stat-value">
+                            {{ digitalHumanStatus.text }}
+                          </div>
+                          <div class="stat-label">数字人检测</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="stat-row">
+                      <div 
+                        class="stat-item clickable" 
+                        :data-status="factCheckStatus.color"
+                        @click="clickStatItem('factcheck')"
+                        title="点击查看事实核查"
+                      >
+                        <el-icon><Warning /></el-icon>
+                        <div class="stat-content">
+                          <div class="stat-value">
+                            {{ factCheckStatus.text }}
+                          </div>
+                          <div class="stat-label">事实核查</div>
+                        </div>
+                      </div>
+
+                      <div 
+                        class="stat-item clickable" 
+                        :data-status="threatReportStatus.color"
+                        @click="clickStatItem('threat')"
+                        title="点击查看威胁报告"
+                      >
+                        <el-icon><TrendCharts /></el-icon>
+                        <div class="stat-content">
+                          <div class="stat-value">
+                            {{ threatReportStatus.text }}
+                          </div>
+                          <div class="stat-label">威胁报告</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </el-card>
@@ -466,11 +693,11 @@ onMounted(() => {
             <template #header>
               <div class="card-header">
                 <span class="card-title">分析结果</span>
-                <el-button 
+                <el-button
                   v-if="isVideoCollapsed"
-                  :icon="VideoPlay" 
-                  @click="toggleVideoPanel" 
-                  type="primary" 
+                  :icon="VideoPlay"
+                  @click="toggleVideoPanel"
+                  type="primary"
                   :text="true"
                   size="small"
                 >
@@ -478,7 +705,7 @@ onMounted(() => {
                 </el-button>
               </div>
             </template>
-            
+
             <div class="card-content">
               <!-- 顶部导航菜单 -->
               <el-menu
@@ -494,7 +721,7 @@ onMounted(() => {
                 <el-menu-item index="factcheck">事实核查</el-menu-item>
                 <el-menu-item index="threat">威胁报告</el-menu-item>
               </el-menu>
-              
+
               <!-- 内容区域，可滚动 -->
               <div class="content-area">
                 <!-- 总结摘要内容 -->
@@ -502,6 +729,7 @@ onMounted(() => {
                   v-if="activeTab === 'summary'"
                   :summary="summary"
                   :loading="summaryLoading"
+                  :video-title="videoData?.video?.title"
                   @regenerate="regenerateSummary"
                 />
 
@@ -555,8 +783,8 @@ onMounted(() => {
       <!-- 悬浮切换按钮（视频收起时显示） -->
       <transition name="fade">
         <div v-show="isVideoCollapsed" class="floating-toggle">
-          <el-button 
-            :icon="VideoPlay" 
+          <el-button
+            :icon="VideoPlay"
             @click="toggleVideoPanel"
             type="primary"
             circle
@@ -569,6 +797,136 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* 新增：视频分析概览样式 */
+.video-analysis-overview {
+  margin-top: 16px;
+}
+
+.risk-indicator {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.risk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.risk-label {
+  font-size: 13px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.quick-stats {
+  margin-bottom: 16px;
+}
+
+.stat-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.stat-row:last-child {
+  margin-bottom: 0;
+}
+
+.stat-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #fafafa;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.stat-item.clickable {
+  cursor: pointer;
+}
+
+.stat-item.clickable:hover {
+  background: #f0f9eb;
+  border-color: #67c23a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.2);
+}
+
+.stat-item.clickable:active {
+  transform: translateY(0);
+}
+
+/* 根据状态添加不同的边框色 */
+.stat-item[data-status="success"] {
+  border-left: 3px solid #67c23a;
+}
+
+.stat-item[data-status="warning"] {
+  border-left: 3px solid #e6a23c;
+}
+
+.stat-item[data-status="danger"] {
+  border-left: 3px solid #f56c6c;
+}
+
+.stat-item[data-status="info"] {
+  border-left: 3px solid #909399;
+}
+
+.stat-item .el-icon {
+  color: #409eff;
+  font-size: 16px;
+}
+
+.stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #909399;
+  line-height: 1.2;
+}
+
+/* 分割线样式调整 */
+.video-info :deep(.el-divider) {
+  margin: 16px 0 12px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+.video-info :deep(.el-divider__text) {
+  font-size: 13px;
+  color: #606266;
+  font-weight: 500;
+  background: white;
+  padding: 0 12px;
+}
+
+/* 响应式调整 */
+@media (max-width: 480px) {
+  .stat-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
 .analysis-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -638,7 +996,8 @@ onMounted(() => {
   max-width: 100%;
 }
 
-.video-card, .analysis-card {
+.video-card,
+.analysis-card {
   height: 100%;
   border-radius: 12px;
   overflow: hidden;
@@ -736,14 +1095,6 @@ onMounted(() => {
   left: 30px;
   z-index: 1000;
 }
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 /* 动画效果 */
 .slide-fade-enter-active,
@@ -802,22 +1153,22 @@ onMounted(() => {
   .analysis-page {
     padding: 10px;
   }
-  
+
   .content-container {
     flex-direction: column;
     gap: 10px;
   }
-  
+
   .video-panel {
     flex: none;
   }
-  
+
   .page-header {
     flex-direction: column;
     gap: 10px;
     align-items: flex-start;
   }
-  
+
   .header-controls {
     align-self: flex-end;
   }
@@ -827,7 +1178,7 @@ onMounted(() => {
   .page-title {
     font-size: 20px;
   }
-  
+
   .breadcrumb-item {
     max-width: 200px;
   }
