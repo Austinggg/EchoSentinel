@@ -83,13 +83,21 @@ PROCESSING_STEPS = [
 WORKFLOW_TEMPLATES = {
     "full": {
         "name": "完整分析",
-        "description": "包含所有分析步骤的完整工作流",
-        "steps": ["transcription", "fact_check", "digital_human", "extract", "summary", "assessment", "classify", "report"]
+        "description": "包含所有分析步骤的完整工作流（面部+躯体+整体检测）",
+        "steps": ["transcription", "fact_check", "digital_human", "extract", "summary", "assessment", "classify", "report"],
+        "digital_human_config": {
+            "types": ["face", "body", "overall"],
+            "comprehensive": True
+        }
     },
     "light": {
         "name": "轻量分析", 
-        "description": "基础的转录和信息提取",
-        "steps": ["transcription", "digital_human","extract", "summary", "assessment", "classify", "report"]
+        "description": "基础的数字人检测（仅整体检测）和内容安全分析",
+        "steps": ["transcription", "digital_human", "extract", "summary", "assessment", "classify", "report"],
+        "digital_human_config": {
+            "types": ["overall"],
+            "comprehensive": False
+        }
     },
     "content": {
         "name": "内容分析",
@@ -275,7 +283,7 @@ def process_video_workflow(video_id, steps_to_run, app):
                 )
                 continue
             
-            # 检查依赖项
+            # 检查依赖项（数字人检测除外，它不依赖任何步骤）
             if 'depends_on' in step_def:
                 # 获取依赖任务状态
                 depend_task = db.session.query(VideoProcessingTask).filter(
@@ -326,13 +334,22 @@ def process_video_workflow(video_id, steps_to_run, app):
                 endpoint = step_def['endpoint'].format(video_id=video_id)
                 url = f"http://localhost:8000{endpoint}"
                 
-                # 特殊处理数字人检测，需要传递检测类型
+                # 根据模板和步骤配置不同的参数
                 request_data = {}
                 if step_id == "digital_human":
-                    request_data = {
-                        "types": ["face", "body", "overall"],
-                        "comprehensive": True
-                    }
+                    # 根据工作流模板选择检测类型
+                    template_name = determine_current_template(steps_to_run)
+                    # 直接从模板配置中获取数字人检测参数
+                    if template_name == "full":
+                        request_data = WORKFLOW_TEMPLATES["full"]["digital_human_config"]
+                    elif template_name == "light":
+                        request_data = WORKFLOW_TEMPLATES["light"]["digital_human_config"]
+                    else:
+                        # 兜底配置（理论上content模板不会走到这里）
+                        request_data = {
+                            "types": ["face", "body", "overall"],
+                            "comprehensive": True
+                        }
                 
                 # 发送请求
                 add_processing_log(
@@ -340,46 +357,59 @@ def process_video_workflow(video_id, steps_to_run, app):
                     task_id=task.id,
                     task_type=step_id,
                     level="INFO",
-                    message=f"调用API: {url}"
+                    message=f"调用API: {url}" + (f" with params: {request_data}" if request_data else "")
                 )
                 
-                # 设置超时时间，数字人检测需要更长时间
-                timeout = 1800 if step_id == "digital_human" else 300  # 30分钟 vs 5分钟
+                # 设置超时时间
+                timeout = 300  # 所有步骤都使用相同的超时时间
                 
                 response = requests.request(
                     method=step_def['method'],
                     url=url,
-                    json=request_data,
+                    json=request_data if request_data else None,
                     timeout=timeout
-                )
-                
-                task.progress = 80.0
-                db.session.commit()
-                
-                # 记录响应状态
-                add_processing_log(
-                    video_id=video_id,
-                    task_id=task.id,
-                    task_type=step_id,
-                    level="INFO",
-                    message=f"API响应状态: {response.status_code}"
                 )
                 
                 # 检查响应
                 if response.status_code >= 200 and response.status_code < 300:
-                    # 成功
-                    task.status = "completed"
-                    task.progress = 100.0
-                    task.completed_at = datetime.datetime.utcnow()
-                    db.session.commit()
-                    
-                    add_processing_log(
-                        video_id=video_id,
-                        task_id=task.id,
-                        task_type=step_id,
-                        level="INFO",
-                        message=f"{step_def['name']} 任务完成"
-                    )
+                    # 数字人检测：启动成功就算完成，不等待实际检测完成
+                    if step_id == "digital_human":
+                        # 只要API返回成功，就认为任务启动成功
+                        task.status = "completed"  # 标记为已完成（启动成功）
+                        task.progress = 100.0
+                        task.completed_at = datetime.datetime.utcnow()
+                        db.session.commit()
+                        
+                        add_processing_log(
+                            video_id=video_id,
+                            task_id=task.id,
+                            task_type=step_id,
+                            level="INFO",
+                            message="数字人检测任务已启动（后台异步执行中）"
+                        )
+                        
+                        # 启动独立的监控线程（可选）
+                        if hasattr(current_app, '_get_current_object'):
+                            monitor_thread = threading.Thread(
+                                target=monitor_digital_human_progress,
+                                args=(video_id, app),
+                                daemon=True
+                            )
+                            monitor_thread.start()
+                    else:
+                        # 其他任务直接标记完成
+                        task.status = "completed"
+                        task.progress = 100.0
+                        task.completed_at = datetime.datetime.utcnow()
+                        db.session.commit()
+                        
+                        add_processing_log(
+                            video_id=video_id,
+                            task_id=task.id,
+                            task_type=step_id,
+                            level="INFO",
+                            message=f"{step_def['name']} 任务完成"
+                        )
                 else:
                     # 失败
                     try:
@@ -410,6 +440,61 @@ def process_video_workflow(video_id, steps_to_run, app):
             message="视频处理工作流完成"
         )
 
+def determine_current_template(steps_to_run):
+    """根据步骤列表推断工作流模板"""
+    for template_name, template_config in WORKFLOW_TEMPLATES.items():
+        if set(steps_to_run) == set(template_config['steps']):
+            return template_name
+    return "custom"
+
+def monitor_digital_human_progress(video_id, app):
+    """独立监控数字人检测进度（可选功能）"""
+    with app.app_context():
+        start_time = time.time()
+        max_wait_time = 1800  # 30分钟超时
+        check_interval = 30   # 30秒检查一次
+        
+        while time.time() - start_time < max_wait_time:
+            try:
+                # 调用状态查询API
+                status_url = f"http://localhost:8000/api/videos/{video_id}/digital-human/status"
+                response = requests.get(status_url, timeout=30)
+                
+                if response.status_code == 200:
+                    status_data = response.json()
+                    if status_data.get('code') == 200:
+                        data = status_data.get('data', {})
+                        status = data.get('status')
+                        progress = data.get('progress', 0)
+                        current_step = data.get('current_step', '')
+                        
+                        add_processing_log(
+                            video_id=video_id,
+                            task_type="digital_human",
+                            level="INFO",
+                            message=f"数字人检测进度监控: {progress}%, 状态: {status}, 步骤: {current_step}"
+                        )
+                        
+                        if status in ["completed", "failed"]:
+                            add_processing_log(
+                                video_id=video_id,
+                                task_type="digital_human", 
+                                level="INFO",
+                                message=f"数字人检测最终状态: {status}"
+                            )
+                            break
+                
+                # 等待下次检查
+                time.sleep(check_interval)
+                
+            except Exception as e:
+                add_processing_log(
+                    video_id=video_id,
+                    task_type="digital_human",
+                    level="WARNING",
+                    message=f"监控数字人检测进度时出错: {str(e)}"
+                )
+                time.sleep(check_interval)
 @workflow_api.route('/api/videos/<video_id>/process/status', methods=['GET'])
 def get_processing_status(video_id):
     """获取视频处理状态"""
@@ -494,6 +579,38 @@ def cancel_processing(video_id):
         logger.exception(f"取消处理失败: {str(e)}")
         return error_response(500, f"取消失败: {str(e)}")
 
+@workflow_api.route('/api/workflow/templates/info', methods=['GET'])
+def get_workflow_template_info():
+    """获取工作流模板的详细信息"""
+    try:
+        template_name = request.args.get('template')
+        
+        if template_name and template_name in WORKFLOW_TEMPLATES:
+            return success_response({
+                "template": template_name,
+                "info": WORKFLOW_TEMPLATES[template_name],
+                "steps_detail": [
+                    {
+                        "id": step_id,
+                        "info": next((s for s in PROCESSING_STEPS if s['id'] == step_id), None)
+                    }
+                    for step_id in WORKFLOW_TEMPLATES[template_name]['steps']
+                ]
+            })
+        else:
+            return success_response({
+                "templates": WORKFLOW_TEMPLATES,
+                "available_steps": [
+                    {
+                        "id": step["id"],
+                        "name": step["name"],
+                        "category": step["category"]
+                    }
+                    for step in PROCESSING_STEPS
+                ]
+            })
+    except Exception as e:
+        return error_response(500, f"获取模板信息失败: {str(e)}")
 def start_video_workflow(video_id, template="content", custom_steps=None, app_context=None):
     """
     统一的视频工作流启动函数
@@ -545,3 +662,100 @@ def auto_process_after_upload(file_id):
         logger.info(f"已为视频 {file_id} 启动自动处理")
     except Exception as e:
         logger.exception(f"启动自动处理失败: {str(e)}")
+def wait_for_digital_human_completion(video_id, task, app, max_wait_time=1800):
+    """等待数字人检测完成"""
+    with app.app_context():
+        start_time = time.time()
+        check_interval = 10  # 10秒检查一次
+        
+        add_processing_log(
+            video_id=video_id,
+            task_id=task.id,
+            task_type="digital_human",
+            level="INFO",
+            message="开始等待数字人检测完成"
+        )
+        
+        while time.time() - start_time < max_wait_time:
+            try:
+                # 调用状态查询API
+                status_url = f"http://localhost:8000/api/videos/{video_id}/digital-human/status"
+                response = requests.get(status_url, timeout=30)
+                
+                if response.status_code == 200:
+                    status_data = response.json()
+                    if status_data.get('code') == 200:
+                        data = status_data.get('data', {})
+                        status = data.get('status')
+                        progress = data.get('progress', 0)
+                        current_step = data.get('current_step', '')
+                        
+                        # 更新任务进度
+                        task.progress = max(10.0, min(95.0, progress))  # 保持在10-95%之间
+                        db.session.commit()
+                        
+                        add_processing_log(
+                            video_id=video_id,
+                            task_id=task.id,
+                            task_type="digital_human",
+                            level="INFO",
+                            message=f"数字人检测进度: {progress}%, 当前步骤: {current_step}"
+                        )
+                        
+                        if status == "completed":
+                            # 任务完成
+                            task.status = "completed"
+                            task.progress = 100.0
+                            task.completed_at = datetime.datetime.utcnow()
+                            db.session.commit()
+                            
+                            add_processing_log(
+                                video_id=video_id,
+                                task_id=task.id,
+                                task_type="digital_human",
+                                level="INFO",
+                                message="数字人检测任务完成"
+                            )
+                            return True
+                            
+                        elif status == "failed":
+                            error_msg = data.get('error_message', '数字人检测失败')
+                            task.status = "failed"
+                            task.error = error_msg
+                            db.session.commit()
+                            
+                            add_processing_log(
+                                video_id=video_id,
+                                task_id=task.id,
+                                task_type="digital_human",
+                                level="ERROR",
+                                message=f"数字人检测失败: {error_msg}"
+                            )
+                            return False
+                
+                # 等待下次检查
+                time.sleep(check_interval)
+                
+            except Exception as e:
+                add_processing_log(
+                    video_id=video_id,
+                    task_id=task.id,
+                    task_type="digital_human",
+                    level="WARNING",
+                    message=f"检查数字人检测状态时出错: {str(e)}"
+                )
+                time.sleep(check_interval)
+        
+        # 超时
+        task.status = "failed"
+        task.error = f"数字人检测任务超时（超过{max_wait_time}秒）"
+        db.session.commit()
+        
+        add_processing_log(
+            video_id=video_id,
+            task_id=task.id,
+            task_type="digital_human",
+            level="ERROR",
+            message=f"数字人检测任务超时"
+        )
+        return False

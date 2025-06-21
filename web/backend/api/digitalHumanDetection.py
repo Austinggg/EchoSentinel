@@ -103,9 +103,9 @@ def update_task_progress_redis(video_id: str, progress: float, current_step: str
 
 
 def async_detect_digital_human(app, video_id, detection_types, comprehensive):
-    """异步执行数字人检测 - 修复应用上下文问题"""
+    """异步执行数字人检测 - 支持独立检测步骤"""
     
-    with app.app_context():  # 使用传入的应用实例创建上下文
+    with app.app_context():
         task_key = get_task_key(video_id)
         
         try:
@@ -118,7 +118,7 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                 "detection_types": detection_types,
                 "comprehensive": comprehensive,
                 "started_at": datetime.datetime.utcnow().isoformat(),
-                "estimated_duration": "15-20分钟"
+                "estimated_duration": f"{len(detection_types) * 5}-{len(detection_types) * 8}分钟"
             }
             update_task_status_redis(video_id, initial_status)
             
@@ -130,143 +130,187 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                 raise Exception("检测记录或视频不存在")
             
             video_path = get_video_file_path(video_id, video.extension)
-            results = {}
+            new_results = {}  # 本次新检测的结果
             
-            # 执行面部检测
-            if 'face' in detection_types:
-                logger.info(f"开始面部检测 - 视频ID: {video_id}")
-                update_task_progress_redis(video_id, 10, "face_detection")
-                
-                face_result = call_detection_service('aigc/detect/face', video_path)
-                detection.face_ai_probability = face_result['ai_probability']
-                detection.face_human_probability = face_result['human_probability']
-                detection.face_confidence = face_result['confidence']
-                detection.face_prediction = face_result['prediction']
-                detection.face_raw_results = face_result['raw_results']
-                results['face'] = face_result
-                
-                # 更新数据库和Redis
-                detection.progress = 33
-                detection.current_step = "face_completed"
-                db.session.commit()
-                update_task_progress_redis(video_id, 33, "face_completed")
-                logger.info(f"面部检测完成 - 视频ID: {video_id}, 结果: {face_result['prediction']}")
-                
-            # 执行躯体检测
-            if 'body' in detection_types:
-                logger.info(f"开始躯体检测 - 视频ID: {video_id}")
-                update_task_progress_redis(video_id, 40, "body_detection")
-                
-                body_result = call_detection_service('aigc/detect/body', video_path)
-                detection.body_ai_probability = body_result['ai_probability']
-                detection.body_human_probability = body_result['human_probability']
-                detection.body_confidence = body_result['confidence']
-                detection.body_prediction = body_result['prediction']
-                detection.body_raw_results = body_result['raw_results']
-                results['body'] = body_result
-                
-                # 更新数据库和Redis
-                detection.progress = 66
-                detection.current_step = "body_completed"
-                db.session.commit()
-                update_task_progress_redis(video_id, 66, "body_completed")
-                logger.info(f"躯体检测完成 - 视频ID: {video_id}, 结果: {body_result['prediction']}")
-                
-            # 执行整体检测
-            if 'overall' in detection_types:
-                logger.info(f"开始整体检测 - 视频ID: {video_id}")
-                update_task_progress_redis(video_id, 70, "overall_detection")
-                
-                overall_result = call_detection_service('aigc/detect/overall', video_path)
-                detection.overall_ai_probability = overall_result['ai_probability']
-                detection.overall_human_probability = overall_result['human_probability']
-                detection.overall_confidence = overall_result['confidence']
-                detection.overall_prediction = overall_result['prediction']
-                detection.overall_raw_results = overall_result['raw_results']
-                results['overall'] = overall_result
-                
-                # 更新数据库和Redis
-                detection.progress = 90
-                detection.current_step = "overall_completed"
-                db.session.commit()
-                update_task_progress_redis(video_id, 90, "overall_completed")
-                logger.info(f"整体检测完成 - 视频ID: {video_id}, 结果: {overall_result['prediction']}")
+            total_steps = len(detection_types) + (1 if comprehensive else 0)
+            current_step = 0
             
-            # 综合评估
-            if comprehensive and len(detection_types) >= 2:
+            # 并行或串行执行检测（这里保持串行以简化错误处理）
+            detection_methods = {
+                'face': ('aigc/detect/face', 'face_detection'),
+                'body': ('aigc/detect/body', 'body_detection'), 
+                'overall': ('aigc/detect/overall', 'overall_detection')
+            }
+            
+            for detection_type in detection_types:
+                if detection_type not in detection_methods:
+                    continue
+                    
+                endpoint, step_name = detection_methods[detection_type]
+                current_step += 1
+                
+                logger.info(f"开始{detection_type}检测 - 视频ID: {video_id}")
+                progress = int((current_step - 0.5) / total_steps * 90)  # 留10%给综合评估
+                update_task_progress_redis(video_id, progress, step_name)
+                
+                # 更新对应模块状态为processing
+                setattr(detection, f'{detection_type}_status', 'processing')
+                setattr(detection, f'{detection_type}_started_at', datetime.datetime.utcnow())
+                db.session.commit()
+                
+                try:
+                    result = call_detection_service(endpoint, video_path)
+                    
+                    # 更新数据库对应字段
+                    setattr(detection, f'{detection_type}_ai_probability', result['ai_probability'])
+                    setattr(detection, f'{detection_type}_human_probability', result['human_probability'])
+                    setattr(detection, f'{detection_type}_confidence', result['confidence'])
+                    setattr(detection, f'{detection_type}_prediction', result['prediction'])
+                    setattr(detection, f'{detection_type}_raw_results', result['raw_results'])
+                    
+                    # 更新模块状态为完成
+                    setattr(detection, f'{detection_type}_status', 'completed')
+                    setattr(detection, f'{detection_type}_completed_at', datetime.datetime.utcnow())
+                    setattr(detection, f'{detection_type}_error_message', None)
+                    
+                    new_results[detection_type] = result
+                    
+                    # 更新进度
+                    progress = int(current_step / total_steps * 90)
+                    detection.progress = progress
+                    detection.current_step = f"{detection_type}_completed"
+                    db.session.commit()
+                    update_task_progress_redis(video_id, progress, f"{detection_type}_completed")
+                    
+                    logger.info(f"{detection_type}检测完成 - 视频ID: {video_id}, 结果: {result['prediction']}")
+                    
+                except Exception as detection_error:
+                    logger.error(f"{detection_type}检测失败 - 视频ID: {video_id}, 错误: {str(detection_error)}")
+                    
+                    # 更新模块状态为失败
+                    setattr(detection, f'{detection_type}_status', 'failed')
+                    setattr(detection, f'{detection_type}_error_message', str(detection_error))
+                    db.session.commit()
+                    
+                    # 继续其他检测，不中断整个流程
+                    continue
+            
+            # 综合评估 - 修复：基于数据库中所有可用的检测结果
+            if comprehensive:
                 logger.info(f"开始综合评估 - 视频ID: {video_id}")
                 update_task_progress_redis(video_id, 95, "comprehensive_analysis")
                 
-                # 计算综合结果
-                weights = {"face": 0.3, "body": 0.2, "overall": 0.5}
-                total_weight = sum(weights[dt] for dt in detection_types if dt in weights)
+                # 更新综合评估状态为processing
+                detection.comprehensive_status = 'processing'
+                detection.comprehensive_started_at = datetime.datetime.utcnow()
+                db.session.commit()
                 
-                weighted_ai_score = 0
-                weighted_human_score = 0
-                predictions = []
-                
-                for dt in detection_types:
-                    if dt in results and dt in weights:
-                        weight = weights[dt] / total_weight  # 归一化权重
-                        weighted_ai_score += results[dt]['ai_probability'] * weight
-                        weighted_human_score += results[dt]['human_probability'] * weight
-                        predictions.append(results[dt]['prediction'])
-                
-                # 投票统计
-                ai_votes = predictions.count("AI-Generated")
-                human_votes = predictions.count("Human")
-                consensus = ai_votes >= len(predictions) / 2
-                
-                # 一致性惩罚
-                confidence_penalty = 0.1 if abs(ai_votes - human_votes) == 1 else 0
-                final_confidence = max(weighted_ai_score, weighted_human_score) - confidence_penalty
-                
-                detection.comprehensive_ai_probability = weighted_ai_score
-                detection.comprehensive_human_probability = weighted_human_score
-                detection.comprehensive_confidence = max(0, min(1, final_confidence))
-                detection.comprehensive_prediction = "AI-Generated" if consensus else "Human"
-                detection.comprehensive_consensus = consensus
-                detection.comprehensive_votes = {"ai": ai_votes, "human": human_votes}
-                
-                results['comprehensive'] = {
-                    "ai_probability": weighted_ai_score,
-                    "human_probability": weighted_human_score,
-                    "confidence": detection.comprehensive_confidence,
-                    "prediction": detection.comprehensive_prediction,
-                    "consensus": consensus,
-                    "votes": {"ai": ai_votes, "human": human_votes}
-                }
-                
-                logger.info(f"综合评估完成 - 视频ID: {video_id}, 结果: {detection.comprehensive_prediction}")
-            
-            # 更新VideoFile表
-            if 'comprehensive' in results:
-                video.digital_human_probability = results['comprehensive']['ai_probability']
-            elif 'overall' in results:
-                video.digital_human_probability = results['overall']['ai_probability']
-            elif 'face' in results:
-                video.digital_human_probability = results['face']['ai_probability']
-            
-            # 标记完成
-            detection.status = "completed"
-            detection.progress = 100
-            detection.current_step = "completed"
-            detection.completed_at = datetime.datetime.utcnow()  # 修复拼写错误
-            db.session.commit()
-            
-            # 更新Redis状态为完成
-            final_status = {
-                "video_id": video_id,
-                "status": "completed",
-                "progress": 100,
-                "current_step": "completed",
-                "completed_at": datetime.datetime.utcnow().isoformat(),
-                "results": detection.to_dict()
-            }
-            update_task_status_redis(video_id, final_status)
-            
-            logger.info(f"异步数字人检测完成 - 视频ID: {video_id}")
-            
+                try:
+                    # 重新查询数据库获取所有可用的检测结果
+                    detection = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+                    all_results = {}
+                    
+                    # 收集数据库中所有可用的检测结果
+                    if detection.face_ai_probability is not None:
+                        all_results['face'] = {
+                            'ai_probability': detection.face_ai_probability,
+                            'human_probability': detection.face_human_probability,
+                            'confidence': detection.face_confidence,
+                            'prediction': detection.face_prediction,
+                            'raw_results': detection.face_raw_results
+                        }
+                    
+                    if detection.body_ai_probability is not None:
+                        all_results['body'] = {
+                            'ai_probability': detection.body_ai_probability,
+                            'human_probability': detection.body_human_probability,
+                            'confidence': detection.body_confidence,
+                            'prediction': detection.body_prediction,
+                            'raw_results': detection.body_raw_results
+                        }
+                    
+                    if detection.overall_ai_probability is not None:
+                        all_results['overall'] = {
+                            'ai_probability': detection.overall_ai_probability,
+                            'human_probability': detection.overall_human_probability,
+                            'confidence': detection.overall_confidence,
+                            'prediction': detection.overall_prediction,
+                            'raw_results': detection.overall_raw_results
+                        }
+                    
+                    # 基于所有可用结果计算综合评估
+                    if len(all_results) > 0:
+                        weights = {"face": 0.3, "body": 0.2, "overall": 0.5}
+                        available_weights = {dt: weights[dt] for dt in all_results.keys() if dt in weights}
+                        
+                        if available_weights:
+                            total_weight = sum(available_weights.values())
+                            
+                            # 重新归一化权重
+                            normalized_weights = {k: v/total_weight for k, v in available_weights.items()}
+                            
+                            weighted_ai_score = sum(all_results[dt]['ai_probability'] * normalized_weights[dt] 
+                                                  for dt in normalized_weights.keys())
+                            weighted_human_score = sum(all_results[dt]['human_probability'] * normalized_weights[dt] 
+                                                     for dt in normalized_weights.keys())
+                            
+                            predictions = [all_results[dt]['prediction'] for dt in all_results.keys()]
+                            
+                            # 计算一致性
+                            ai_votes = predictions.count("AI-Generated")
+                            human_votes = predictions.count("Human")
+                            consensus = len(set(predictions)) == 1  # 所有预测一致
+                            
+                            # 置信度计算
+                            base_confidence = max(weighted_ai_score, weighted_human_score)
+                            confidence_penalty = 0 if consensus else 0.1  # 不一致时降低置信度
+                            final_confidence = max(0, min(1, base_confidence - confidence_penalty))
+                            
+                            # 更新综合评估结果
+                            detection.comprehensive_ai_probability = weighted_ai_score
+                            detection.comprehensive_human_probability = weighted_human_score
+                            detection.comprehensive_confidence = final_confidence
+                            detection.comprehensive_prediction = "AI-Generated" if weighted_ai_score > weighted_human_score else "Human"
+                            detection.comprehensive_consensus = consensus
+                            detection.comprehensive_votes = {"ai": ai_votes, "human": human_votes}
+                            
+                            # 更新综合评估状态为完成
+                            detection.comprehensive_status = 'completed'
+                            detection.comprehensive_completed_at = datetime.datetime.utcnow()
+                            detection.comprehensive_error_message = None
+                            
+                            # 将综合评估结果也加入结果集
+                            all_results['comprehensive'] = {
+                                "ai_probability": weighted_ai_score,
+                                "human_probability": weighted_human_score,
+                                "confidence": final_confidence,
+                                "prediction": detection.comprehensive_prediction,
+                                "consensus": consensus,
+                                "votes": {"ai": ai_votes, "human": human_votes},
+                                "available_detections": list(all_results.keys())
+                            }
+                            
+                            logger.info(f"综合评估完成 - 视频ID: {video_id}, 基于检测: {list(all_results.keys())}, 结果: {detection.comprehensive_prediction}")
+                            
+                            # 更新最终结果变量为所有结果
+                            final_results = all_results
+                        else:
+                            # 如果没有有效的权重配置，使用新检测结果
+                            final_results = new_results
+                    else:
+                        # 如果没有任何结果，使用新检测结果
+                        final_results = new_results
+                        
+                except Exception as comprehensive_error:
+                    logger.error(f"综合评估失败 - 视频ID: {video_id}, 错误: {str(comprehensive_error)}")
+                    
+                    # 更新综合评估状态为失败
+                    detection.comprehensive_status = 'failed'
+                    detection.comprehensive_error_message = str(comprehensive_error)
+                    db.session.commit()
+                    
+                    # 即使综合评估失败，也继续使用新检测结果
+                    final_results = new_results
         except Exception as e:
             # 更新数据库状态为失败
             try:
@@ -295,7 +339,7 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
 
 @digital_human_api.route('/api/videos/<video_id>/digital-human/detect', methods=['POST'])
 def detect_digital_human(video_id):
-    """对指定视频进行数字人检测 - Redis增强版本"""
+    """对指定视频进行数字人检测 - 支持选择性检测"""
     try:
         # 查询视频是否存在
         video = VideoFile.query.filter_by(id=video_id).first()
@@ -339,9 +383,21 @@ def detect_digital_human(video_id):
             detection = DigitalHumanDetection(video_id=video_id)
             db.session.add(detection)
         
-        # 获取检测参数
-        detection_types = request.json.get('types', ['face', 'body', 'overall']) if request.json else ['face', 'body', 'overall']
-        comprehensive = request.json.get('comprehensive', True) if request.json else True
+        # 获取检测参数 - 允许选择性检测
+        data = request.get_json() if request.content_type == 'application/json' else {}
+        detection_types = data.get('types', ['face', 'body', 'overall'])
+        comprehensive = data.get('comprehensive', True)
+        
+        # 验证检测类型
+        valid_types = {'face', 'body', 'overall'}
+        detection_types = [dt for dt in detection_types if dt in valid_types]
+        
+        if not detection_types:
+            return error_response(400, "至少需要选择一种检测类型")
+        
+        # 如果只有一种检测类型，自动关闭综合评估
+        if len(detection_types) == 1:
+            comprehensive = False
         
         # 更新数据库状态为处理中
         detection.status = "processing"
@@ -365,10 +421,10 @@ def detect_digital_human(video_id):
         return success_response({
             "video_id": video_id,
             "status": "processing",
-            "message": "检测任务已启动，请通过状态查询API获取进度",
+            "message": f"检测任务已启动，将执行{len(detection_types)}个检测模块",
             "detection_types": detection_types,
             "comprehensive": comprehensive,
-            "estimated_duration": "15-20分钟",
+            "estimated_duration": f"{len(detection_types) * 5}-{len(detection_types) * 8}分钟",
             "task_key": get_task_key(video_id)
         })
         
@@ -500,6 +556,7 @@ def get_digital_human_result(video_id):
             "filename": video.filename,
             "status": detection.status,
             "detection": detection.to_dict(),
+            "completed_at": detection.completed_at.isoformat() if detection.completed_at else None,
             "summary": {
                 "final_prediction": None,
                 "confidence": None,

@@ -491,10 +491,17 @@ def delete_video_with_related(video_id):
 
                 # 2. 删除处理日志
                 if task_ids:
-                    connection.execute(
-                        db.text("DELETE FROM processing_logs WHERE task_id IN :task_ids"),
-                        {"task_ids": tuple(task_ids) if len(task_ids) > 1 else f"({task_ids[0]})"}
-                    )
+                    # 处理多个task_ids的情况
+                    if len(task_ids) > 1:
+                        task_ids_str = "(" + ",".join([f"'{task_id}'" for task_id in task_ids]) + ")"
+                        connection.execute(
+                            db.text(f"DELETE FROM processing_logs WHERE task_id IN {task_ids_str}")
+                        )
+                    else:
+                        connection.execute(
+                            db.text("DELETE FROM processing_logs WHERE task_id = :task_id"),
+                            {"task_id": task_ids[0]}
+                        )
                 
                 # 也删除直接关联到视频的日志
                 connection.execute(
@@ -508,31 +515,67 @@ def delete_video_with_related(video_id):
                     {"video_id": video_id}
                 )
                 
-                # 4. 删除内容分析
+                # 4. 删除数字人检测结果 (新增)
+                connection.execute(
+                    db.text("DELETE FROM digital_human_detections WHERE video_id = :video_id"),
+                    {"video_id": video_id}
+                )
+                
+                # 5. 删除内容分析
                 connection.execute(
                     db.text("DELETE FROM content_analysis WHERE video_id = :video_id"),
                     {"video_id": video_id}
                 )
                 
-                # 5. 删除视频转录
+                # 6. 删除视频转录
                 connection.execute(
                     db.text("DELETE FROM video_transcripts WHERE video_id = :video_id"),
                     {"video_id": video_id}
                 )
                 
-                # 6. 更新抖音视频引用
+                # 7. 删除事实核查结果 (如果有这个表)
+                try:
+                    connection.execute(
+                        db.text("DELETE FROM fact_check_results WHERE video_id = :video_id"),
+                        {"video_id": video_id}
+                    )
+                except Exception:
+                    # 如果表不存在，忽略错误
+                    pass
+                
+                # 8. 删除信息提取结果 (如果有这个表)
+                try:
+                    connection.execute(
+                        db.text("DELETE FROM information_extractions WHERE video_id = :video_id"),
+                        {"video_id": video_id}
+                    )
+                except Exception:
+                    # 如果表不存在，忽略错误
+                    pass
+                
+                # 9. 删除分类结果 (如果有这个表)
+                try:
+                    connection.execute(
+                        db.text("DELETE FROM video_classifications WHERE video_id = :video_id"),
+                        {"video_id": video_id}
+                    )
+                except Exception:
+                    # 如果表不存在，忽略错误
+                    pass
+                
+                # 10. 更新抖音视频引用
                 connection.execute(
                     db.text("UPDATE douyin_videos SET video_file_id = NULL WHERE video_file_id = :video_id"),
                     {"video_id": video_id}
                 )
                 
-                # 7. 最后删除视频文件记录
+                # 11. 最后删除视频文件记录
                 connection.execute(
                     db.text("DELETE FROM video_files WHERE id = :video_id"),
                     {"video_id": video_id}
                 )
 
-        # 8. 尝试删除磁盘上的文件(不阻止API响应)
+        # 12. 尝试删除磁盘上的文件(不阻止API响应)
         try:
             # 删除视频文件和缩略图
             video_path = get_video_file_path(video_id, video.extension)
@@ -549,8 +592,10 @@ def delete_video_with_related(video_id):
         return success_response({"video_id": video_id, "deleted": True})
 
     except Exception as e:
-        logger.exception(f"删除视频时发生错误: {str(e)}")
+        print(f"删除视频时发生错误: {str(e)}")
         return error_response(500, f"服务器内部错误: {str(e)}")
+    
+    
 # 添加生成缩略图的独立函数
 def generate_video_thumbnail(video_path, file_id):
     """根据视频生成缩略图，并返回是否成功"""

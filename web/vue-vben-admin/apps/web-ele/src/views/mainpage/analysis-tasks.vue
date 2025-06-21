@@ -439,7 +439,22 @@ onMounted(() => {
             sortable="custom"
           >
             <template #default="{ row }">
+              <!-- 如果是等待中或处理中状态，显示占位内容 -->
+              <div v-if="row.status === 'pending'" class="placeholder-content">
+                <ElTag size="small" type="info">等待分析</ElTag>
+              </div>
+              <div v-else-if="row.status === 'processing'" class="placeholder-content">
+                <ElTag size="small" type="warning">
+                  <ElIcon><Loading /></ElIcon>
+                  分析中
+                </ElTag>
+              </div>
+              <div v-else-if="row.status === 'failed'" class="placeholder-content">
+                <ElTag size="small" type="danger">分析失败</ElTag>
+              </div>
+              <!-- 完成状态显示实际概率 -->
               <ElProgress
+                v-else
                 :percentage="(row.digital_human_probability || 0) * 100"
                 :color="getDigitalHumanColor(row.digital_human_probability)"
                 :stroke-width="8"
@@ -456,13 +471,27 @@ onMounted(() => {
             sortable="custom"
           >
             <template #default="{ row }">
+              <!-- 如果是等待中或处理中状态，显示占位内容 -->
+              <div v-if="row.status === 'pending'" class="placeholder-content">
+                <ElTag size="small" type="info">待评估</ElTag>
+              </div>
+              <div v-else-if="row.status === 'processing'" class="placeholder-content">
+                <ElTag size="small" type="warning">
+                  <ElIcon><Loading /></ElIcon>
+                  评估中
+                </ElTag>
+              </div>
+              <div v-else-if="row.status === 'failed'" class="placeholder-content">
+                <ElTag size="small" type="danger">评估失败</ElTag>
+              </div>
+              <!-- 完成状态显示实际风险等级 -->
               <ElTag
-                v-if="row.risk_level"
+                v-else-if="row.risk_level"
                 :type="getRiskLevelType(row.risk_level)"
               >
                 {{ getRiskLevelName(row.risk_level) }}
               </ElTag>
-              <span v-else>-</span>
+              <ElTag v-else size="small" type="info">未知</ElTag>
             </template>
           </ElTableColumn>
 
@@ -534,7 +563,7 @@ onMounted(() => {
           <ElPagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
-            :page-sizes="[10, 20, 50, 100]"
+            :page-sizes="[5,10, 20, 50, 100]"
             layout="total, sizes, prev, pager, next, jumper"
             :total="totalItems"
             @size-change="handleSizeChange"
@@ -740,5 +769,19 @@ onMounted(() => {
 
 .action-buttons .el-button + .el-button {
   margin-left: 0;
+}
+
+/* 占位内容样式 */
+.placeholder-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #909399;
+  font-size: 14px;
+}
+
+.placeholder-content .el-tag {
+  margin-right: 8px;
 }
 </style>

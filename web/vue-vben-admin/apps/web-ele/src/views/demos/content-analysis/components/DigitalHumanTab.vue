@@ -4,40 +4,24 @@ import axios from 'axios';
 import { useRoute } from 'vue-router';
 import {
   ElButton,
-  ElProgress,
-  ElCard,
-  ElImage,
-  ElTag,
-  ElDivider,
-  ElSteps,
-  ElStep,
   ElIcon,
   ElMessage,
-  ElSkeleton,
-  ElSkeletonItem,
-  ElAlert,
-  ElCollapse,
-  ElCollapseItem,
-  ElTable,
-  ElTableColumn,
-  ElTooltip,
-  ElDescriptions,
-  ElDescriptionsItem,
-  ElStatistic,
+  ElCard,
 } from 'element-plus';
 import {
   ArrowLeft,
   ArrowRight,
-  Camera,
   VideoCamera,
-  Picture,
   Refresh,
   Warning,
-  InfoFilled,
-  QuestionFilled,
-  CircleCheck,
-  CircleClose,
+  VideoPlay, // 使用 VideoPlay 替代 Play
 } from '@element-plus/icons-vue';
+
+// 导入拆分的子组件
+import ComprehensiveTab from './digital-human/ComprehensiveTab.vue';
+import FaceDetectionTab from './digital-human/FaceDetectionTab.vue';
+import BodyDetectionTab from './digital-human/BodyDetectionTab.vue';
+import OverallDetectionTab from './digital-human/OverallDetectionTab.vue';
 
 const props = defineProps({
   videoData: {
@@ -47,75 +31,8 @@ const props = defineProps({
 });
 
 const route = useRoute();
-const retestSingleStep = async (stepType) => {
-  try {
-    const videoId = getVideoId();
-    if (!videoId) {
-      ElMessage.error('未找到视频ID');
-      return;
-    }
 
-    detectionStatus.value = 'loading';
-    detectionError.value = null;
-
-    console.log(`开始单步重检: ${stepType}`);
-
-    const response = await axios.post(`/api/videos/${videoId}/digital-human/detect`, {
-      types: [stepType], // 只检测指定类型
-      comprehensive: false, // 单步检测不需要综合评估
-    });
-
-    if (response.data.code === 200) {
-      detectionStatus.value = 'processing';
-      ElMessage.success(`${getStepName(stepType)}重新检测已启动`);
-      startPolling();
-    } else {
-      throw new Error(response.data.message || '启动重检失败');
-    }
-  } catch (error) {
-    console.error('单步重检失败:', error);
-    detectionStatus.value = 'completed'; // 恢复到完成状态
-    ElMessage.error('重检失败: ' + (error.response?.data?.message || error.message));
-  }
-};
-const getStepName = (stepType) => {
-  const names = {
-    face: '面部检测',
-    body: '躯体检测',
-    overall: '整体检测'
-  };
-  return names[stepType] || stepType;
-};
-// 修复躯体数据计算
-const bodyDataFixed = computed(() => {
-  if (!detectionData.value?.body) return null;
-  
-  const body = detectionData.value.body;
-  
-  // 修复：如果所有检测项目都正常，应该是高真实度
-  if (body.raw_results?.total_score === 1.0) {
-    return {
-      ...body,
-      // 修正显示数据
-      human_probability: 1.0, // 100% 真实
-      ai_probability: 0.0,    // 0% AI
-      confidence: 1.0,        // 100% 置信度
-      prediction: 'Human'     // 预测为真实
-    };
-  }
-  
-  return body;
-});
-// 检测步骤 - 扩展为4个步骤
-const activeStep = ref(0);
-const steps = [
-  { title: '面部检测', description: '基于Xception模型的面部伪造检测' },
-  { title: '躯体检测', description: '基于多模态LLM的躯体异常检测' },
-  { title: '整体检测', description: '全局特征的综合性分析检测' },
-  { title: '综合评估', description: '多层次融合决策与最终判定' },
-];
-
-// 检测状态管理
+// 检测状态管理 - 改进状态逻辑
 const detectionStatus = ref('not_started');
 const detectionData = ref(null);
 const detectionError = ref(null);
@@ -123,6 +40,49 @@ const isPolling = ref(false);
 const pollingTimer = ref(null);
 const maxRetries = ref(0);
 const MAX_RETRIES = 100;
+
+// 新增：单独跟踪各个检测步骤的状态
+const stepStatuses = ref({
+  face: 'not_started',     // not_started, processing, completed, failed
+  body: 'not_started',
+  overall: 'not_started',
+  comprehensive: 'not_started'
+});
+
+// 新增：检测进度信息
+const detectionProgress = ref({
+  current_step: '',
+  progress: 0,
+  processing_types: [] // 当前正在处理的检测类型
+});
+
+// 计算整体检测状态 - 支持部分完成
+const overallDetectionStatus = computed(() => {
+  // 如果从未开始过任何检测
+  if (!detectionData.value && detectionStatus.value === 'not_started') {
+    return 'not_started';
+  }
+  
+  // 如果有任何检测在进行中
+  const hasProcessing = Object.values(stepStatuses.value).some(status => status === 'processing');
+  if (hasProcessing) {
+    return 'partial_processing'; // 新状态：部分处理中
+  }
+  
+  // 如果有任何检测完成
+  const hasCompleted = Object.values(stepStatuses.value).some(status => status === 'completed');
+  if (hasCompleted) {
+    return 'partial_completed'; // 新状态：部分完成
+  }
+  
+  // 如果所有检测都失败
+  const allFailed = Object.values(stepStatuses.value).every(status => status === 'failed' || status === 'not_started');
+  if (allFailed && Object.values(stepStatuses.value).some(status => status === 'failed')) {
+    return 'failed';
+  }
+  
+  return 'not_started';
+});
 
 // 权重配置
 const DETECTION_WEIGHTS = {
@@ -140,178 +100,157 @@ const BODY_CRITERIA = [
   { name: '动作流畅度', description: '检查动作的自然性和物理合理性', weight: 1.4 },
 ];
 
-// 获取视频ID
-const getVideoId = () => {
-  return route.query.id || props.videoData?.video?.id;
-};
-
-// 轮询和状态管理函数
-const stopPolling = () => {
-  console.log('停止轮询');
-  isPolling.value = false;
-  maxRetries.value = 0;
-  if (pollingTimer.value) {
-    clearInterval(pollingTimer.value);
-    pollingTimer.value = null;
+// 计算实际可用的步骤 - 综合评估放在第一位
+const availableSteps = computed(() => {
+  if (detectionStatus.value !== 'completed' || !detectionData.value) {
+    return [
+      { title: '综合评估', description: '多层次融合决策与最终判定', type: 'comprehensive' },
+      { title: '面部检测', description: '基于Xception模型的面部伪造检测', type: 'face' },
+      { title: '躯体检测', description: '基于多模态LLM的躯体异常检测', type: 'body' },
+      { title: '整体检测', description: '全局特征的综合性分析检测', type: 'overall' },
+    ];
   }
-};
 
-const startPolling = () => {
-  if (isPolling.value) return;
+  const steps = [];
+  const data = detectionData.value;
   
-  console.log('开始轮询状态');
-  isPolling.value = true;
-  maxRetries.value = 0;
+  // 综合评估始终放在第一位（只要有任何检测结果就显示）
+  if (data.face || data.body || data.overall || data.comprehensive) {
+    steps.push({ title: '综合评估', description: '多层次融合决策与最终判定', type: 'comprehensive' });
+  }
   
-  pollingTimer.value = setInterval(() => {
-    maxRetries.value++;
-    console.log(`轮询检查状态... (${maxRetries.value}/${MAX_RETRIES})`);
-    
-    if (maxRetries.value > MAX_RETRIES) {
-      stopPolling();
-      detectionStatus.value = 'failed';
-      detectionError.value = '检测超时，请重新尝试';
-      ElMessage.error('检测超时，请重新尝试');
-      return;
-    }
-    
-    checkDetectionStatus();
-  }, 5000);
-};
-
-// API调用函数
-const checkDetectionStatus = async () => {
-  try {
-    const videoId = getVideoId();
-    if (!videoId) {
-      stopPolling();
-      return;
-    }
-
-    const response = await axios.get(`/api/videos/${videoId}/digital-human/status`);
-    
-    if (response.data.code === 200) {
-      const data = response.data.data;
-      
-      if (data.status === 'completed') {
-        detectionStatus.value = 'completed';
-        detectionData.value = data.results;
-        stopPolling();
-        ElMessage.success('数字人检测完成');
-      } else if (data.status === 'processing') {
-        if (detectionStatus.value !== 'processing') {
-          detectionStatus.value = 'processing';
-        }
-      } else if (data.status === 'failed') {
-        detectionStatus.value = 'failed';
-        detectionError.value = data.error_message || '检测失败';
-        stopPolling();
-        ElMessage.error('检测失败: ' + detectionError.value);
-      }
-    }
-  } catch (error) {
-    console.error('查询检测状态失败:', error);
-    if (error.response?.status === 404) {
-      detectionStatus.value = 'not_started';
-      stopPolling();
-    }
+  // 添加实际执行的检测步骤
+  if (data.face) {
+    steps.push({ title: '面部检测', description: '基于Xception模型的面部伪造检测', type: 'face' });
   }
-};
-
-const startDetection = async () => {
-  try {
-    const videoId = getVideoId();
-    if (!videoId) {
-      ElMessage.error('未找到视频ID');
-      return;
-    }
-
-    detectionStatus.value = 'loading';
-    detectionError.value = null;
-
-    const response = await axios.post(`/api/videos/${videoId}/digital-human/detect`, {
-      types: ['face', 'body', 'overall'],
-      comprehensive: true,
-    });
-
-    if (response.data.code === 200) {
-      detectionStatus.value = 'processing';
-      ElMessage.success('数字人检测已启动，正在分析中...');
-      startPolling();
-    } else {
-      throw new Error(response.data.message || '启动检测失败');
-    }
-  } catch (error) {
-    console.error('启动数字人检测失败:', error);
-    detectionStatus.value = 'failed';
-    detectionError.value = error.response?.data?.message || error.message || '启动检测失败';
-    ElMessage.error('启动检测失败: ' + detectionError.value);
+  if (data.body) {
+    steps.push({ title: '躯体检测', description: '基于多模态LLM的躯体异常检测', type: 'body' });
   }
-};
-
-const restartDetection = () => {
-  stopPolling();
-  detectionStatus.value = 'not_started';
-  detectionData.value = null;
-  detectionError.value = null;
-  activeStep.value = 0;
-};
-
-// 步骤切换
-const nextStep = () => {
-  if (activeStep.value < steps.length - 1) {
-    activeStep.value++;
+  if (data.overall) {
+    steps.push({ title: '整体检测', description: '全局特征的综合性分析检测', type: 'overall' });
   }
-};
+  
+  return steps;
+});
 
-const prevStep = () => {
-  if (activeStep.value > 0) {
-    activeStep.value--;
+// 当前步骤类型 - 默认为综合评估
+const currentStepType = computed(() => {
+  return availableSteps.value[activeStep.value]?.type || 'comprehensive';
+});
+
+// 检测状态检查函数
+const isStepAvailable = (stepType) => {
+  // 综合评估：只要有任何完成的检测就可以查看
+  if (stepType === 'comprehensive') {
+    return stepStatuses.value.face === 'completed' || 
+           stepStatuses.value.body === 'completed' || 
+           stepStatuses.value.overall === 'completed';
   }
+  
+  // 其他检测：只有完成状态才能查看
+  return stepStatuses.value[stepType] === 'completed';
 };
 
-// 数据处理和计算
-const getProgressStatus = (score) => {
-  if (score >= 80) return 'success';
-  if (score >= 60) return 'warning';
-  return 'exception';
+// 检测步骤是否正在进行中
+const isStepProcessing = (stepType) => {
+  return stepStatuses.value[stepType] === 'processing';
 };
 
-const getRiskLevel = (aiProbability) => {
-  if (aiProbability >= 0.8) return { level: '高风险', type: 'danger' };
-  if (aiProbability >= 0.5) return { level: '中风险', type: 'warning' };
-  return { level: '低风险', type: 'success' };
+// 检测步骤是否失败
+const isStepFailed = (stepType) => {
+  return stepStatuses.value[stepType] === 'failed';
 };
 
-// 综合分析计算
+// 获取检测结果或默认值
+const getDetectionResult = (stepType) => {
+  if (!detectionData.value || !detectionData.value[stepType]) {
+    return {
+      available: false,
+      human_probability: 0,
+      ai_probability: 0,
+      confidence: 0,
+      prediction: 'Not Detected',
+      raw_results: null
+    };
+  }
+  
+  return {
+    available: true,
+    ...detectionData.value[stepType]
+  };
+};
+
+// 修复躯体数据计算 - 添加可用性检查
+const bodyDataFixed = computed(() => {
+  const bodyResult = getDetectionResult('body');
+  if (!bodyResult.available) return bodyResult;
+  
+  const body = detectionData.value.body;
+  
+  // 修复：如果所有检测项目都正常，应该是高真实度
+  if (body.raw_results?.total_score === 1.0) {
+    return {
+      ...bodyResult,
+      human_probability: 1.0,
+      ai_probability: 0.0,
+      confidence: 1.0,
+      prediction: 'Human'
+    };
+  }
+  
+  return bodyResult;
+});
+
+// 综合分析计算 - 只计算可用的检测结果
 const comprehensiveAnalysis = computed(() => {
   if (!detectionData.value) return null;
   
   const data = detectionData.value;
-  
-  // 计算加权得分
   const scores = {};
   let weightedSum = 0;
   let totalWeight = 0;
   
+  // 只计算实际执行的检测
+  const availableDetections = [];
   if (data.face) {
     scores.face = data.face.human_probability * 100;
     weightedSum += data.face.human_probability * DETECTION_WEIGHTS.face;
     totalWeight += DETECTION_WEIGHTS.face;
+    availableDetections.push('face');
   }
   
   if (data.body) {
     scores.body = data.body.human_probability * 100;
     weightedSum += data.body.human_probability * DETECTION_WEIGHTS.body;
     totalWeight += DETECTION_WEIGHTS.body;
+    availableDetections.push('body');
   }
   
   if (data.overall) {
     scores.overall = data.overall.human_probability * 100;
     weightedSum += data.overall.human_probability * DETECTION_WEIGHTS.overall;
     totalWeight += DETECTION_WEIGHTS.overall;
+    availableDetections.push('overall');
   }
   
+  // 如果只有一个检测结果，直接使用
+  if (availableDetections.length === 1) {
+    const singleType = availableDetections[0];
+    const singleResult = data[singleType];
+    return {
+      scores,
+      calculatedScore: singleResult.human_probability * 100,
+      finalScore: singleResult.human_probability * 100,
+      aiProbability: singleResult.ai_probability * 100,
+      confidence: singleResult.confidence * 100,
+      prediction: singleResult.prediction,
+      votes: { ai: singleResult.prediction === 'AI-Generated' ? 1 : 0, human: singleResult.prediction === 'Human' ? 1 : 0 },
+      consensus: true,
+      availableDetections
+    };
+  }
+  
+  // 多个检测结果的综合计算
   const calculatedScore = totalWeight > 0 ? (weightedSum / totalWeight) * 100 : 0;
   const finalScore = data.comprehensive?.human_probability * 100 || calculatedScore;
   
@@ -322,8 +261,12 @@ const comprehensiveAnalysis = computed(() => {
     aiProbability: data.comprehensive?.ai_probability * 100 || (100 - finalScore),
     confidence: data.comprehensive?.confidence * 100 || 50,
     prediction: data.comprehensive?.prediction || (finalScore >= 50 ? 'Human' : 'AI-Generated'),
-    votes: data.comprehensive?.votes || { ai: 0, human: 0 },
-    consensus: data.comprehensive?.consensus ?? false,
+    votes: data.comprehensive?.votes || { 
+      ai: availableDetections.filter(type => data[type].prediction === 'AI-Generated').length,
+      human: availableDetections.filter(type => data[type].prediction === 'Human').length
+    },
+    consensus: data.comprehensive?.consensus ?? true,
+    availableDetections
   };
 });
 
@@ -371,7 +314,33 @@ const overallAnalysisDetails = computed(() => {
   };
 });
 
-// 格式化函数
+// 工具函数
+const getVideoId = () => {
+  return route.query.id || props.videoData?.video?.id;
+};
+
+const getStepName = (stepType) => {
+  const names = {
+    face: '面部检测',
+    body: '躯体检测',
+    overall: '整体检测',
+    comprehensive: '综合评估'
+  };
+  return names[stepType] || stepType;
+};
+
+const getProgressStatus = (score) => {
+  if (score >= 80) return 'success';
+  if (score >= 60) return 'warning';
+  return 'exception';
+};
+
+const getRiskLevel = (aiProbability) => {
+  if (aiProbability >= 0.8) return { level: '高风险', type: 'danger' };
+  if (aiProbability >= 0.5) return { level: '中风险', type: 'warning' };
+  return { level: '低风险', type: 'success' };
+};
+
 const formatDateTime = (dateStr) => {
   if (!dateStr) return '未知时间';
   const date = new Date(dateStr);
@@ -385,34 +354,375 @@ const formatDateTime = (dateStr) => {
   });
 };
 
-const formatPercentage = (value, decimals = 1) => {
-  return (value * 100).toFixed(decimals) + '%';
+// 步骤切换逻辑
+const nextStep = () => {
+  if (activeStep.value < availableSteps.value.length - 1) {
+    activeStep.value++;
+  }
 };
 
-// 生命周期管理
-onMounted(() => {
+const prevStep = () => {
+  if (activeStep.value > 0) {
+    activeStep.value--;
+  }
+};
+
+const jumpToStep = (stepType) => {
+  const stepIndex = availableSteps.value.findIndex(step => step.type === stepType);
+  if (stepIndex !== -1) {
+    activeStep.value = stepIndex;
+  }
+};
+
+const handleModuleClick = (stepType) => {
+  if (stepType === 'comprehensive') {
+    return;
+  }
+  
+  if (isStepAvailable(stepType)) {
+    jumpToStep(stepType);
+  } else {
+    retestSingleStep(stepType);
+  }
+};
+
+// 轮询和状态管理函数
+const stopPolling = () => {
+  console.log('停止轮询');
+  isPolling.value = false;
+  maxRetries.value = 0;
+  if (pollingTimer.value) {
+    clearInterval(pollingTimer.value);
+    pollingTimer.value = null;
+  }
+};
+
+const startPolling = () => {
+  if (isPolling.value) return;
+  
+  console.log('开始轮询状态');
+  isPolling.value = true;
+  maxRetries.value = 0;
+  
+  pollingTimer.value = setInterval(() => {
+    maxRetries.value++;
+    console.log(`轮询检查状态... (${maxRetries.value}/${MAX_RETRIES})`);
+    
+    if (maxRetries.value > MAX_RETRIES) {
+      stopPolling();
+      detectionStatus.value = 'failed';
+      detectionError.value = '检测超时，请重新尝试';
+      ElMessage.error('检测超时，请重新尝试');
+      return;
+    }
+    
+    checkDetectionStatus();
+  }, 5000);
+};
+
+// API调用函数 - 改进状态更新逻辑
+const checkDetectionStatus = async () => {
+  try {
+    const videoId = getVideoId();
+    if (!videoId) {
+      console.warn('数字人检测: 视频ID为空，停止轮询');
+      stopPolling();
+      return;
+    }
+
+    console.log(`数字人检测: 检查状态 - 视频ID: ${videoId}`);
+    const response = await axios.get(`/api/videos/${videoId}/digital-human/status`);
+    
+    console.log('数字人检测状态响应:', response.data);
+    
+    if (response.data.code === 200) {
+      const data = response.data.data;
+      
+      // 更新进度信息
+      if (data.progress !== undefined) {
+        detectionProgress.value.progress = data.progress;
+        detectionProgress.value.current_step = data.current_step || '';
+      }
+      
+      if (data.status === 'completed') {
+        console.log('数字人检测完成，获取结果...');
+        detectionStatus.value = 'completed';
+        detectionData.value = data.results;
+        
+        // 更新各步骤状态
+        updateStepStatuses(data.results);
+        
+        stopPolling();
+        ElMessage.success('数字人检测完成');
+      } else if (data.status === 'processing') {
+        if (detectionStatus.value !== 'processing') {
+          console.log('数字人检测进行中...');
+          detectionStatus.value = 'processing';
+        }
+        
+        // 根据当前步骤更新步骤状态
+        updateProcessingStepStatus(data.current_step);
+        
+      } else if (data.status === 'failed') {
+        console.error('数字人检测失败:', data.error_message);
+        detectionStatus.value = 'failed';
+        detectionError.value = data.error_message || '检测失败';
+        stopPolling();
+        ElMessage.error('检测失败: ' + detectionError.value);
+      }
+    } else {
+      console.error('API响应错误:', response.data);
+    }
+  } catch (error) {
+    console.error('查询检测状态失败:', error);
+    if (error.response?.status === 404) {
+      console.log('检测记录不存在，设置为未开始状态');
+      detectionStatus.value = 'not_started';
+      stopPolling();
+    } else {
+      console.error('检测状态查询异常:', error.response?.data || error.message);
+    }
+  }
+};
+
+// 新增：更新步骤状态的函数
+const updateStepStatuses = (results) => {
+  // 如果有 module_statuses 字段，直接使用
+  if (results.module_statuses) {
+    stepStatuses.value = {
+      face: results.module_statuses.face || 'not_started',
+      body: results.module_statuses.body || 'not_started',
+      overall: results.module_statuses.overall || 'not_started',
+      comprehensive: results.module_statuses.comprehensive || 'not_started'
+    };
+    return;
+  }
+  
+  // 兼容旧版本：根据检测结果推断状态
+  stepStatuses.value = {
+    face: 'not_started',
+    body: 'not_started',
+    overall: 'not_started',
+    comprehensive: 'not_started'
+  };
+  
+  // 根据结果更新状态
+  if (results?.face) {
+    stepStatuses.value.face = 'completed';
+  }
+  if (results?.body) {
+    stepStatuses.value.body = 'completed';
+  }
+  if (results?.overall) {
+    stepStatuses.value.overall = 'completed';
+  }
+  if (results?.comprehensive) {
+    stepStatuses.value.comprehensive = 'completed';
+  }
+};
+
+// 新增：根据当前步骤更新处理状态
+const updateProcessingStepStatus = (currentStep) => {
+  // 重置处理状态
+  Object.keys(stepStatuses.value).forEach(key => {
+    if (stepStatuses.value[key] === 'processing') {
+      stepStatuses.value[key] = 'not_started';
+    }
+  });
+  
+  // 根据当前步骤设置处理状态
+  if (currentStep?.includes('face')) {
+    stepStatuses.value.face = 'processing';
+  } else if (currentStep?.includes('body')) {
+    stepStatuses.value.body = 'processing';
+  } else if (currentStep?.includes('overall')) {
+    stepStatuses.value.overall = 'processing';
+  } else if (currentStep?.includes('comprehensive')) {
+    stepStatuses.value.comprehensive = 'processing';
+  }
+};
+
+// 新增：加载已有检测结果的函数
+const loadExistingDetectionResult = async () => {
+  try {
+    const videoId = getVideoId();
+    if (!videoId) return;
+
+    // 修复API路径：应该调用result接口而不是status接口
+    const response = await axios.get(`/api/videos/${videoId}/digital-human/result`);
+    if (response.data.code === 200) {
+      console.log('加载已有数字人检测结果:', response.data.data);
+      detectionData.value = response.data.data.detection;
+      detectionStatus.value = 'completed';
+      
+      // 更新步骤状态
+      updateStepStatuses(response.data.data.detection);
+      
+      console.log('数字人检测状态已更新为completed，数据:', detectionData.value);
+    }
+  } catch (error) {
+    console.log('没有找到已有的数字人检测结果:', error.response?.status);
+    // 404是正常的，说明还没有检测结果
+    if (error.response?.status !== 404) {
+      console.error('加载检测结果异常:', error);
+    }
+  }
+};
+
+const startDetection = async () => {
+  try {
+    const videoId = getVideoId();
+    if (!videoId) {
+      ElMessage.error('未找到视频ID');
+      return;
+    }
+
+    detectionStatus.value = 'loading';
+    detectionError.value = null;
+
+    const response = await axios.post(`/api/videos/${videoId}/digital-human/detect`, {
+      types: ['face', 'body', 'overall'],
+      comprehensive: true,
+    });
+
+    if (response.data.code === 200) {
+      detectionStatus.value = 'processing';
+      ElMessage.success('数字人检测已启动，正在分析中...');
+      startPolling();
+    } else {
+      throw new Error(response.data.message || '启动检测失败');
+    }
+  } catch (error) {
+    console.error('启动数字人检测失败:', error);
+    detectionStatus.value = 'failed';
+    detectionError.value = error.response?.data?.message || error.message || '启动检测失败';
+    ElMessage.error('启动检测失败: ' + detectionError.value);
+  }
+};
+
+const restartDetection = () => {
+  stopPolling();
+  detectionStatus.value = 'not_started';
+  detectionData.value = null;
+  detectionError.value = null;
+  activeStep.value = 0;
+};
+
+const retestSingleStep = async (stepType) => {
+  try {
+    const videoId = getVideoId();
+    if (!videoId) {
+      ElMessage.error('未找到视频ID');
+      return;
+    }
+
+    detectionStatus.value = 'loading';
+    detectionError.value = null;
+
+    console.log(`开始单步重检: ${stepType}`);
+
+    const response = await axios.post(`/api/videos/${videoId}/digital-human/detect`, {
+      types: [stepType], // 只检测指定类型
+      comprehensive: false, // 单步检测不需要综合评估
+    });
+
+    if (response.data.code === 200) {
+      detectionStatus.value = 'processing';
+      ElMessage.success(`${getStepName(stepType)}重新检测已启动`);
+      startPolling();
+    } else {
+      throw new Error(response.data.message || '启动重检失败');
+    }
+  } catch (error) {
+    console.error('单步重检失败:', error);
+    detectionStatus.value = 'completed'; // 恢复到完成状态
+    ElMessage.error('重检失败: ' + (error.response?.data?.message || error.message));
+  }
+};
+
+// 定义activeStep变量
+const activeStep = ref(0);
+
+// 修改初始化逻辑 - 改进状态判断
+onMounted(async () => {
   const videoId = getVideoId();
+  console.log('数字人检测组件初始化，视频ID:', videoId);
+  
   if (videoId) {
-    setTimeout(() => {
-      checkDetectionStatus();
-    }, 100);
+    // 默认显示综合评估页面
+    activeStep.value = 0;
+    
+    try {
+      // 优先加载已有结果
+      console.log('开始加载已有检测结果...');
+      await loadExistingDetectionResult();
+      
+      console.log('加载结果完成，当前状态:', {
+        detectionStatus: detectionStatus.value,
+        hasData: !!detectionData.value,
+        stepStatuses: stepStatuses.value
+      });
+      
+      // 如果成功加载了数据，确保状态正确设置
+      if (detectionData.value) {
+        detectionStatus.value = 'completed';
+        updateStepStatuses(detectionData.value);
+        console.log('数据加载成功，状态已更新为completed');
+      } else if (detectionStatus.value === 'not_started') {
+        console.log('没有已有结果，检查检测状态...');
+        // 延迟检查，避免在组件挂载阶段触发
+        setTimeout(() => {
+          if (!isUnmounted.value) {
+            checkDetectionStatus();
+          }
+        }, 100);
+      }
+    } catch (error) {
+      console.error('初始化检测状态时出错:', error);
+      // 出错时也检查一下状态，但要确保组件未卸载
+      setTimeout(() => {
+        if (!isUnmounted.value) {
+          checkDetectionStatus();
+        }
+      }, 100);
+    }
   }
 });
 
+// 修改路由监听器
 watch(() => route.query.id, (newId, oldId) => {
   if (newId && newId !== oldId) {
     stopPolling();
     restartDetection();
+    // 延迟检查状态，避免在路由切换过程中触发
     setTimeout(() => {
-      checkDetectionStatus();
+      if (!isUnmounted.value) {
+        checkDetectionStatus();
+      }
     }, 500);
   }
 }, { immediate: false });
 
+// 修改卸载钩子 - 增强清理逻辑
 onUnmounted(() => {
+  console.log('数字人检测组件即将卸载，清理资源...');
   stopPolling();
+  isUnmounted.value = true;
+  
+  // 清理可能存在的延时器
+  if (pollingTimer.value) {
+    clearInterval(pollingTimer.value);
+    pollingTimer.value = null;
+  }
+  
+  // 重置所有状态
+  detectionStatus.value = 'not_started';
+  detectionData.value = null;
+  detectionError.value = null;
+  maxRetries.value = 0;
 });
 </script>
+
 <template>
   <div class="digital-human-container">
     <!-- 标题和步骤控制 -->
@@ -430,25 +740,13 @@ onUnmounted(() => {
         </el-button>
         <el-button
           type="primary"
-          :disabled="activeStep === steps.length - 1"
+          :disabled="activeStep === availableSteps.length - 1"
           @click="nextStep"
           size="small"
         >
           下一步 <el-icon class="el-icon--right"><ArrowRight /></el-icon>
         </el-button>
       </div>
-    </div>
-
-    <!-- 步骤条 -->
-    <div class="steps-container" v-if="detectionStatus === 'completed'">
-      <el-steps :active="activeStep" finish-status="success" align-center>
-        <el-step
-          v-for="(step, index) in steps"
-          :key="index"
-          :title="step.title"
-          :description="step.description"
-        />
-      </el-steps>
     </div>
 
     <!-- 未开始检测状态 -->
@@ -483,7 +781,7 @@ onUnmounted(() => {
           <el-button 
             type="primary" 
             size="large" 
-            :icon="Play"
+            :icon="VideoPlay"
             @click="startDetection"
           >
             开始检测
@@ -557,773 +855,94 @@ onUnmounted(() => {
     </div>
 
     <!-- 检测完成状态 -->
-    <div v-else-if="detectionStatus === 'completed' && detectionData" class="detection-content">
+    <div v-else-if="overallDetectionStatus === 'partial_completed' || overallDetectionStatus === 'partial_processing' || detectionStatus === 'completed'" class="detection-content">
       
-      <!-- 面部检测结果 -->
-      <div v-if="activeStep === 0" class="analysis-step">
-        <el-card class="analysis-card">
-          <template #header>
-            <div class="card-header">
-              <div class="header-left">
-                <el-icon><Camera /></el-icon>
-                <span>面部检测分析</span>
-                <el-tag v-if="detectionData.face" :type="detectionData.face.prediction === 'Human' ? 'success' : 'danger'">
-                  {{ detectionData.face.prediction === 'Human' ? '真实面部' : 'AI生成面部' }}
-                </el-tag>
-              </div>
-              <!-- 单步重检按钮 -->
-              <el-button 
-                type="primary" 
-                size="small" 
-                :icon="Refresh"
-                @click="retestSingleStep('face')"
-                :disabled="detectionStatus === 'processing'"
-              >
-                重新检测
-              </el-button>
-            </div>
+      <!-- 如果有检测在进行中，显示进度提示 -->
+      <div v-if="overallDetectionStatus === 'partial_processing'" class="processing-banner">
+        <el-alert
+          title="部分检测进行中"
+          :description="`当前步骤: ${detectionProgress.current_step || '未知'} - 进度: ${detectionProgress.progress}%`"
+          type="info"
+          :closable="false"
+          show-icon
+        >
+          <template #action>
+            <el-button size="small" @click="checkDetectionStatus" :icon="Refresh">
+              刷新
+            </el-button>
           </template>
-
-          <div class="face-analysis">
-            <!-- 主要指标 -->
-            <div class="main-metrics">
-              <el-statistic
-                title="真实度"
-                :value="detectionData.face?.human_probability * 100"
-                suffix="%"
-                :value-style="{ color: detectionData.face?.human_probability > 0.5 ? '#67c23a' : '#f56c6c' }"
-              />
-              <el-statistic
-                title="AI概率"
-                :value="detectionData.face?.ai_probability * 100"
-                suffix="%"
-                :value-style="{ color: detectionData.face?.ai_probability > 0.5 ? '#f56c6c' : '#67c23a' }"
-              />
-              <el-statistic
-                title="置信度"
-                :value="detectionData.face?.confidence * 100"
-                suffix="%"
-                :value-style="{ color: '#409eff' }"
-              />
-            </div>
-
-            <!-- 面部检测特征图片展示 -->
-            <el-divider>检测特征图片</el-divider>
-            <div class="detection-images">
-              <div class="images-grid">
-                <!-- 面部关键点检测图 -->
-                <div class="image-item">
-                  <div class="image-header">
-                    <span class="item-name">面部关键点检测</span>
-                    <el-tag type="primary" size="small">特征分析</el-tag>
-                  </div>
-                  <div class="image-placeholder">
-                    <el-image
-                      :src="`/api/videos/${getVideoId()}/digital-human/face-keypoints`"
-                      fit="contain"
-                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/face-keypoints`]"
-                      :hide-on-click-modal="true"
-                    >
-                      <template #error>
-                        <div class="image-error">
-                          <el-icon size="32"><Picture /></el-icon>
-                          <div class="error-text">
-                            <div>面部关键点检测图</div>
-                            <div class="error-subtitle">暂未生成</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template #placeholder>
-                        <div class="image-loading">
-                          <el-icon class="loading-icon"><Refresh /></el-icon>
-                          <div>加载中...</div>
-                        </div>
-                      </template>
-                    </el-image>
-                  </div>
-                  <div class="image-description">
-                    基于深度学习模型的面部关键点定位和特征提取分析
-                  </div>
-                </div>
-
-                <!-- 面部表情分析图 -->
-                <div class="image-item">
-                  <div class="image-header">
-                    <span class="item-name">表情真实性分析</span>
-                    <el-tag type="info" size="small">表情检测</el-tag>
-                  </div>
-                  <div class="image-placeholder">
-                    <el-image
-                      :src="`/api/videos/${getVideoId()}/digital-human/face-expression`"
-                      fit="contain"
-                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/face-expression`]"
-                      :hide-on-click-modal="true"
-                    >
-                      <template #error>
-                        <div class="image-error">
-                          <el-icon size="32"><Picture /></el-icon>
-                          <div class="error-text">
-                            <div>表情真实性分析图</div>
-                            <div class="error-subtitle">暂未生成</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template #placeholder>
-                        <div class="image-loading">
-                          <el-icon class="loading-icon"><Refresh /></el-icon>
-                          <div>加载中...</div>
-                        </div>
-                      </template>
-                    </el-image>
-                  </div>
-                  <div class="image-description">
-                    面部表情的自然性和协调性智能分析结果
-                  </div>
-                </div>
-
-                <!-- 纹理特征分析图 -->
-                <div class="image-item">
-                  <div class="image-header">
-                    <span class="item-name">纹理特征分析</span>
-                    <el-tag type="warning" size="small">纹理检测</el-tag>
-                  </div>
-                  <div class="image-placeholder">
-                    <el-image
-                      :src="`/api/videos/${getVideoId()}/digital-human/face-texture`"
-                      fit="contain"
-                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/face-texture`]"
-                      :hide-on-click-modal="true"
-                    >
-                      <template #error>
-                        <div class="image-error">
-                          <el-icon size="32"><Picture /></el-icon>
-                          <div class="error-text">
-                            <div>面部纹理特征图</div>
-                            <div class="error-subtitle">暂未生成</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template #placeholder>
-                        <div class="image-loading">
-                          <el-icon class="loading-icon"><Refresh /></el-icon>
-                          <div>加载中...</div>
-                        </div>
-                      </template>
-                    </el-image>
-                  </div>
-                  <div class="image-description">
-                    面部皮肤纹理和细节的真实性检测分析
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 算法详情 -->
-            <el-divider>检测算法详情</el-divider>
-            <div class="algorithm-details">
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="检测模型">
-                  基于Xception深度神经网络
-                </el-descriptions-item>
-                <el-descriptions-item label="训练数据集">
-                  大规模真实/合成人脸数据集
-                </el-descriptions-item>
-                <el-descriptions-item label="特征提取">
-                  多层次面部特征深度学习
-                </el-descriptions-item>
-                <el-descriptions-item label="检测精度">
-                  高精度伪造面部识别
-                </el-descriptions-item>
-                <el-descriptions-item label="分析维度">
-                  关键点、表情、纹理、边缘
-                </el-descriptions-item>
-                <el-descriptions-item label="检测时间">
-                  {{ formatDateTime(detectionData.face?.raw_results?.metadata?.timestamp) }}
-                </el-descriptions-item>
-              </el-descriptions>
-            </div>
-
-            <!-- 检测结果 -->
-            <el-divider>检测结果</el-divider>
-            <div class="risk-assessment">
-              <el-progress
-                type="dashboard"
-                :percentage="Math.round(detectionData.face?.human_probability * 100)"
-                :status="getProgressStatus(detectionData.face?.human_probability * 100)"
-                :width="150"
-              />
-              <div class="risk-info">
-                <h4>{{ detectionData.face?.prediction === 'Human' ? '真实面部' : 'AI生成面部' }}</h4>
-                <p>基于深度学习算法的面部真实性检测结果</p>
-                <div class="confidence-info">
-                  <el-tag :type="detectionData.face?.confidence > 0.7 ? 'success' : 'warning'">
-                    置信度: {{ (detectionData.face?.confidence * 100).toFixed(1) }}%
-                  </el-tag>
-                </div>
-              </div>
-            </div>
-          </div>
-        </el-card>
+        </el-alert>
       </div>
+      
+      <!-- 综合评估结果 - 使用子组件 -->
+      <ComprehensiveTab
+        v-if="currentStepType === 'comprehensive'"
+        :comprehensive-analysis="comprehensiveAnalysis"
+        :detection-data="detectionData"
+        :is-step-available="isStepAvailable"
+        :get-detection-result="getDetectionResult"
+        :body-data-fixed="bodyDataFixed"
+        :get-progress-status="getProgressStatus"
+        :get-risk-level="getRiskLevel"
+        :format-date-time="formatDateTime"
+        :handle-module-click="handleModuleClick"
+        :jump-to-step="jumpToStep"
+        :start-detection="startDetection"
+        :step-statuses="stepStatuses"
+        :is-step-processing="isStepProcessing"
+        :is-step-failed="isStepFailed"
+      />
 
-      <!-- 躯体检测结果 -->
-      <div v-if="activeStep === 1" class="analysis-step">
-        <el-card class="analysis-card">
-          <template #header>
-            <div class="card-header">
-              <div class="header-left">
-                <el-icon><VideoCamera /></el-icon>
-                <span>躯体检测分析</span>
-                <el-tag v-if="bodyDataFixed" :type="bodyDataFixed.prediction === 'Human' ? 'success' : 'danger'">
-                  {{ bodyDataFixed.prediction === 'Human' ? '真实躯体' : 'AI生成躯体' }}
-                </el-tag>
-              </div>
-              <!-- 单步重检按钮 -->
-              <el-button 
-                type="primary" 
-                size="small" 
-                :icon="Refresh"
-                @click="retestSingleStep('body')"
-                :disabled="detectionStatus === 'processing'"
-              >
-                重新检测
-              </el-button>
-            </div>
-          </template>
+      <!-- 面部检测结果 - 使用子组件 -->
+      <FaceDetectionTab
+        v-else-if="currentStepType === 'face'"
+        :is-step-available="isStepAvailable"
+        :get-detection-result="getDetectionResult"
+        :detection-data="detectionData"
+        :get-video-id="getVideoId"
+        :format-date-time="formatDateTime"
+        :get-progress-status="getProgressStatus"
+        :retest-single-step="retestSingleStep"
+        :detection-status="detectionStatus"
+        :step-status="stepStatuses.face"
+        :is-processing="isStepProcessing('face')"
+      />
 
-          <div class="body-analysis">
-            <!-- 主要指标 - 使用修复后的数据 -->
-            <div class="main-metrics">
-              <el-statistic
-                title="真实度"
-                :value="bodyDataFixed?.human_probability * 100"
-                suffix="%"
-                :value-style="{ color: bodyDataFixed?.human_probability > 0.5 ? '#67c23a' : '#f56c6c' }"
-              />
-              <el-statistic
-                title="AI概率"
-                :value="bodyDataFixed?.ai_probability * 100"
-                suffix="%"
-                :value-style="{ color: bodyDataFixed?.ai_probability > 0.5 ? '#f56c6c' : '#67c23a' }"
-              />
-              <el-statistic
-                title="置信度"
-                :value="bodyDataFixed?.confidence * 100"
-                suffix="%"
-                :value-style="{ color: '#409eff' }"
-              />
-            </div>
+      <!-- 躯体检测结果 - 使用子组件 -->
+      <BodyDetectionTab
+        v-else-if="currentStepType === 'body'"
+        :is-step-available="isStepAvailable"
+        :body-data-fixed="bodyDataFixed"
+        :detection-data="detectionData"
+        :body-analysis-details="bodyAnalysisDetails"
+        :get-video-id="getVideoId"
+        :get-progress-status="getProgressStatus"
+        :retest-single-step="retestSingleStep"
+        :detection-status="detectionStatus"
+        :step-status="stepStatuses.body"
+        :is-processing="isStepProcessing('body')"
+      />
 
-            <!-- 异常项目图片展示区域 -->
-            <el-divider>异常项目图片</el-divider>
-            <div class="anomaly-images">
-              <div class="images-grid">
-                <!-- 为每个检测项目预留图片位置 -->
-                <div 
-                  v-for="item in bodyAnalysisDetails" 
-                  :key="item.name"
-                  class="image-item"
-                  v-show="item.response !== '是'"
-                >
-                  <div class="image-header">
-                    <span class="item-name">{{ item.name }}</span>
-                    <el-tag type="danger" size="small">异常</el-tag>
-                  </div>
-                  <div class="image-placeholder">
-                    <!-- 预留图片位置 -->
-                    <el-image
-                      :src="`/api/videos/${getVideoId()}/digital-human/anomaly-image/${item.name}`"
-                      fit="contain"
-                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/anomaly-image/${item.name}`]"
-                      :hide-on-click-modal="true"
-                    >
-                      <template #error>
-                        <div class="image-error">
-                          <el-icon size="32"><Picture /></el-icon>
-                          <div class="error-text">
-                            <div>{{ item.name }}异常图片</div>
-                            <div class="error-subtitle">暂未生成</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template #placeholder>
-                        <div class="image-loading">
-                          <el-icon class="loading-icon"><Refresh /></el-icon>
-                          <div>加载中...</div>
-                        </div>
-                      </template>
-                    </el-image>
-                  </div>
-                  <div class="image-description">
-                    {{ item.description }}
-                  </div>
-                </div>
-              </div>
-              
-              <!-- 如果没有异常项目 -->
-              <div v-if="bodyAnalysisDetails.every(item => item.response === '是')" class="no-anomaly">
-                <el-icon size="48" color="#67c23a"><CircleCheck /></el-icon>
-                <p>所有检测项目均正常，未发现异常</p>
-              </div>
-            </div>
-
-            <!-- 检测标准详情 -->
-            <el-divider>检测项目详情</el-divider>
-            <el-table :data="bodyAnalysisDetails" style="width: 100%">
-              <el-table-column prop="name" label="检测项目" width="120" />
-              <el-table-column prop="description" label="检测内容" />
-              <el-table-column prop="response" label="检测结果" width="100" align="center">
-                <template #default="scope">
-                  <el-tag :type="scope.row.status">
-                    <el-icon v-if="scope.row.response === '是'"><CircleCheck /></el-icon>
-                    <el-icon v-else><CircleClose /></el-icon>
-                    {{ scope.row.response === '是' ? '正常' : '异常' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="weightedScore" label="得分" width="100" align="center">
-                <template #default="scope">
-                  {{ scope.row.weightedScore.toFixed(2) }}
-                </template>
-              </el-table-column>
-            </el-table>
-
-            <!-- 总体评分 -->
-            <el-divider>总体评分</el-divider>
-            <div class="total-score">
-              <el-progress
-                type="dashboard"
-                :percentage="Math.round(detectionData.body?.raw_results?.total_score * 100)"
-                :status="getProgressStatus(detectionData.body?.raw_results?.total_score * 100)"
-                :width="150"
-              />
-              <div class="score-info">
-                <h4>综合得分: {{ (detectionData.body?.raw_results?.total_score * 100).toFixed(1) }}%</h4>
-                <p>基于智能算法的躯体异常检测评分</p>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </div>
-
-      <!-- 整体检测结果 -->
-      <!-- 整体检测结果 -->
-      <div v-if="activeStep === 2" class="analysis-step">
-        <el-card class="analysis-card">
-          <template #header>
-            <div class="card-header">
-              <div class="header-left">
-                <el-icon><Picture /></el-icon>
-                <span>整体检测分析</span>
-                <el-tag v-if="detectionData.overall" :type="detectionData.overall.prediction === 'Human' ? 'success' : 'danger'">
-                  {{ detectionData.overall.prediction === 'Human' ? '真实内容' : 'AI生成内容' }}
-                </el-tag>
-              </div>
-              <!-- 单步重检按钮 -->
-              <el-button 
-                type="primary" 
-                size="small" 
-                :icon="Refresh"
-                @click="retestSingleStep('overall')"
-                :disabled="detectionStatus === 'processing'"
-              >
-                重新检测
-              </el-button>
-            </div>
-          </template>
-
-          <div class="overall-analysis">
-            <!-- 主要指标 -->
-            <div class="main-metrics">
-              <el-statistic
-                title="真实度"
-                :value="detectionData.overall?.human_probability * 100"
-                suffix="%"
-                :value-style="{ color: detectionData.overall?.human_probability > 0.5 ? '#67c23a' : '#f56c6c' }"
-              />
-              <el-statistic
-                title="AI概率"
-                :value="detectionData.overall?.ai_probability * 100"
-                suffix="%"
-                :value-style="{ color: detectionData.overall?.ai_probability > 0.5 ? '#f56c6c' : '#67c23a' }"
-              />
-              <el-statistic
-                title="置信度"
-                :value="detectionData.overall?.confidence * 100"
-                suffix="%"
-                :value-style="{ color: '#409eff' }"
-              />
-            </div>
-
-            <!-- 整体特征图片展示 -->
-            <el-divider>整体特征分析图片</el-divider>
-            <div class="detection-images">
-              <div class="images-grid">
-                <!-- 时空一致性分析图 -->
-                <div class="image-item">
-                  <div class="image-header">
-                    <span class="item-name">时空一致性分析</span>
-                    <el-tag type="primary" size="small">时序特征</el-tag>
-                  </div>
-                  <div class="image-placeholder">
-                    <el-image
-                      :src="`/api/videos/${getVideoId()}/digital-human/temporal-consistency`"
-                      fit="contain"
-                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/temporal-consistency`]"
-                      :hide-on-click-modal="true"
-                    >
-                      <template #error>
-                        <div class="image-error">
-                          <el-icon size="32"><Picture /></el-icon>
-                          <div class="error-text">
-                            <div>时空一致性分析图</div>
-                            <div class="error-subtitle">暂未生成</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template #placeholder>
-                        <div class="image-loading">
-                          <el-icon class="loading-icon"><Refresh /></el-icon>
-                          <div>加载中...</div>
-                        </div>
-                      </template>
-                    </el-image>
-                  </div>
-                  <div class="image-description">
-                    视频帧间的时间连续性和空间一致性检测分析
-                  </div>
-                </div>
-
-                <!-- 全局纹理特征图 -->
-                <div class="image-item">
-                  <div class="image-header">
-                    <span class="item-name">全局纹理特征</span>
-                    <el-tag type="info" size="small">纹理分析</el-tag>
-                  </div>
-                  <div class="image-placeholder">
-                    <el-image
-                      :src="`/api/videos/${getVideoId()}/digital-human/global-texture`"
-                      fit="contain"
-                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/global-texture`]"
-                      :hide-on-click-modal="true"
-                    >
-                      <template #error>
-                        <div class="image-error">
-                          <el-icon size="32"><Picture /></el-icon>
-                          <div class="error-text">
-                            <div>全局纹理特征图</div>
-                            <div class="error-subtitle">暂未生成</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template #placeholder>
-                        <div class="image-loading">
-                          <el-icon class="loading-icon"><Refresh /></el-icon>
-                          <div>加载中...</div>
-                        </div>
-                      </template>
-                    </el-image>
-                  </div>
-                  <div class="image-description">
-                    整体画面的纹理一致性和生成痕迹检测
-                  </div>
-                </div>
-
-                <!-- 生成痕迹检测图 -->
-                <div class="image-item">
-                  <div class="image-header">
-                    <span class="item-name">生成痕迹检测</span>
-                    <el-tag type="warning" size="small">痕迹分析</el-tag>
-                  </div>
-                  <div class="image-placeholder">
-                    <el-image
-                      :src="`/api/videos/${getVideoId()}/digital-human/generation-artifacts`"
-                      fit="contain"
-                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/generation-artifacts`]"
-                      :hide-on-click-modal="true"
-                    >
-                      <template #error>
-                        <div class="image-error">
-                          <el-icon size="32"><Picture /></el-icon>
-                          <div class="error-text">
-                            <div>生成痕迹检测图</div>
-                            <div class="error-subtitle">暂未生成</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template #placeholder>
-                        <div class="image-loading">
-                          <el-icon class="loading-icon"><Refresh /></el-icon>
-                          <div>加载中...</div>
-                        </div>
-                      </template>
-                    </el-image>
-                  </div>
-                  <div class="image-description">
-                    AI生成算法特有的视觉伪影和生成痕迹识别
-                  </div>
-                </div>
-
-                <!-- 边缘一致性分析图 -->
-                <div class="image-item">
-                  <div class="image-header">
-                    <span class="item-name">边缘一致性分析</span>
-                    <el-tag type="success" size="small">边缘检测</el-tag>
-                  </div>
-                  <div class="image-placeholder">
-                    <el-image
-                      :src="`/api/videos/${getVideoId()}/digital-human/edge-consistency`"
-                      fit="contain"
-                      :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/edge-consistency`]"
-                      :hide-on-click-modal="true"
-                    >
-                      <template #error>
-                        <div class="image-error">
-                          <el-icon size="32"><Picture /></el-icon>
-                          <div class="error-text">
-                            <div>边缘一致性分析图</div>
-                            <div class="error-subtitle">暂未生成</div>
-                          </div>
-                        </div>
-                      </template>
-                      <template #placeholder>
-                        <div class="image-loading">
-                          <el-icon class="loading-icon"><Refresh /></el-icon>
-                          <div>加载中...</div>
-                        </div>
-                      </template>
-                    </el-image>
-                  </div>
-                  <div class="image-description">
-                    图像边缘的自然性和一致性深度学习检测
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 检测特征 -->
-            <el-divider>检测算法特征</el-divider>
-            <div class="algorithm-features">
-              <div class="feature-grid">
-                <div class="feature-card">
-                  <el-icon size="24" color="#409eff"><VideoCamera /></el-icon>
-                  <h4>时空一致性检测</h4>
-                  <p>分析视频帧间的时间连续性和空间一致性，识别生成内容的时序异常</p>
-                </div>
-                <div class="feature-card">
-                  <el-icon size="24" color="#67c23a"><Picture /></el-icon>
-                  <h4>全局纹理分析</h4>
-                  <p>检测整体画面的纹理特征，识别AI生成算法留下的纹理痕迹</p>
-                </div>
-                <div class="feature-card">
-                  <el-icon size="24" color="#e6a23c"><Warning /></el-icon>
-                  <h4>生成伪影识别</h4>
-                  <p>检测AI生成模型产生的视觉伪影和不自然的生成痕迹</p>
-                </div>
-                <div class="feature-card">
-                  <el-icon size="24" color="#f56c6c"><InfoFilled /></el-icon>
-                  <h4>多尺度特征融合</h4>
-                  <p>结合像素级、特征级和语义级的多尺度特征进行综合判断</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- 检测技术详情 -->
-            <el-divider>技术详情</el-divider>
-            <div class="raw-data">
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="检测算法">
-                  全局特征深度学习模型
-                </el-descriptions-item>
-                <el-descriptions-item label="分析维度">
-                  像素级、特征级、语义级
-                </el-descriptions-item>
-                <el-descriptions-item label="特征类型">
-                  时空一致性、纹理特征、生成痕迹
-                </el-descriptions-item>
-                <el-descriptions-item label="检测精度">
-                  高精度智能识别
-                </el-descriptions-item>
-                <el-descriptions-item label="模型架构">
-                  深度卷积神经网络
-                </el-descriptions-item>
-                <el-descriptions-item label="训练策略">
-                  对抗性训练增强泛化能力
-                </el-descriptions-item>
-              </el-descriptions>
-            </div>
-
-            <!-- 概率分布可视化 -->
-            <el-divider>概率分布</el-divider>
-            <div class="probability-distribution">
-              <div class="probability-bar">
-                <div class="bar-label">AI生成概率</div>
-                <el-progress
-                  :percentage="Math.round(detectionData.overall?.ai_probability * 100)"
-                  status="exception"
-                  :stroke-width="20"
-                />
-              </div>
-              <div class="probability-bar">
-                <div class="bar-label">真实内容概率</div>
-                <el-progress
-                  :percentage="Math.round(detectionData.overall?.human_probability * 100)"
-                  status="success"
-                  :stroke-width="20"
-                />
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </div>
-
-      <!-- 综合评估结果 -->
-      <div v-if="activeStep === 3" class="analysis-step">
-        <el-card class="analysis-card">
-          <template #header>
-            <div class="card-header">
-              <div class="header-left">
-                <el-icon><InfoFilled /></el-icon>
-                <span>综合评估结果</span>
-                <el-tag v-if="comprehensiveAnalysis" :type="comprehensiveAnalysis.prediction === 'Human' ? 'success' : 'danger'" size="large">
-                  {{ comprehensiveAnalysis.prediction === 'Human' ? '真实人物' : '疑似数字人' }}
-                </el-tag>
-              </div>
-            </div>
-          </template>
-
-          <div class="comprehensive-analysis" v-if="comprehensiveAnalysis">
-            <!-- 最终结果展示 -->
-            <div class="final-result">
-              <div class="result-score">
-                <el-progress
-                  type="dashboard"
-                  :percentage="Math.round(comprehensiveAnalysis.finalScore)"
-                  :status="getProgressStatus(comprehensiveAnalysis.finalScore)"
-                  :width="200"
-                  :stroke-width="15"
-                />
-                <div class="score-label">真实度评分</div>
-              </div>
-              
-              <div class="result-details">
-                <div class="detail-item">
-                  <span class="label">最终预测:</span>
-                  <el-tag :type="comprehensiveAnalysis.prediction === 'Human' ? 'success' : 'danger'" size="large">
-                    {{ comprehensiveAnalysis.prediction === 'Human' ? '真实人物' : '疑似数字人' }}
-                  </el-tag>
-                </div>
-                <div class="detail-item">
-                  <span class="label">置信度:</span>
-                  <span class="value">{{ comprehensiveAnalysis.confidence.toFixed(1) }}%</span>
-                </div>
-                <div class="detail-item">
-                  <span class="label">AI概率:</span>
-                  <span class="value danger">{{ comprehensiveAnalysis.aiProbability.toFixed(1) }}%</span>
-                </div>
-                <div class="detail-item">
-                  <span class="label">检测一致性:</span>
-                  <el-tag :type="comprehensiveAnalysis.consensus ? 'success' : 'warning'">
-                    {{ comprehensiveAnalysis.consensus ? '一致' : '分歧' }}
-                  </el-tag>
-                </div>
-              </div>
-            </div>
-
-            <!-- 各模块得分 -->
-            <el-divider>各模块检测得分</el-divider>
-            <div class="component-scores">
-              <div class="score-item" v-if="comprehensiveAnalysis.scores.face !== undefined">
-                <div class="score-header">
-                  <span>面部检测得分</span>
-                </div>
-                <el-progress
-                  :percentage="Math.round(comprehensiveAnalysis.scores.face)"
-                  :status="getProgressStatus(comprehensiveAnalysis.scores.face)"
-                />
-              </div>
-              
-              <div class="score-item" v-if="comprehensiveAnalysis.scores.body !== undefined">
-                <div class="score-header">
-                  <span>躯体检测得分</span>
-                </div>
-                <el-progress
-                  :percentage="Math.round(comprehensiveAnalysis.scores.body)"
-                  :status="getProgressStatus(comprehensiveAnalysis.scores.body)"
-                />
-              </div>
-              
-              <div class="score-item" v-if="comprehensiveAnalysis.scores.overall !== undefined">
-                <div class="score-header">
-                  <span>整体检测得分</span>
-                </div>
-                <el-progress
-                  :percentage="Math.round(comprehensiveAnalysis.scores.overall)"
-                  :status="getProgressStatus(comprehensiveAnalysis.scores.overall)"
-                />
-              </div>
-            </div>
-
-            <!-- 检测一致性 -->
-            <el-divider>检测一致性</el-divider>
-            <div class="voting-statistics">
-              <div class="vote-result">
-                <div class="vote-item">
-                  <el-icon size="24" color="#f56c6c"><CircleClose /></el-icon>
-                  <span>AI生成: {{ comprehensiveAnalysis.votes.ai }} 个模块</span>
-                </div>
-                <div class="vote-item">
-                  <el-icon size="24" color="#67c23a"><CircleCheck /></el-icon>
-                  <span>真实人物: {{ comprehensiveAnalysis.votes.human }} 个模块</span>
-                </div>
-              </div>
-              <div class="consensus-info">
-                <el-alert
-                  :title="comprehensiveAnalysis.consensus ? '检测结果一致' : '检测结果存在分歧'"
-                  :type="comprehensiveAnalysis.consensus ? 'success' : 'warning'"
-                  :description="comprehensiveAnalysis.consensus ? 
-                    '多个检测模块的结果高度一致，增强了判定的可靠性。' : 
-                    '不同检测模块的结果存在分歧，建议进一步人工审核。'"
-                  show-icon
-                  :closable="false"
-                />
-              </div>
-            </div>
-
-            <!-- 检测摘要 -->
-            <el-divider>检测摘要</el-divider>
-            <div class="detection-summary">
-              <el-descriptions :column="2" border>
-                <el-descriptions-item label="检测时间">
-                  {{ formatDateTime(detectionData.completed_at) }}
-                </el-descriptions-item>
-                <el-descriptions-item label="检测模块">
-                  面部、躯体、整体
-                </el-descriptions-item>
-                <el-descriptions-item label="算法类型">
-                  深度学习 + 智能分析
-                </el-descriptions-item>
-                <el-descriptions-item label="融合策略">
-                  多模块智能融合
-                </el-descriptions-item>
-                <el-descriptions-item label="风险等级" :span="2">
-                  <el-tag :type="getRiskLevel(comprehensiveAnalysis.aiProbability / 100).type" size="large">
-                    {{ getRiskLevel(comprehensiveAnalysis.aiProbability / 100).level }}
-                  </el-tag>
-                </el-descriptions-item>
-              </el-descriptions>
-            </div>
-          </div>
-        </el-card>
-      </div>
+      <!-- 整体检测结果 - 使用子组件 -->
+      <OverallDetectionTab
+        v-else-if="currentStepType === 'overall'"
+        :is-step-available="isStepAvailable"
+        :get-detection-result="getDetectionResult"
+        :detection-data="detectionData"
+        :get-video-id="getVideoId"
+        :retest-single-step="retestSingleStep"
+        :detection-status="detectionStatus"
+        :step-status="stepStatuses.overall"
+        :is-processing="isStepProcessing('overall')"
+      />
 
       <!-- 操作按钮 -->
       <div class="action-buttons">
         <el-button @click="restartDetection" :icon="Refresh">
           全部重新检测
         </el-button>
-        <el-button type="primary" @click="activeStep = 3">
-          查看综合结果
+        <el-button type="primary" @click="activeStep = 0" v-if="currentStepType !== 'comprehensive'">
+          返回综合评估
         </el-button>
       </div>
     </div>
@@ -1331,83 +950,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 检测图片展示区域 */
-.detection-images {
-  margin: 1.5rem 0;
-}
-
-/* 算法详情 */
-.algorithm-details {
-  margin: 1.5rem 0;
-}
-
-/* 算法特征网格 */
-.algorithm-features {
-  margin: 1.5rem 0;
-}
-
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-}
-
-.feature-card {
-  padding: 1.5rem;
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
-  text-align: center;
-  background: #fafafa;
-  transition: all 0.2s ease;
-}
-
-.feature-card:hover {
-  border-color: #409eff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
-  background: white;
-}
-
-.feature-card h4 {
-  margin: 0.75rem 0 0.5rem 0;
-  color: #303133;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.feature-card p {
-  margin: 0;
-  color: #606266;
-  font-size: 0.875rem;
-  line-height: 1.4;
-}
-
-/* 置信度信息 */
-.confidence-info {
-  margin-top: 0.75rem;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .feature-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .algorithm-features {
-    margin: 1rem 0;
-  }
-  
-  .feature-card {
-    padding: 1rem;
-  }
-}
-/* 基础容器样式 */
+/* 保留基础容器样式和状态样式 */
 .digital-human-container {
   height: 100%;
   overflow: auto;
   padding: 0 4px;
 }
 
-/* 标题和控制按钮 */
 .header-controls {
   display: flex;
   justify-content: space-between;
@@ -1426,12 +975,7 @@ onUnmounted(() => {
   gap: 0.5rem;
 }
 
-/* 步骤条 */
-.steps-container {
-  margin-bottom: 2rem;
-}
-
-/* 提示状态 */
+/* 状态提示样式 */
 .detection-prompt,
 .detection-loading,
 .detection-failed {
@@ -1534,246 +1078,6 @@ onUnmounted(() => {
   margin-top: 2rem;
 }
 
-/* 分析步骤 */
-.analysis-step {
-  margin-bottom: 2rem;
-}
-
-.analysis-card {
-  min-height: 500px;
-}
-
-/* 卡片头部样式 */
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 500;
-  width: 100%;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-/* 主要指标 */
-.main-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2rem;
-  margin-bottom: 2rem;
-  text-align: center;
-}
-
-/* 异常图片展示区域 */
-.anomaly-images {
-  margin: 1.5rem 0;
-}
-
-.images-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.image-item {
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fafafa;
-}
-
-.image-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  background: #f5f7fa;
-  border-bottom: 1px solid #dcdfe6;
-}
-
-.item-name {
-  font-weight: 500;
-  color: #303133;
-}
-
-.image-placeholder {
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: white;
-}
-
-.image-error,
-.image-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #909399;
-  text-align: center;
-  gap: 0.5rem;
-}
-
-.error-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.error-subtitle {
-  font-size: 0.75rem;
-  color: #c0c4cc;
-}
-
-.image-loading .loading-icon {
-  animation: spin 2s linear infinite;
-}
-
-.image-description {
-  padding: 0.75rem 1rem;
-  font-size: 0.875rem;
-  color: #606266;
-  line-height: 1.4;
-}
-
-.no-anomaly {
-  text-align: center;
-  padding: 2rem;
-  color: #67c23a;
-}
-
-.no-anomaly p {
-  margin: 0.5rem 0 0;
-  color: #606266;
-}
-
-/* 风险评估 */
-.risk-assessment,
-.total-score {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-}
-
-.risk-info,
-.score-info {
-  flex: 1;
-}
-
-.risk-info h4,
-.score-info h4 {
-  margin: 0 0 0.5rem 0;
-  color: #409eff;
-}
-
-/* 概率分布 */
-.probability-distribution {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.probability-bar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.bar-label {
-  width: 120px;
-  font-weight: 500;
-}
-
-/* 综合分析 */
-.final-result {
-  display: flex;
-  gap: 3rem;
-  margin-bottom: 2rem;
-  align-items: center;
-}
-
-.result-score {
-  text-align: center;
-}
-
-.score-label {
-  margin-top: 1rem;
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-
-.result-details {
-  flex: 1;
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: #f8f9fa;
-  border-radius: 6px;
-}
-
-.label {
-  font-weight: 500;
-}
-
-.value {
-  font-weight: bold;
-}
-
-.value.danger {
-  color: #f56c6c;
-}
-
-/* 组件得分 */
-.component-scores {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.score-item {
-  background: white;
-  padding: 1rem;
-  border-radius: 6px;
-}
-
-.score-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-/* 投票统计 */
-.voting-statistics {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.vote-result {
-  display: flex;
-  gap: 2rem;
-  justify-content: center;
-}
-
-.vote-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-}
-
 /* 操作按钮 */
 .action-buttons {
   margin-top: 2rem;
@@ -1795,61 +1099,14 @@ onUnmounted(() => {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .main-metrics {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-  
-  .final-result {
+  .header-controls {
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
+    align-items: flex-start;
   }
   
   .detection-features {
     grid-template-columns: 1fr;
   }
-  
-  .vote-result {
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-  }
-  
-  .images-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-  
-  .header-left {
-    width: 100%;
-  }
-}
-
-/* Element Plus 组件样式覆盖 */
-:deep(.el-card__body) {
-  padding: 20px;
-}
-
-:deep(.el-progress) {
-  margin-bottom: 0.5rem;
-}
-
-:deep(.el-divider) {
-  margin: 1.5rem 0;
-}
-
-:deep(.el-statistic__content) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-:deep(.el-descriptions__label) {
-  font-weight: 500;
 }
 </style>

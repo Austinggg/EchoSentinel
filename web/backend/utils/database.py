@@ -514,8 +514,14 @@ class DigitalHumanDetection(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
     
-    # 检测状态
+    # 总体检测状态
     status = db.Column(db.String(20), default="pending")  # pending, processing, completed, failed
+    
+    # 新增：各个模块的独立状态
+    face_status = db.Column(db.String(20), default="not_started")  # not_started, processing, completed, failed
+    body_status = db.Column(db.String(20), default="not_started")
+    overall_status = db.Column(db.String(20), default="not_started")
+    comprehensive_status = db.Column(db.String(20), default="not_started")
     
     # 面部检测结果
     face_ai_probability = db.Column(db.Float, nullable=True)
@@ -523,6 +529,9 @@ class DigitalHumanDetection(db.Model):
     face_confidence = db.Column(db.Float, nullable=True)
     face_prediction = db.Column(db.String(20), nullable=True)  # AI-Generated, Human
     face_raw_results = db.Column(db.JSON, nullable=True)
+    face_started_at = db.Column(db.DateTime, nullable=True)  # 面部检测开始时间
+    face_completed_at = db.Column(db.DateTime, nullable=True)  # 面部检测完成时间
+    face_error_message = db.Column(db.Text, nullable=True)  # 面部检测错误信息
     
     # 躯体检测结果
     body_ai_probability = db.Column(db.Float, nullable=True)
@@ -530,6 +539,9 @@ class DigitalHumanDetection(db.Model):
     body_confidence = db.Column(db.Float, nullable=True)
     body_prediction = db.Column(db.String(20), nullable=True)
     body_raw_results = db.Column(db.JSON, nullable=True)
+    body_started_at = db.Column(db.DateTime, nullable=True)  # 躯体检测开始时间
+    body_completed_at = db.Column(db.DateTime, nullable=True)  # 躯体检测完成时间
+    body_error_message = db.Column(db.Text, nullable=True)  # 躯体检测错误信息
     
     # 整体检测结果
     overall_ai_probability = db.Column(db.Float, nullable=True)
@@ -537,6 +549,9 @@ class DigitalHumanDetection(db.Model):
     overall_confidence = db.Column(db.Float, nullable=True)
     overall_prediction = db.Column(db.String(20), nullable=True)
     overall_raw_results = db.Column(db.JSON, nullable=True)
+    overall_started_at = db.Column(db.DateTime, nullable=True)  # 整体检测开始时间
+    overall_completed_at = db.Column(db.DateTime, nullable=True)  # 整体检测完成时间
+    overall_error_message = db.Column(db.Text, nullable=True)  # 整体检测错误信息
     
     # 综合评估结果
     comprehensive_ai_probability = db.Column(db.Float, nullable=True)
@@ -545,6 +560,9 @@ class DigitalHumanDetection(db.Model):
     comprehensive_prediction = db.Column(db.String(20), nullable=True)
     comprehensive_consensus = db.Column(db.Boolean, nullable=True)
     comprehensive_votes = db.Column(db.JSON, nullable=True)  # {"ai": 2, "human": 1}
+    comprehensive_started_at = db.Column(db.DateTime, nullable=True)  # 综合评估开始时间
+    comprehensive_completed_at = db.Column(db.DateTime, nullable=True)  # 综合评估完成时间
+    comprehensive_error_message = db.Column(db.Text, nullable=True)  # 综合评估错误信息
     
     # 时间戳
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
@@ -566,35 +584,57 @@ class DigitalHumanDetection(db.Model):
             "id": self.id,
             "video_id": self.video_id,
             "status": self.status,
+            "module_statuses": {
+                "face": self.face_status,
+                "body": self.body_status,
+                "overall": self.overall_status,
+                "comprehensive": self.comprehensive_status
+            },
             "face": {
                 "ai_probability": self.face_ai_probability,
                 "human_probability": self.face_human_probability,
                 "confidence": self.face_confidence,
                 "prediction": self.face_prediction,
-                "raw_results": self.face_raw_results
-            } if self.face_ai_probability is not None else None,
+                "raw_results": self.face_raw_results,
+                "status": self.face_status,
+                "started_at": self.face_started_at.isoformat() if self.face_started_at else None,
+                "completed_at": self.face_completed_at.isoformat() if self.face_completed_at else None,
+                "error_message": self.face_error_message
+            } if self.face_ai_probability is not None or self.face_status != "not_started" else None,
             "body": {
                 "ai_probability": self.body_ai_probability,
                 "human_probability": self.body_human_probability,
                 "confidence": self.body_confidence,
                 "prediction": self.body_prediction,
-                "raw_results": self.body_raw_results
-            } if self.body_ai_probability is not None else None,
+                "raw_results": self.body_raw_results,
+                "status": self.body_status,
+                "started_at": self.body_started_at.isoformat() if self.body_started_at else None,
+                "completed_at": self.body_completed_at.isoformat() if self.body_completed_at else None,
+                "error_message": self.body_error_message
+            } if self.body_ai_probability is not None or self.body_status != "not_started" else None,
             "overall": {
                 "ai_probability": self.overall_ai_probability,
                 "human_probability": self.overall_human_probability,
                 "confidence": self.overall_confidence,
                 "prediction": self.overall_prediction,
-                "raw_results": self.overall_raw_results
-            } if self.overall_ai_probability is not None else None,
+                "raw_results": self.overall_raw_results,
+                "status": self.overall_status,
+                "started_at": self.overall_started_at.isoformat() if self.overall_started_at else None,
+                "completed_at": self.overall_completed_at.isoformat() if self.overall_completed_at else None,
+                "error_message": self.overall_error_message
+            } if self.overall_ai_probability is not None or self.overall_status != "not_started" else None,
             "comprehensive": {
                 "ai_probability": self.comprehensive_ai_probability,
                 "human_probability": self.comprehensive_human_probability,
                 "confidence": self.comprehensive_confidence,
                 "prediction": self.comprehensive_prediction,
                 "consensus": self.comprehensive_consensus,
-                "votes": self.comprehensive_votes
-            } if self.comprehensive_ai_probability is not None else None,
+                "votes": self.comprehensive_votes,
+                "status": self.comprehensive_status,
+                "started_at": self.comprehensive_started_at.isoformat() if self.comprehensive_started_at else None,
+                "completed_at": self.comprehensive_completed_at.isoformat() if self.comprehensive_completed_at else None,
+                "error_message": self.comprehensive_error_message
+            } if self.comprehensive_ai_probability is not None or self.comprehensive_status != "not_started" else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,

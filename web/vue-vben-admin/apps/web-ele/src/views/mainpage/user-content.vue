@@ -6,6 +6,7 @@ import {
   watch,
   onBeforeUnmount,
   nextTick,
+  h,
 } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
@@ -25,7 +26,6 @@ echarts.use([
   LegendComponent,
   CanvasRenderer,
 ]);
-
 import {
   ElAlert,
   ElAvatar,
@@ -45,6 +45,8 @@ import {
   ElSelect,
   ElOption,
   ElMessageBox,
+  ElProgress,
+  ElDivider,
 } from 'element-plus';
 
 import {
@@ -65,7 +67,9 @@ import {
   Loading,
   ChatLineRound,
   Location,
-  UserFilled, // 添加这个图标
+  UserFilled,
+  Plus, // 添加这个 - 关注图标可能用到
+  Collection, // 添加这个 - 收藏图标
 } from '@element-plus/icons-vue';
 const loadingStats = ref(false);
 const statsData = ref({
@@ -75,7 +79,42 @@ const statsData = ref({
   risk_distribution: [],
   analysis_status: [],
 });
-
+const analysisTemplate = ref('light'); // 默认完整分析
+const analysisTemplates = ref([
+  {
+    value: 'full',
+    label: '完整分析',
+    description: '包含所有分析步骤',
+  },
+  {
+    value: 'light',
+    label: '轻量分析',
+    description: '基础内容分析和数字人检测',
+  },
+  {
+    value: 'content',
+    label: '内容分析',
+    description: '专注内容安全评估',
+  },
+]);
+// 添加获取预计时间的函数
+const getEstimatedTime = (template, videoCount = 1) => {
+  const timePerVideo = {
+    'full': 25,      // 完整分析：25分钟
+    'light': 5,      // 轻量分析：5分钟
+    'content': 3     // 内容分析：3分钟
+  };
+  
+  const minutes = (timePerVideo[template] || 5) * videoCount;
+  
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}小时${remainingMinutes}分钟` : `${hours}小时`;
+  }
+  
+  return `${minutes}分钟`;
+};
 // 图表引用
 const analysisStatusChart = ref(null);
 const riskDistributionChart = ref(null);
@@ -274,7 +313,6 @@ const hasVideosToAnalyze = computed(() => {
   );
 });
 
-// 批量分析视频
 const batchAnalyzeVideos = async () => {
   if (batchAnalyzing.value) {
     ElMessage.info('批量分析任务正在进行中，请稍候');
@@ -292,23 +330,88 @@ const batchAnalyzeVideos = async () => {
   }
 
   try {
-    batchAnalyzing.value = true;
+    // 获取当前选择的模板信息
+    const selectedTemplate = analysisTemplates.value.find(
+      (t) => t.value === analysisTemplate.value,
+    );
+    const templateName = selectedTemplate ? selectedTemplate.label : '未知模板';
+    const templateDesc = selectedTemplate ? selectedTemplate.description : '';
 
-    // 显示确认对话框
+    // 显示美化的确认对话框
     await ElMessageBox.confirm(
-      `确定要批量分析选中的 ${videosToAnalyze.length} 个视频吗？`,
+      '', // 主要内容放在message中
       '批量分析确认',
       {
-        confirmButtonText: '确定分析',
+        confirmButtonText: '立即开始分析',
         cancelButtonText: '取消',
         type: 'info',
+        customClass: 'batch-analysis-confirm-dialog',
+        showCancelButton: true,
+        closeOnClickModal: false,
+        // 修改 batchAnalyzeVideos 函数中的消息结构
+        message: h('div', { class: 'analysis-confirm-content' }, [
+          // 头部标题区
+          h('div', { class: 'confirm-header' }, [
+            h('div', { class: 'confirm-title' }, '即将启动批量分析'),
+            h('div', { class: 'confirm-subtitle' }, '请确认以下分析配置'),
+          ]),
+
+          // 主要信息卡片 - 改为单列布局
+          h('div', { class: 'confirm-info-card' }, [
+            // 视频数量信息
+            h('div', { class: 'info-row' }, [
+              h('div', { class: 'info-label' }, [
+                h('span', { style: 'margin-right: 6px;' }, '📹'),
+                h('span', '分析对象'),
+              ]),
+              h(
+                'div',
+                { class: 'info-value highlight' },
+                `${videosToAnalyze.length} 个视频`,
+              ),
+            ]),
+
+            // 分析模板信息
+            h('div', { class: 'info-row' }, [
+              h('div', { class: 'info-label' }, [
+                h('span', { style: 'margin-right: 6px;' }, '⚙️'),
+                h('span', '分析模板'),
+              ]),
+              h('div', { class: 'info-value' }, [
+                h('span', { class: 'template-name' }, templateName),
+                h('div', { class: 'template-desc' }, templateDesc),
+              ]),
+            ]),
+          ]),
+
+          // 预计信息 - 使用新的时间计算
+          h('div', { class: 'estimate-info' }, [
+            h('div', { class: 'estimate-item' }, [
+              h('span', { class: 'estimate-label' }, '⏱️ 预计用时：'),
+              h(
+                'span',
+                { class: 'estimate-value' },
+                getEstimatedTime(
+                  analysisTemplate.value,
+                  videosToAnalyze.length,
+                ),
+              ),
+            ]),
+            h('div', { class: 'estimate-item' }, [
+              h('span', { class: 'estimate-label' }, '🔄 处理方式：'),
+              h('span', { class: 'estimate-value' }, '逐个分析'),
+            ]),
+          ]),
+        ]),
       },
     );
+
+    batchAnalyzing.value = true;
 
     // 创建进度提示
     const loadingInstance = ElLoading.service({
       lock: true,
-      text: `正在提交分析任务 (0/${videosToAnalyze.length})`,
+      text: `正在提交${templateName}分析任务 (0/${videosToAnalyze.length})`,
       background: 'rgba(0, 0, 0, 0.7)',
     });
 
@@ -321,7 +424,7 @@ const batchAnalyzeVideos = async () => {
 
       // 更新加载提示
       loadingInstance.setText(
-        `正在提交分析任务 (${i + 1}/${videosToAnalyze.length})`,
+        `正在提交${templateName}分析任务 (${i + 1}/${videosToAnalyze.length})`,
       );
 
       try {
@@ -332,6 +435,14 @@ const batchAnalyzeVideos = async () => {
         // 提交分析请求
         const response = await axios.post(
           `/api/account/videos/${video.aweme_id}/analyze`,
+          {
+            template: analysisTemplate.value,
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
         );
 
         if (response.data.code === 200) {
@@ -363,13 +474,15 @@ const batchAnalyzeVideos = async () => {
 
     // 显示结果
     if (successCount > 0 && failCount === 0) {
-      ElMessage.success(`成功提交 ${successCount} 个视频的分析任务`);
+      ElMessage.success(
+        `成功提交 ${successCount} 个视频的${templateName}分析任务`,
+      );
     } else if (successCount > 0 && failCount > 0) {
       ElMessage.warning(
-        `成功提交 ${successCount} 个视频分析任务，${failCount} 个视频提交失败`,
+        `成功提交 ${successCount} 个视频${templateName}分析任务，${failCount} 个视频提交失败`,
       );
     } else {
-      ElMessage.error('所有视频分析任务提交失败');
+      ElMessage.error(`所有视频${templateName}分析任务提交失败`);
     }
   } catch (error) {
     if (error === 'cancel') {
@@ -452,7 +565,7 @@ const getRiskLevelText = (level) => {
   }
 };
 
-// 分析视频
+// 修改 analyzeVideo 函数
 const analyzeVideo = async (row) => {
   if (row.analyzing) {
     ElMessage.info('视频正在分析中，请稍候');
@@ -465,6 +578,58 @@ const analyzeVideo = async (row) => {
   }
 
   try {
+    // 获取当前选择的模板信息
+    const selectedTemplate = analysisTemplates.value.find(
+      (t) => t.value === analysisTemplate.value,
+    );
+    const templateName = selectedTemplate ? selectedTemplate.label : '未知模板';
+    const templateDesc = selectedTemplate ? selectedTemplate.description : '';
+
+    // 显示美化的确认对话框
+    await ElMessageBox.confirm(
+      '', // 主要内容放在message中
+      '分析确认',
+      {
+        confirmButtonText: '开始分析',
+        cancelButtonText: '取消',
+        type: 'info',
+        customClass: 'single-analysis-confirm-dialog',
+        showCancelButton: true,
+        closeOnClickModal: false,
+        message: h('div', { class: 'analysis-confirm-content single' }, [
+          // 头部区域
+          h('div', { class: 'confirm-header' }, [
+            h('div', { class: 'confirm-title' }, '视频分析确认'),
+            h('div', { class: 'confirm-subtitle' }, '即将对此视频进行深度分析'),
+          ]),
+
+          // 分析配置卡片
+          h('div', { class: 'confirm-info-card' }, [
+            h('div', { class: 'info-row' }, [
+              h('div', { class: 'info-label' }, [
+                h('span', { style: 'margin-right: 8px;' }, '⚙️'),
+                h('span', '分析模板'),
+              ]),
+              h('div', { class: 'info-value' }, [
+                h('span', { class: 'template-name' }, templateName),
+                h('div', { class: 'template-desc' }, templateDesc),
+              ]),
+            ]),
+          ]),
+
+          // 快速提示
+          h('div', { class: 'quick-tips' }, [
+            h(
+              'div',
+              { class: 'tip-item' },
+              `⏱️ 预计用时：${getEstimatedTime(analysisTemplate.value)}`,
+            ),
+            h('div', { class: 'tip-item' }, '📊 完成后可查看详细报告'),
+          ]),
+        ]),
+      },
+    );
+
     // 设置分析中状态
     row.analyzing = true;
     row.analysis_progress = 0;
@@ -472,10 +637,18 @@ const analyzeVideo = async (row) => {
     // 调用分析API
     const response = await axios.post(
       `/api/account/videos/${row.aweme_id}/analyze`,
+      {
+        template: analysisTemplate.value,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      },
     );
 
     if (response.data.code === 200) {
-      ElMessage.success('分析任务已启动');
+      ElMessage.success(`${templateName}分析任务已启动`);
 
       // 启动定时器检查分析状态
       if (analysisTimers.value[row.aweme_id]) {
@@ -489,13 +662,15 @@ const analyzeVideo = async (row) => {
       throw new Error(response.data.message || '启动分析失败');
     }
   } catch (error) {
-    console.error('分析视频失败:', error);
-    ElMessage.error(`分析失败: ${error.message || '未知错误'}`);
+    if (error === 'cancel') {
+      ElMessage.info('已取消分析');
+    } else {
+      console.error('分析视频失败:', error);
+      ElMessage.error(`分析失败: ${error.message || '未知错误'}`);
+    }
     row.analyzing = false;
   }
 };
-
-// 检查分析状态
 // 检查分析状态
 const checkAnalysisStatus = async (row) => {
   try {
@@ -991,7 +1166,35 @@ onBeforeUnmount(() => {
           <h3>发布视频列表</h3>
           <span class="video-count">共 {{ totalItems }} 条内容</span>
         </div>
-
+        <!-- 新增：分析模板选择器 - 放在中间位置 -->
+        <div class="template-selector-section">
+          <span class="template-label">分析模板：</span>
+          <el-select
+            v-model="analysisTemplate"
+            size="small"
+            style="width: 140px"
+          >
+            <el-option
+              v-for="template in analysisTemplates"
+              :key="template.value"
+              :label="template.label"
+              :value="template.value"
+            >
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  width: 100%;
+                "
+              >
+                <span>{{ template.label }}</span>
+                <span style="color: #8492a6; font-size: 12px; margin-left: 8px">
+                  {{ template.description }}
+                </span>
+              </div>
+            </el-option>
+          </el-select>
+        </div>
         <!-- 中间：表格操作区域 -->
         <div v-if="multipleSelection.length > 0" class="table-operations">
           <span class="selected-count"
@@ -1685,6 +1888,453 @@ onBeforeUnmount(() => {
 
   .search-input {
     flex: 1;
+  }
+}
+</style>
+<style>
+/* 修改按钮样式 - 去掉紫色渐变 */
+.batch-analysis-confirm-dialog .el-button--primary {
+  background: #409eff !important;
+  border: 1px solid #409eff !important;
+  border-radius: 8px !important;
+  padding: 10px 20px !important;
+  font-weight: 500 !important;
+}
+
+.batch-analysis-confirm-dialog .el-button--primary:hover {
+  background: #66b1ff !important;
+  border-color: #66b1ff !important;
+}
+
+.single-analysis-confirm-dialog .el-button--primary {
+  background: #409eff !important;
+  border: 1px solid #409eff !important;
+  border-radius: 8px !important;
+  padding: 10px 20px !important;
+  font-weight: 500 !important;
+}
+
+.single-analysis-confirm-dialog .el-button--primary:hover {
+  background: #66b1ff !important;
+  border-color: #66b1ff !important;
+}
+
+/* 修复布局问题 - 信息卡片使用单列布局 */
+.confirm-info-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #e3e6ea;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0;
+  min-height: 24px;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: #495057;
+  font-size: 14px;
+  flex: 0 0 auto;
+  min-width: 80px;
+}
+
+.info-value {
+  text-align: right;
+  flex: 1;
+  margin-left: 12px;
+}
+
+.info-value.highlight {
+  color: #409eff;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.template-name {
+  color: #409eff;
+  font-weight: 600;
+  font-size: 14px;
+  display: block;
+  text-align: right;
+}
+
+.template-desc {
+  color: #6c757d;
+  font-size: 12px;
+  margin-top: 2px;
+  line-height: 1.3;
+  text-align: right;
+  max-width: none;
+}
+
+/* 响应式优化 */
+@media (max-width: 600px) {
+  .info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  .info-label {
+    font-size: 13px;
+    min-width: auto;
+  }
+
+  .info-value {
+    text-align: left;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .template-name,
+  .template-desc {
+    text-align: left;
+  }
+}
+/* 优化后的确认对话框样式 */
+.batch-analysis-confirm-dialog .el-message-box {
+  min-width: 480px !important;
+  max-width: 520px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15) !important;
+}
+
+.batch-analysis-confirm-dialog .el-message-box__header {
+  padding: 20px 20px 15px !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+.batch-analysis-confirm-dialog .el-message-box__title {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #2c3e50 !important;
+}
+
+.batch-analysis-confirm-dialog .el-message-box__content {
+  padding: 0 !important;
+}
+
+.batch-analysis-confirm-dialog .el-message-box__btns {
+  padding: 15px 20px 20px !important;
+  border-top: 1px solid #f0f0f0 !important;
+}
+
+.batch-analysis-confirm-dialog .el-button--primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 10px 20px !important;
+  font-weight: 500 !important;
+}
+
+.batch-analysis-confirm-dialog .el-button--default {
+  border-radius: 8px !important;
+  padding: 10px 20px !important;
+}
+
+.single-analysis-confirm-dialog .el-message-box {
+  min-width: 420px !important;
+  max-width: 460px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15) !important;
+}
+
+.single-analysis-confirm-dialog .el-message-box__header {
+  padding: 20px 20px 15px !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+.single-analysis-confirm-dialog .el-message-box__title {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #2c3e50 !important;
+}
+
+.single-analysis-confirm-dialog .el-message-box__content {
+  padding: 0 !important;
+}
+
+.single-analysis-confirm-dialog .el-message-box__btns {
+  padding: 15px 20px 20px !important;
+  border-top: 1px solid #f0f0f0 !important;
+}
+
+.single-analysis-confirm-dialog .el-button--primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 10px 20px !important;
+  font-weight: 500 !important;
+}
+
+/* 优化确认内容布局 */
+.analysis-confirm-content {
+  padding: 16px 20px !important;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.confirm-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.confirm-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 6px;
+}
+
+.confirm-subtitle {
+  font-size: 13px;
+  color: #7f8c8d;
+}
+
+/* 紧凑的信息卡片样式 */
+.confirm-info-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid #e3e6ea;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  min-height: 24px;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: #495057;
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+
+.info-value {
+  text-align: right;
+  flex: 1;
+  margin-left: 12px;
+}
+
+.info-value.highlight {
+  color: #667eea;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.template-name {
+  color: #667eea;
+  font-weight: 600;
+  font-size: 14px;
+  display: block;
+  text-align: right;
+}
+
+.template-desc {
+  color: #6c757d;
+  font-size: 12px;
+  margin-top: 2px;
+  line-height: 1.3;
+  text-align: right;
+}
+
+/* 更紧凑的预计信息 */
+.estimate-info {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.estimate-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.estimate-item:last-child {
+  margin-bottom: 0;
+}
+
+.estimate-label {
+  color: #856404;
+  font-weight: 500;
+}
+
+.estimate-value {
+  color: #856404;
+  font-weight: 600;
+}
+
+/* 更紧凑的提示区域 */
+.tips-section {
+  background: #e7f3ff;
+  border: 1px solid #b3d8ff;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.tips-title {
+  font-weight: 600;
+  color: #0066cc;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.tips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tip-item {
+  color: #0066cc;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* 更紧凑的快速提示 */
+.quick-tips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.quick-tips .tip-item {
+  color: #495057;
+  font-size: 12px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+/* 单个分析对话框的优化 */
+.analysis-confirm-content.single {
+  padding: 14px 20px !important;
+}
+
+.analysis-confirm-content.single .confirm-header {
+  margin-bottom: 16px;
+}
+
+.analysis-confirm-content.single .confirm-info-card {
+  margin-bottom: 12px;
+}
+
+/* 模板选择器也优化一下 */
+.template-selector-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.template-label {
+  font-size: 13px;
+  color: #495057;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* 响应式优化 */
+@media (max-width: 600px) {
+  .batch-analysis-confirm-dialog .el-message-box,
+  .single-analysis-confirm-dialog .el-message-box {
+    min-width: 90vw !important;
+    max-width: 95vw !important;
+    margin: 0 2.5vw !important;
+  }
+
+  .info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+
+  .info-label {
+    font-size: 13px;
+  }
+
+  .info-value {
+    text-align: left;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .template-name,
+  .template-desc {
+    text-align: left;
+  }
+
+  .estimate-item {
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 8px;
+  }
+
+  .quick-tips {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .quick-tips .tip-item {
+    font-size: 11px;
+    padding: 6px;
+  }
+}
+
+/* 额外的紧凑样式 */
+@media (min-width: 601px) {
+  .analysis-confirm-content {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .template-desc {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 </style>

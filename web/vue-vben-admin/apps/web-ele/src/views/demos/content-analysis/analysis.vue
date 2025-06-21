@@ -13,6 +13,8 @@ import {
   ElResult,
   ElButton,
   ElLoading,
+  ElDivider,
+  ElProgress,
 } from 'element-plus';
 import {
   Close,
@@ -228,9 +230,43 @@ const loadDigitalHumanData = async () => {
     const videoId = route.query.id;
     if (!videoId) return;
 
-    const response = await axios.get(`/api/videos/${videoId}/digital-human/result`);
-    if (response.data.code === 200) {
-      digitalHumanData.value = response.data.data;
+    // 优先尝试获取检测结果
+    try {
+      const response = await axios.get(`/api/videos/${videoId}/digital-human/result`);
+      if (response.data.code === 200) {
+        digitalHumanData.value = response.data.data.detection;
+        console.log('成功加载数字人检测结果:', digitalHumanData.value);
+        return;
+      }
+    } catch (resultError) {
+      // 如果404，说明没有完成的结果，继续检查状态
+      if (resultError.response?.status === 404) {
+        console.log('没有完成的检测结果，检查检测状态...');
+      } else {
+        console.error('获取检测结果时出错:', resultError);
+      }
+    }
+
+    // 如果没有完成的结果，检查是否有进行中的检测
+    try {
+      const statusResponse = await axios.get(`/api/videos/${videoId}/digital-human/status`);
+      if (statusResponse.data.code === 200) {
+        const statusData = statusResponse.data.data;
+        console.log('检测状态:', statusData.status);
+        
+        // 即使是processing状态，我们也不在这里设置digitalHumanData
+        // 让数字人检测页面自己处理
+        if (statusData.status === 'completed' && statusData.results) {
+          digitalHumanData.value = statusData.results;
+        }
+      }
+    } catch (statusError) {
+      // 404说明没有任何检测记录，这是正常的
+      if (statusError.response?.status === 404) {
+        console.log('没有找到任何数字人检测记录');
+      } else {
+        console.error('检查检测状态时出错:', statusError);
+      }
     }
   } catch (error) {
     console.error('加载数字人检测数据失败:', error);
@@ -456,6 +492,9 @@ const loadVideoData = async () => {
         },
       };
     }
+
+    // 新增：加载数字人检测数据
+    await loadDigitalHumanData();
 
     loading.value = false;
   } catch (error) {

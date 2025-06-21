@@ -14,6 +14,8 @@ from utils.database import VideoFile, db, DouyinVideo  # 添加DouyinVideo导入
 from utils.database import VideoFile, db
 from utils.HttpResponse import HttpResponse
 import json
+from api.workflow import start_video_workflow, WORKFLOW_TEMPLATES
+
 # 定义下载目录
 BASE_DIR = Path(os.path.abspath(os.path.dirname(__file__))).parent.parent.parent
 DOWNLOAD_DIR = BASE_DIR / "downloads"
@@ -35,7 +37,12 @@ def download_and_analyze_video():
         video_url = request.args.get('url')
         prefix = request.args.get('prefix', 'true').lower() == 'true'
         with_watermark = request.args.get('with_watermark', 'false').lower() == 'true'
-        
+        #获取分析参数模板
+        analysis_template = request.args.get('template', 'full')
+        # 验证模板是否有效
+        if analysis_template not in WORKFLOW_TEMPLATES:
+            logger.warning(f"未知的分析模板: {analysis_template}，使用默认full模板")
+            analysis_template = 'full'
         if not video_url:
             return {"code": 400, "message": "缺少URL参数"}, 400
             
@@ -219,8 +226,8 @@ def download_and_analyze_video():
                     
                     # 启动视频处理
                     processing_thread = threading.Thread(
-                        target=auto_process_video,
-                        args=(file_id,)
+                        target=start_video_workflow,
+                        args=(file_id, analysis_template)
                     )
                     processing_thread.daemon = True
                     processing_thread.start()
@@ -242,7 +249,9 @@ def download_and_analyze_video():
                         "tags": tags,
                         "platform": platform,
                         "originalUrl": video_url,
-                        "downloadPath": str(download_path)
+                        "downloadPath": str(download_path),
+                        "analysis_template": analysis_template,
+                        "template_name": WORKFLOW_TEMPLATES[analysis_template]['name'],
                     }
                 }
                 

@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 
 from utils.database import DouyinVideo, UserAnalysisTask, UserProfile, db
+from api.workflow import start_video_workflow, WORKFLOW_TEMPLATES
 
 account_api = Blueprint('account_api', __name__)
 
@@ -184,9 +185,11 @@ def fetch_account_videos(profile_id):
 def analyze_douyin_video(aweme_id):
     """分析抖音视频"""
     try:
+        data = request.get_json() or {}
+        analysis_template = data.get('template', 'light')  # 默认使用full模板
         # 获取视频信息
         video = DouyinVideo.query.filter_by(aweme_id=aweme_id).first()
-        
+
         if not video:
             return jsonify({"code": 404, "message": "视频不存在"}), 404
         
@@ -223,7 +226,7 @@ def analyze_douyin_video(aweme_id):
                 "url": video_url,
                 "prefix": "false",
                 "with_watermark": "false",
-                "template": "full"  # 使用完整分析模板
+                "template": analysis_template  # 使用完整分析模板
             }
         )
         
@@ -262,11 +265,12 @@ def analyze_douyin_video(aweme_id):
         # 返回成功响应
         return jsonify({
             "code": 200,
-            "message": "全流程分析任务已启动",
+            "message": f"{WORKFLOW_TEMPLATES.get(analysis_template, {}).get('name', '指定')}分析任务已启动",
             "data": {
                 "video_id": file_id,
                 "status": "processing",
-                "template": "full"
+                "template": analysis_template,
+                "template_name": WORKFLOW_TEMPLATES.get(analysis_template, {}).get('name', '自定义')
             }
         })
             
