@@ -131,25 +131,25 @@ const props = defineProps({
       <el-divider>检测特征图片</el-divider>
       <div class="detection-images">
         <div class="images-grid">
-          <!-- 面部关键点检测图 -->
+          <!-- 面部区域定位图 -->
           <div class="image-item">
             <div class="image-header">
-              <span class="item-name">面部关键点检测</span>
-              <el-tag type="primary" size="small">特征分析</el-tag>
+              <span class="item-name">面部区域定位</span>
+              <el-tag type="primary" size="small">区域检测</el-tag>
             </div>
             <div class="image-placeholder">
               <el-image
-                :src="`/api/videos/${getVideoId()}/digital-human/face-keypoints`"
+                src="/images/digital-human/face-keypoints.jpg"
                 fit="contain"
-                :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/face-keypoints`]"
+                :preview-src-list="['/images/digital-human/face-keypoints.jpg']"
                 :hide-on-click-modal="true"
               >
                 <template #error>
                   <div class="image-error">
                     <el-icon size="32"><Picture /></el-icon>
                     <div class="error-text">
-                      <div>面部关键点检测图</div>
-                      <div class="error-subtitle">暂未生成</div>
+                      <div>面部区域定位图</div>
+                      <div class="error-subtitle">图片加载失败</div>
                     </div>
                   </div>
                 </template>
@@ -162,28 +162,28 @@ const props = defineProps({
               </el-image>
             </div>
             <div class="image-description">
-              基于Xception模型的面部关键点定位和特征提取分析
+              基于MediaPipe的面部区域精确定位和边界框检测
             </div>
           </div>
-          <!-- 纹理特征分析图 -->
+          <!-- 特征热力图 -->
           <div class="image-item">
             <div class="image-header">
-              <span class="item-name">纹理特征分析</span>
-              <el-tag type="warning" size="small">纹理检测</el-tag>
+              <span class="item-name">GradCAM特征热力图</span>
+              <el-tag type="warning" size="small">热力分析</el-tag>
             </div>
             <div class="image-placeholder">
               <el-image
-                :src="`/api/videos/${getVideoId()}/digital-human/face-texture`"
+                src="/images/digital-human/face-heatmap.jpg"
                 fit="contain"
-                :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/face-texture`]"
+                :preview-src-list="['/images/digital-human/face-heatmap.jpg']"
                 :hide-on-click-modal="true"
               >
                 <template #error>
                   <div class="image-error">
                     <el-icon size="32"><Picture /></el-icon>
                     <div class="error-text">
-                      <div>面部纹理特征图</div>
-                      <div class="error-subtitle">暂未生成</div>
+                      <div>特征热力图</div>
+                      <div class="error-subtitle">图片加载失败</div>
                     </div>
                   </div>
                 </template>
@@ -196,7 +196,7 @@ const props = defineProps({
               </el-image>
             </div>
             <div class="image-description">
-              面部皮肤纹理和细节的真实性检测分析
+              基于GradCAM技术生成的面部特征重要性可视化热力图
             </div>
           </div>
         </div>
@@ -209,17 +209,17 @@ const props = defineProps({
           <el-descriptions-item label="检测模型">
             基于Xception深度神经网络
           </el-descriptions-item>
-          <el-descriptions-item label="训练数据集">
-            大规模真实/合成人脸数据集
+          <el-descriptions-item label="面部定位">
+            MediaPipe面部检测框架
           </el-descriptions-item>
-          <el-descriptions-item label="特征提取">
-            多层次面部特征
+          <el-descriptions-item label="特征可视化">
+            GradCAM梯度激活映射
           </el-descriptions-item>
           <el-descriptions-item label="检测精度">
             高精度伪造面部识别
           </el-descriptions-item>
           <el-descriptions-item label="分析维度">
-            关键点、表情、纹理、边缘
+            区域定位、特征热力、纹理、边缘
           </el-descriptions-item>
           <el-descriptions-item label="检测时间">
             {{ formatDateTime(detectionData.face?.raw_results?.metadata?.timestamp) }}
@@ -324,11 +324,24 @@ const props = defineProps({
 }
 
 .image-placeholder {
-  height: 200px;
+  height: 250px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: white;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.image-placeholder :deep(.el-image) {
+  width: 100%;
+  height: 100%;
+}
+
+.image-placeholder :deep(.el-image__inner) {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .image-error,
@@ -362,6 +375,9 @@ const props = defineProps({
   font-size: 0.875rem;
   color: #606266;
   line-height: 1.4;
+  background: white;
+  border-top: 1px solid #f0f0f0;
+  min-height: 60px;
 }
 
 /* 算法详情 */
