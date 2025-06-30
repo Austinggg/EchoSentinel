@@ -282,16 +282,20 @@ const handleExport = (format) => {
 
 <template>
   <div class="threat-report">
-    <div class="threat-report-header">
-      <h3 class="section-heading">内容威胁分析报告</h3>
-      <div class="report-timestamp">
-        生成时间: {{ formatDate(reportData?.timestamp || new Date()) }}
+    <!-- 简化头部 -->
+    <div class="report-header">
+      <div class="header-main">
+        <h2 class="report-title">威胁分析报告</h2>
+        <div class="report-meta">
+          <span class="report-id">{{ reportData?.id || 'TR-' + Date.now().toString().slice(-6) }}</span>
+          <span class="report-time">{{ formatDate(reportData?.timestamp || new Date()) }}</span>
+        </div>
       </div>
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="loading-container">
-      <el-skeleton :rows="10" animated />
+    <div v-if="loading" class="loading-state">
+      <el-skeleton :rows="6" animated />
     </div>
 
     <!-- 错误状态 -->
@@ -302,97 +306,92 @@ const handleExport = (format) => {
       sub-title="无法获取分析报告数据"
     >
       <template #extra>
-        <el-button type="primary" @click="regenerateReport">重试</el-button>
+        <el-button type="primary" @click="regenerateReport">重新分析</el-button>
       </template>
     </el-result>
 
-    <!-- 报告数据显示 -->
-    <div v-else-if="reportData" class="analysis-report">
-      <!-- 风险等级信息 -->
-      <el-card class="risk-info-card" :class="`border-${riskLevelInfo.class}`">
-        <div class="risk-info-header">
-          <div class="risk-level-container">
-            <el-tag
-              :type="riskLevelInfo.class"
-              size="large"
-              effect="dark"
-              class="risk-level-tag"
-            >
-              {{ riskLevelInfo.text }}
-            </el-tag>
-            <div class="risk-probability">
-              风险概率:
-              <span :style="{ color: riskLevelInfo.color }">
-                {{ (reportData.risk_probability * 100).toFixed(1) }}%
-              </span>
-            </div>
-          </div>
-          <div class="action-buttons">
-            <!-- 重新生成按钮 -->
-            <el-button
-              type="primary"
-              @click="regenerateReport"
-              :icon="Refresh"
-              size="small"
-            >
-              重新生成
-            </el-button>
-
-            <!-- 导出下拉菜单 -->
-            <el-dropdown @command="handleExport" class="export-dropdown">
-              <el-button type="success" size="small">
-                <el-icon><Download /></el-icon>
-                导出报告
-                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+    <!-- 报告内容 -->
+    <div v-else-if="reportData" class="report-main">
+      <!-- 风险概览 -->
+      <div class="risk-overview">
+        <div class="risk-header">
+          <h3>风险评估</h3>
+          <div class="actions">
+            <el-button @click="regenerateReport" :icon="Refresh" size="small">重新分析</el-button>
+            <el-dropdown @command="handleExport">
+              <el-button :icon="Download" size="small">
+                导出 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="markdown">
-                    <el-icon><Document /></el-icon>
-                    Markdown (.md)
-                  </el-dropdown-item>
-                  <el-dropdown-item command="pdf">
-                    <el-icon><Document /></el-icon>
-                    PDF文档 (.pdf)
-                  </el-dropdown-item>
-                  <el-dropdown-item command="excel">
-                    <el-icon><Grid /></el-icon>
-                    Excel表格 (.xlsx)
-                  </el-dropdown-item>
-                  <el-dropdown-item command="json">
-                    <el-icon><DataBoard /></el-icon>
-                    JSON数据 (.json)
-                  </el-dropdown-item>
+                  <el-dropdown-item command="pdf">PDF报告</el-dropdown-item>
+                  <el-dropdown-item command="markdown">Markdown</el-dropdown-item>
+                  <el-dropdown-item command="excel">Excel表格</el-dropdown-item>
+                  <el-dropdown-item command="json">JSON数据</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
           </div>
         </div>
-      </el-card>
+        
+        <div class="risk-metrics">
+          <div class="metric-item primary">
+            <div class="metric-label">威胁等级</div>
+            <div class="metric-value">
+              <span class="risk-level" :class="riskLevelInfo.class">{{ riskLevelInfo.text }}</span>
+            </div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-label">风险评分</div>
+            <div class="metric-value">{{ (reportData.risk_probability * 100).toFixed(1) }}%</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-label">分析状态</div>
+            <div class="metric-value">
+              <span class="status-complete">已完成</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <!-- 分析报告内容 -->
-      <el-card class="report-content">
-        <div class="report-container">
+      <!-- 分析报告 -->
+      <div class="analysis-section">
+        <h3>分析报告</h3>
+        <div class="report-content">
           <div
             class="markdown-body"
             v-html="md.render(reportData.report)"
           ></div>
         </div>
-      </el-card>
+      </div>
+
+      <!-- 报告信息 -->
+      <div class="report-info">
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">分析引擎</span>
+            <span class="info-value">EchoSentinel AI</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">报告版本</span>
+            <span class="info-value">v2.1</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">置信度</span>
+            <span class="info-value">{{ (reportData.risk_probability * 100).toFixed(1) }}%</span>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- 没有报告时显示 -->
-    <div v-else>
-      <el-result icon="info" title="暂无分析报告">
-        <template #sub-title>
-          <p>系统尚未对此视频生成分析报告，点击下方按钮生成。</p>
-        </template>
-        <template #extra>
-          <el-button type="primary" @click="regenerateReport">
-            生成分析报告
-          </el-button>
-        </template>
-      </el-result>
+    <!-- 无报告状态 -->
+    <div v-else class="empty-state">
+      <div class="empty-content">
+        <div class="empty-icon">🛡️</div>
+        <h3>暂无威胁分析报告</h3>
+        <p>点击下方按钮开始分析视频内容的潜在威胁</p>
+        <el-button type="primary" @click="regenerateReport">开始分析</el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -400,452 +399,365 @@ const handleExport = (format) => {
 <style scoped>
 .threat-report {
   height: 100%;
-  overflow: auto;
+  background: #f8f9fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
-.threat-report-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
+/* 头部样式 */
+.report-header {
+  background: #fff;
+  border-bottom: 1px solid #ebeef5;
+  padding: 20px 24px;
 }
 
-.section-heading {
-  margin-bottom: 1rem;
-  font-size: 1.125rem;
-  font-weight: 500;
+.header-main {
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
-.report-timestamp {
-  font-size: 14px;
-  color: #909399;
-  font-style: italic;
-}
-
-.loading-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-top: 3rem;
-  padding-bottom: 3rem;
-}
-
-.risk-info-card {
-  margin-bottom: 1rem;
-  border-top-width: 4px;
-}
-
-.risk-info-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.risk-level-container {
-  display: flex;
-  align-items: center;
-}
-
-.risk-level-tag {
-  margin-right: 0.75rem;
-}
-
-.risk-probability {
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.export-dropdown {
-  margin-left: 0.5rem;
-}
-
-.report-content {
-  margin-bottom: 1rem;
-  border-radius: 12px;
-  border: none;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-
-.report-container {
-  padding: 30px;
-}
-
-.border-success {
-  border-top-color: #67c23a;
-}
-
-.border-warning {
-  border-top-color: #e6a23c;
-}
-
-.border-danger {
-  border-top-color: #f56c6c;
-}
-
-.border-info {
-  border-top-color: #909399;
-}
-
-/* 下拉菜单项样式 */
-:deep(.el-dropdown-menu__item) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 统一的Markdown样式 - 与SummaryTab保持一致 */
-:deep(.markdown-body) {
-  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 15px;
-  line-height: 1.8;
-  color: #2c3e50;
-  word-break: break-word;
-}
-
-:deep(.markdown-body h1) {
-  font-size: 24px;
-  font-weight: 600;
-  color: #2c3e50;
-  margin: 0 0 20px 0;
-  padding-bottom: 12px;
-  border-bottom: 3px solid #409eff;
-  position: relative;
-}
-
-:deep(.markdown-body h1::before) {
-  content: '';
-  position: absolute;
-  bottom: -3px;
-  left: 0;
-  width: 60px;
-  height: 3px;
-  background: linear-gradient(90deg, #409eff, #67c23a);
-  border-radius: 2px;
-}
-
-:deep(.markdown-body h2) {
-  margin: 32px 0 16px 0;
+.report-title {
   font-size: 20px;
   font-weight: 600;
-  color: #409eff;
-  background: linear-gradient(135deg, #ecf5ff 0%, #e8f4fd 100%);
-  padding: 12px 16px;
-  border-radius: 8px;
-  border-left: 4px solid #409eff;
-  position: relative;
+  color: #2c3e50;
+  margin: 0 0 8px 0;
 }
 
-:deep(.markdown-body h3) {
-  margin: 24px 0 12px 0;
-  font-size: 17px;
-  font-weight: 600;
-  color: #67c23a;
-  position: relative;
-  padding-left: 20px;
+.report-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #8492a6;
 }
 
-:deep(.markdown-body h3::before) {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 16px;
-  background: #67c23a;
-  border-radius: 2px;
-}
-
-:deep(.markdown-body p) {
-  margin-bottom: 16px;
-  line-height: 1.8;
-  text-align: justify;
-}
-
-:deep(.markdown-body ul, .markdown-body ol) {
-  padding-left: 2em;
-  margin-bottom: 16px;
-}
-
-:deep(.markdown-body li) {
-  margin-bottom: 8px;
-  line-height: 1.6;
-}
-
-:deep(.markdown-body li::marker) {
-  color: #409eff;
-  font-weight: bold;
-}
-
-/* 强调内容样式 */
-:deep(.markdown-body strong) {
-  color: #e6a23c;
-  font-weight: bold;
-  background: linear-gradient(135deg, rgba(255, 229, 100, 0.3), rgba(255, 239, 153, 0.3));
+.report-id {
+  font-family: Monaco, Consolas, monospace;
+  background: #f1f3f4;
   padding: 2px 6px;
-  border-radius: 4px;
-  border-bottom: 2px solid rgba(230, 162, 60, 0.3);
-}
-
-:deep(.markdown-body em) {
-  color: #909399;
-  font-style: italic;
-  background: rgba(144, 147, 153, 0.1);
-  padding: 1px 4px;
   border-radius: 3px;
 }
 
-/* 引用样式 */
-:deep(.markdown-body blockquote) {
-  margin: 20px 0;
+/* 主要内容 */
+.report-main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 风险概览 */
+.risk-overview {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+  overflow: hidden;
+}
+
+.risk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #f0f9eb 0%, #e8f5e8 100%);
-  border-left: 4px solid #67c23a;
-  border-radius: 0 8px 8px 0;
-  font-style: italic;
-  color: #67c23a;
-  position: relative;
+  border-bottom: 1px solid #ebeef5;
+  background: #fafbfc;
 }
 
-:deep(.markdown-body blockquote::before) {
-  content: '"';
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  font-size: 24px;
-  color: #67c23a;
-  opacity: 0.5;
-}
-
-/* 代码样式 */
-:deep(.markdown-body code) {
-  background: #f4f4f5;
-  color: #e6a23c;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Monaco', 'Consolas', monospace;
-  font-size: 0.9em;
-  border: 1px solid #e9ecef;
-}
-
-/* 威胁报告特殊样式 */
-:deep(.markdown-body > p:first-child) {
+.risk-header h3 {
   font-size: 16px;
-  background: linear-gradient(135deg, #fef0f0 0%, #fde2e2 100%);
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.risk-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1px;
+  background: #ebeef5;
+}
+
+.metric-item {
+  background: #fff;
   padding: 20px;
-  border-radius: 10px;
-  border-left: 5px solid #f56c6c;
+  text-align: center;
+}
+
+.metric-item.primary {
+  background: #f8f9fa;
+}
+
+.metric-label {
+  font-size: 13px;
+  color: #8492a6;
+  margin-bottom: 8px;
   font-weight: 500;
-  margin-bottom: 25px;
-  box-shadow: 0 2px 12px rgba(245, 108, 108, 0.1);
-  position: relative;
 }
 
-:deep(.markdown-body > p:first-child::before) {
-  content: '⚠️';
-  position: absolute;
-  left: -12px;
-  top: 20px;
-  background: white;
-  padding: 4px;
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
 }
 
-/* 表格样式 */
+/* 风险等级样式 */
+.risk-level {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.risk-level.success {
+  background: #e8f5e8;
+  color: #52c41a;
+}
+
+.risk-level.warning {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.risk-level.danger {
+  background: #fff2f0;
+  color: #ff4d4f;
+}
+
+.risk-level.info {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.status-complete {
+  color: #52c41a;
+  font-weight: 500;
+}
+
+/* 分析部分 */
+.analysis-section {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+  overflow: hidden;
+}
+
+.analysis-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid #ebeef5;
+  background: #fafbfc;
+}
+
+.report-content {
+  padding: 24px;
+}
+
+/* 报告信息 */
+.report-info {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+  padding: 16px 20px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-label {
+  font-size: 13px;
+  color: #8492a6;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 13px;
+  color: #2c3e50;
+  font-family: Monaco, Consolas, monospace;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.empty-content {
+  text-align: center;
+  max-width: 300px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-content h3 {
+  font-size: 18px;
+  color: #2c3e50;
+  margin: 0 0 8px 0;
+}
+
+.empty-content p {
+  color: #8492a6;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* 加载状态 */
+.loading-state {
+  max-width: 1000px;
+  margin: 24px auto;
+  padding: 0 24px;
+}
+
+/* Markdown样式 - 简洁专业版 */
+:deep(.markdown-body) {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #2c3e50;
+}
+
+:deep(.markdown-body h1),
+:deep(.markdown-body h2) {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 20px 0 12px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+:deep(.markdown-body h3) {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 16px 0 8px 0;
+}
+
+:deep(.markdown-body p) {
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+:deep(.markdown-body strong) {
+  color: #2c3e50;
+  font-weight: 600;
+  background: #fff7e6;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+:deep(.markdown-body ul),
+:deep(.markdown-body ol) {
+  padding-left: 20px;
+  margin-bottom: 12px;
+}
+
+:deep(.markdown-body li) {
+  margin-bottom: 4px;
+}
+
+:deep(.markdown-body blockquote) {
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-left: 3px solid #dcdfe6;
+  color: #606266;
+}
+
+:deep(.markdown-body code) {
+  background: #f1f3f4;
+  color: #2c3e50;
+  padding: 2px 4px;
+  border-radius: 2px;
+  font-family: Monaco, Consolas, monospace;
+  font-size: 0.9em;
+}
+
 :deep(.markdown-body table) {
   width: 100%;
   border-collapse: collapse;
-  margin: 20px 0;
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-:deep(.markdown-body table th) {
-  background: linear-gradient(135deg, #409eff 0%, #67c23a 100%);
-  color: white;
-  padding: 12px 16px;
-  border: none;
-  font-weight: 600;
-  text-align: left;
-}
-
-:deep(.markdown-body table td) {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.2s ease;
-}
-
-:deep(.markdown-body table tr:hover td) {
-  background-color: #f8f9fa;
-}
-
-:deep(.markdown-body table tr:last-child td) {
-  border-bottom: none;
-}
-
-/* 威胁等级标识样式 */
-:deep(.markdown-body p:has(> ▲)) {
-  background: linear-gradient(135deg, #fef0f0 0%, #fde2e2 100%);
-  padding: 16px 20px;
-  border-radius: 8px;
-  border-left: 4px solid #f56c6c;
-  margin-bottom: 20px;
-  position: relative;
-  box-shadow: 0 2px 8px rgba(245, 108, 108, 0.1);
-}
-
-:deep(.markdown-body p ▲) {
-  color: #f56c6c;
-  font-weight: bold;
-  margin-right: 8px;
-  font-size: 16px;
-}
-
-/* 数字列表样式增强 */
-:deep(.markdown-body ol) {
-  padding-left: 0;
-  margin-bottom: 20px;
-  counter-reset: list-counter;
-}
-
-:deep(.markdown-body ol li) {
-  margin-bottom: 12px;
-  padding: 12px 16px 12px 50px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border-left: 4px solid #409eff;
-  position: relative;
-  counter-increment: list-counter;
-  transition: all 0.2s ease;
-}
-
-:deep(.markdown-body ol li:hover) {
-  background: #ecf5ff;
-  border-left-color: #67c23a;
-  transform: translateX(2px);
-}
-
-:deep(.markdown-body ol li::before) {
-  content: counter(list-counter);
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
-  background: linear-gradient(135deg, #409eff, #67c23a);
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 12px;
-}
-
-/* 段落内强调文本增强 */
-:deep(.markdown-body p strong:first-of-type) {
-  display: inline-block;
-  margin-right: 8px;
-  background: linear-gradient(135deg, #409eff, #67c23a);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
+  margin: 12px 0;
   font-size: 13px;
 }
 
-/* 预格式化文本样式 */
-:deep(.markdown-body pre) {
-  background: #f6f8fa;
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid #e1e4e8;
-  overflow-x: auto;
+:deep(.markdown-body table th) {
+  background: #f8f9fa;
+  color: #2c3e50;
+  padding: 8px 12px;
+  border: 1px solid #ebeef5;
+  font-weight: 600;
+}
+
+:deep(.markdown-body table td) {
+  padding: 8px 12px;
+  border: 1px solid #ebeef5;
+}
+
+/* 威胁重点标注 */
+:deep(.markdown-body p:has(strong:contains('▲'))) {
+  background: linear-gradient(135deg, #fff2f0 0%, #ffebe8 100%);
+  border-left: 3px solid #ff4d4f;
+  padding: 12px 16px;
   margin: 16px 0;
+  border-radius: 4px;
 }
 
-:deep(.markdown-body pre code) {
-  background: none;
-  color: #24292e;
-  padding: 0;
-  border: none;
-}
-
-/* 分割线样式 */
-:deep(.markdown-body hr) {
-  border: none;
-  height: 2px;
-  background: linear-gradient(90deg, #409eff, #67c23a);
-  margin: 32px 0;
-  border-radius: 1px;
+:deep(.markdown-body strong:contains('▲')) {
+  color: #ff4d4f;
+  background: transparent;
+  font-weight: 700;
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .threat-report-header {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
+  .report-main {
+    padding: 16px;
+    gap: 16px;
   }
   
-  .risk-info-header {
+  .risk-header {
     flex-direction: column;
     gap: 12px;
-    align-items: flex-start;
+    align-items: stretch;
   }
   
-  .risk-level-container {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-  }
-  
-  .action-buttons {
-    width: 100%;
+  .actions {
     justify-content: center;
   }
   
-  .report-container {
-    padding: 20px;
+  .risk-metrics {
+    grid-template-columns: 1fr;
   }
   
-  :deep(.markdown-body) {
-    font-size: 14px;
+  .info-grid {
+    grid-template-columns: 1fr;
   }
   
-  :deep(.markdown-body ol li) {
-    padding: 10px 12px 10px 40px;
-  }
-  
-  :deep(.markdown-body ol li::before) {
-    left: 12px;
-    width: 20px;
-    height: 20px;
-    font-size: 11px;
-  }
-}
-
-@media (max-width: 480px) {
-  .section-heading {
-    font-size: 1rem;
-  }
-  
-  .action-buttons {
+  .info-item {
     flex-direction: column;
-    gap: 8px;
-  }
-  
-  .action-buttons .el-button {
-    width: 100%;
+    gap: 4px;
+    align-items: flex-start;
   }
 }
 </style>

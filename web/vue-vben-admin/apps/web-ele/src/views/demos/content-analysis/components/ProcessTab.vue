@@ -479,10 +479,10 @@ const getLabelPosition = (index) => {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 2px;
+  width: 1px;
   height: 50%;
   background: #e2e8f0;
-  transform-origin: bottom center;
+  transform-origin: 0 0;
 }
 
 .axis-line {
@@ -570,15 +570,22 @@ const getLabelPosition = (index) => {
 
 .point-tooltip {
   position: absolute;
-  top: -30px;
+  top: -25px;
   left: 50%;
   transform: translateX(-50%);
   background: white;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  font-size: 12px;
+  font-size: 10px;
   white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.radar-point:hover .point-tooltip {
+  opacity: 1;
 }
 
 .radar-labels {
@@ -593,17 +600,29 @@ const getLabelPosition = (index) => {
   position: absolute;
   top: 50%;
   left: 50%;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 500;
   white-space: nowrap;
   transform-origin: 0 0;
   background: rgba(255, 255, 255, 0.9);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
   border: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.label-text {
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.label-score {
+  font-size: 8px;
+  font-weight: 600;
+  margin-top: 1px;
 }
 
 /* 柱状图样式 - 修复动画问题 */

@@ -75,6 +75,22 @@ const factCheckStatusInfo = computed(() => {
       return { class: 'info', text: '未核查' };
   }
 });
+
+// 判断是否为404错误（表示尚未启动事实核查）
+const isNotStarted = computed(() => {
+  return props.error && (
+    props.error.includes('404') || 
+    props.error.includes('Request failed with status code 404') ||
+    props.error.includes('该视频尚未进行事实核查')
+  );
+});
+
+// 添加新的计算属性来判断是否已完成但不值得核查
+const isCompletedNotWorthChecking = computed(() => {
+  return props.factCheckData && 
+         props.factCheckData.status === 'completed' && 
+         props.factCheckData.worth_checking === false;
+});
 </script>
 
 <template>
@@ -91,16 +107,41 @@ const factCheckStatusInfo = computed(() => {
       <el-skeleton :rows="10" animated />
     </div>
 
-    <!-- 错误状态 -->
+    <!-- 尚未启动事实核查状态 (404错误) -->
+    <el-result
+      v-if="isNotStarted"
+      icon="info"
+      title="尚未启动事实核查"
+      sub-title="该视频还没有进行事实核查，点击下方按钮开始核查"
+    >
+      <template #extra>
+        <el-button type="primary" @click="generateFactCheck" size="large">
+          <el-icon class="mr-1"><InfoFilled /></el-icon>
+          开始事实核查
+        </el-button>
+        <el-button @click="loadFactCheckData" size="large">
+          <el-icon class="mr-1"><Refresh /></el-icon>
+          刷新状态
+        </el-button>
+      </template>
+    </el-result>
+
+    <!-- 其他错误状态 -->
     <el-result
       v-else-if="error"
       icon="error"
-      :title="error"
-      sub-title="无法获取事实核查数据"
+      title="获取数据失败"
+      :sub-title="error"
     >
       <template #extra>
-        <el-button type="primary" @click="loadFactCheckData">重试</el-button>
-        <el-button type="success" @click="generateFactCheck">重新核查</el-button>
+        <el-button type="primary" @click="loadFactCheckData">
+          <el-icon class="mr-1"><Refresh /></el-icon>
+          重新加载
+        </el-button>
+        <el-button type="success" @click="generateFactCheck">
+          <el-icon class="mr-1"><InfoFilled /></el-icon>
+          开始核查
+        </el-button>
       </template>
     </el-result>
 
@@ -116,20 +157,35 @@ const factCheckStatusInfo = computed(() => {
       </template>
     </el-result>
 
-    <!-- 尚未进行核查的状态 -->
-    <el-result
-      v-else-if="notFound"
-      icon="info"
-      title="暂无事实核查结果"
-      sub-title="该视频尚未进行事实核查，点击下方按钮开始核查。"
-    >
-      <template #extra>
-        <el-button type="primary" @click="generateFactCheck">开始事实核查</el-button>
-      </template>
-    </el-result>
+    <!-- 不值得核查状态 - 修复这个判断逻辑 -->
+    <div v-else-if="isCompletedNotWorthChecking" class="not-worth-checking">
+      <el-card class="status-card border-info">
+        <div class="status-header">
+          <div class="status-info">
+            <el-tag type="info" size="large" effect="dark" class="status-tag">
+              已完成
+            </el-tag>
+            <span class="not-worth-checking-label">无需核查</span>
+          </div>
+          <div class="action-buttons">
+            <el-button
+              type="primary"
+              @click="generateFactCheck"
+              :icon="Refresh"
+              size="small"
+            >
+              重新核查
+            </el-button>
+          </div>
+        </div>
+        <div class="reason-text">
+          {{ factCheckData.reason || '系统判断该内容不需要进行事实核查' }}
+        </div>
+      </el-card>
+    </div>
 
-    <!-- 事实核查结果展示 -->
-    <div v-else-if="factCheckData?.worth_checking" class="factcheck-result">
+    <!-- 事实核查结果展示 - 值得核查且有结果 -->
+    <div v-else-if="factCheckData?.worth_checking === true" class="factcheck-result">
       <!-- 核查状态卡片 -->
       <el-card class="status-card" :class="`border-${factCheckStatusInfo.class}`">
         <div class="status-header">
@@ -282,33 +338,6 @@ const factCheckStatusInfo = computed(() => {
       </div>
     </div>
 
-    <!-- 不值得核查状态 -->
-    <div
-      v-else-if="factCheckData && factCheckData.status === 'completed'"
-      class="not-worth-checking"
-    >
-      <el-card>
-        <div class="not-worth-header">
-          <el-icon><InfoFilled /></el-icon>
-          <span>该视频内容不需要进行事实核查</span>
-        </div>
-        <div class="reason-text">
-          {{
-            factCheckData.reason ||
-            '该内容没有包含需要核查的重要事实断言。'
-          }}
-        </div>
-        <el-button
-          type="primary"
-          @click="generateFactCheck"
-          size="small"
-          class="retry-button"
-        >
-          重新尝试核查
-        </el-button>
-      </el-card>
-    </div>
-
     <!-- 没有事实核查数据时的初始状态 -->
     <div v-else>
       <el-result
@@ -384,6 +413,15 @@ const factCheckStatusInfo = computed(() => {
 .worth-checking-label {
   background-color: #f0f9eb;
   color: #67c23a;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.not-worth-checking-label {
+  background-color: #f4f4f5;
+  color: #909399;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 14px;
@@ -606,5 +644,10 @@ const factCheckStatusInfo = computed(() => {
   font-size: 85%;
   background-color: rgba(27, 31, 35, 0.05);
   border-radius: 3px;
+}
+
+/* 添加图标间距样式 */
+.mr-1 {
+  margin-right: 4px;
 }
 </style>

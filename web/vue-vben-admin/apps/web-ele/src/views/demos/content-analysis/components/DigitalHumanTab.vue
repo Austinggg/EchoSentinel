@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import axios from 'axios';
 import { useRoute } from 'vue-router';
 import {
@@ -14,7 +14,10 @@ import {
   VideoCamera,
   Refresh,
   Warning,
-  VideoPlay, // 使用 VideoPlay 替代 Play
+  VideoPlay,
+  Camera,
+  CircleCheck,
+  InfoFilled,
 } from '@element-plus/icons-vue';
 
 // 导入拆分的子组件
@@ -40,6 +43,9 @@ const isPolling = ref(false);
 const pollingTimer = ref(null);
 const maxRetries = ref(0);
 const MAX_RETRIES = 100;
+
+// 新增：组件卸载标志
+const isUnmounted = ref(false);
 
 // 新增：单独跟踪各个检测步骤的状态
 const stepStatuses = ref({
@@ -81,7 +87,7 @@ const overallDetectionStatus = computed(() => {
     return 'failed';
   }
   
-  return 'not_started';
+  return detectionStatus.value; // 返回原始状态
 });
 
 // 权重配置
@@ -354,38 +360,6 @@ const formatDateTime = (dateStr) => {
   });
 };
 
-// 步骤切换逻辑
-const nextStep = () => {
-  if (activeStep.value < availableSteps.value.length - 1) {
-    activeStep.value++;
-  }
-};
-
-const prevStep = () => {
-  if (activeStep.value > 0) {
-    activeStep.value--;
-  }
-};
-
-const jumpToStep = (stepType) => {
-  const stepIndex = availableSteps.value.findIndex(step => step.type === stepType);
-  if (stepIndex !== -1) {
-    activeStep.value = stepIndex;
-  }
-};
-
-const handleModuleClick = (stepType) => {
-  if (stepType === 'comprehensive') {
-    return;
-  }
-  
-  if (isStepAvailable(stepType)) {
-    jumpToStep(stepType);
-  } else {
-    retestSingleStep(stepType);
-  }
-};
-
 // 轮询和状态管理函数
 const stopPolling = () => {
   console.log('停止轮询');
@@ -447,10 +421,9 @@ const checkDetectionStatus = async () => {
       if (data.status === 'completed') {
         console.log('数字人检测完成，获取结果...');
         detectionStatus.value = 'completed';
-        detectionData.value = data.results;
         
-        // 更新各步骤状态
-        updateStepStatuses(data.results);
+        // 尝试加载完整结果
+        await loadExistingDetectionResult();
         
         stopPolling();
         ElMessage.success('数字人检测完成');
@@ -462,6 +435,16 @@ const checkDetectionStatus = async () => {
         
         // 根据当前步骤更新步骤状态
         updateProcessingStepStatus(data.current_step);
+        
+        // 检查是否有部分结果可以显示
+        if (data.progress >= 30) { // 假设30%以上可能有部分结果
+          try {
+            await loadExistingDetectionResult();
+          } catch (partialError) {
+            // 部分结果加载失败，继续等待
+            console.log('暂时无法获取部分结果，继续等待');
+          }
+        }
         
       } else if (data.status === 'failed') {
         console.error('数字人检测失败:', data.error_message);
@@ -542,30 +525,120 @@ const updateProcessingStepStatus = (currentStep) => {
   }
 };
 
-// 新增：加载已有检测结果的函数
+// 新增：加载已有检测结果的函数 - 支持部分完成
 const loadExistingDetectionResult = async () => {
   try {
     const videoId = getVideoId();
     if (!videoId) return;
 
-    // 修复API路径：应该调用result接口而不是status接口
     const response = await axios.get(`/api/videos/${videoId}/digital-human/result`);
     if (response.data.code === 200) {
       console.log('加载已有数字人检测结果:', response.data.data);
       detectionData.value = response.data.data.detection;
-      detectionStatus.value = 'completed';
+      
+      // 根据实际状态设置检测状态
+      if (response.data.data.status === 'completed') {
+        detectionStatus.value = 'completed';
+      } else if (response.data.data.status === 'processing') {
+        // 部分完成状态：有些模块完成了，有些还在进行中
+        detectionStatus.value = 'partial_completed';
+      }
       
       // 更新步骤状态
       updateStepStatuses(response.data.data.detection);
       
-      console.log('数字人检测状态已更新为completed，数据:', detectionData.value);
+      console.log('数字人检测状态已更新，数据:', detectionData.value);
     }
   } catch (error) {
     console.log('没有找到已有的数字人检测结果:', error.response?.status);
-    // 404是正常的，说明还没有检测结果
-    if (error.response?.status !== 404) {
+    // 400可能表示部分完成但还在处理中，尝试检查状态
+    if (error.response?.status === 400) {
+      console.log('检测可能在进行中，检查状态...');
+      setTimeout(() => {
+        if (!isUnmounted.value) {
+          checkDetectionStatus();
+        }
+      }, 100);
+    } else if (error.response?.status !== 404) {
       console.error('加载检测结果异常:', error);
     }
+  }
+};
+
+const retestSingleStep = async (stepType) => {
+  try {
+    const videoId = getVideoId();
+    if (!videoId) {
+      ElMessage.error('未找到视频ID');
+      return;
+    }
+
+    detectionStatus.value = 'loading';
+    detectionError.value = null;
+
+    console.log(`开始单步重检: ${stepType}`);
+
+    const response = await axios.post(`/api/videos/${videoId}/digital-human/detect`, {
+      types: [stepType], // 只检测指定类型
+      comprehensive: false, // 单步检测不需要综合评估
+    });
+
+    if (response.data.code === 200) {
+      detectionStatus.value = 'processing';
+      ElMessage.success(`${getStepName(stepType)}重新检测已启动`);
+      startPolling();
+    } else {
+      throw new Error(response.data.message || '启动重检失败');
+    }
+  } catch (error) {
+    console.error('单步重检失败:', error);
+    detectionStatus.value = 'completed'; // 恢复到完成状态
+    ElMessage.error('重检失败: ' + (error.response?.data?.message || error.message));
+  }
+};
+
+// 新增：防止事件冒泡的处理函数 - 但不要过度阻止
+const stopEventPropagation = (event) => {
+  if (event) {
+    event.stopPropagation();
+  }
+};
+
+// 新增：发射事件给父组件，通知内部tab变化（仅用于调试）
+const emit = defineEmits(['update:activeTab']);
+
+// 定义activeStep变量
+const activeStep = ref(0);
+
+// 修改：步骤切换逻辑 - 简化事件处理
+const nextStep = () => {
+  if (activeStep.value < availableSteps.value.length - 1) {
+    activeStep.value++;
+  }
+};
+
+const prevStep = () => {
+  if (activeStep.value > 0) {
+    activeStep.value--;
+  }
+};
+
+const jumpToStep = (stepType) => {
+  const stepIndex = availableSteps.value.findIndex(step => step.type === stepType);
+  if (stepIndex !== -1) {
+    activeStep.value = stepIndex;
+  }
+};
+
+const handleModuleClick = (stepType) => {
+  if (stepType === 'comprehensive') {
+    return;
+  }
+  
+  if (isStepAvailable(stepType)) {
+    jumpToStep(stepType);
+  } else {
+    retestSingleStep(stepType);
   }
 };
 
@@ -608,40 +681,12 @@ const restartDetection = () => {
   activeStep.value = 0;
 };
 
-const retestSingleStep = async (stepType) => {
-  try {
-    const videoId = getVideoId();
-    if (!videoId) {
-      ElMessage.error('未找到视频ID');
-      return;
-    }
-
-    detectionStatus.value = 'loading';
-    detectionError.value = null;
-
-    console.log(`开始单步重检: ${stepType}`);
-
-    const response = await axios.post(`/api/videos/${videoId}/digital-human/detect`, {
-      types: [stepType], // 只检测指定类型
-      comprehensive: false, // 单步检测不需要综合评估
-    });
-
-    if (response.data.code === 200) {
-      detectionStatus.value = 'processing';
-      ElMessage.success(`${getStepName(stepType)}重新检测已启动`);
-      startPolling();
-    } else {
-      throw new Error(response.data.message || '启动重检失败');
-    }
-  } catch (error) {
-    console.error('单步重检失败:', error);
-    detectionStatus.value = 'completed'; // 恢复到完成状态
-    ElMessage.error('重检失败: ' + (error.response?.data?.message || error.message));
-  }
-};
-
-// 定义activeStep变量
-const activeStep = ref(0);
+// 修改：watch activeStep变化时通知父组件 - 使用 nextTick 避免冲突
+watch(activeStep, async (newStep) => {
+  await nextTick();
+  const currentType = availableSteps.value[newStep]?.type;
+  emit('update:activeTab', currentType);
+}, { immediate: false });
 
 // 修改初始化逻辑 - 改进状态判断
 onMounted(async () => {
@@ -703,11 +748,11 @@ watch(() => route.query.id, (newId, oldId) => {
   }
 }, { immediate: false });
 
-// 修改卸载钩子 - 增强清理逻辑
+// 修改：卸载钩子 - 增强清理逻辑
 onUnmounted(() => {
   console.log('数字人检测组件即将卸载，清理资源...');
-  stopPolling();
   isUnmounted.value = true;
+  stopPolling();
   
   // 清理可能存在的延时器
   if (pollingTimer.value) {
@@ -720,11 +765,18 @@ onUnmounted(() => {
   detectionData.value = null;
   detectionError.value = null;
   maxRetries.value = 0;
+  
+  // 清理事件监听器
+  emit('update:activeTab', null);
 });
 </script>
 
 <template>
-  <div class="digital-human-container">
+  <!-- 修改：简化事件处理，避免过度阻止 -->
+  <div 
+    class="digital-human-container" 
+    data-component="digital-human"
+  >
     <!-- 标题和步骤控制 -->
     <div class="header-controls">
       <h3 class="section-heading">数字人检测分析</h3>
@@ -855,7 +907,7 @@ onUnmounted(() => {
     </div>
 
     <!-- 检测完成状态 -->
-    <div v-else-if="overallDetectionStatus === 'partial_completed' || overallDetectionStatus === 'partial_processing' || detectionStatus === 'completed'" class="detection-content">
+    <div v-else-if="overallDetectionStatus === 'partial_completed' || overallDetectionStatus === 'partial_processing' || detectionStatus === 'completed' || detectionStatus === 'partial_completed'" class="detection-content">
       
       <!-- 如果有检测在进行中，显示进度提示 -->
       <div v-if="overallDetectionStatus === 'partial_processing'" class="processing-banner">
@@ -938,10 +990,17 @@ onUnmounted(() => {
 
       <!-- 操作按钮 -->
       <div class="action-buttons">
-        <el-button @click="restartDetection" :icon="Refresh">
+        <el-button 
+          @click="restartDetection" 
+          :icon="Refresh"
+        >
           全部重新检测
         </el-button>
-        <el-button type="primary" @click="activeStep = 0" v-if="currentStepType !== 'comprehensive'">
+        <el-button 
+          type="primary" 
+          @click="activeStep = 0" 
+          v-if="currentStepType !== 'comprehensive'"
+        >
           返回综合评估
         </el-button>
       </div>
@@ -950,8 +1009,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 保留基础容器样式和状态样式 */
+/* 新增：组件容器样式，确保事件隔离但不过度阻止 */
 .digital-human-container {
+  position: relative;
+  z-index: 1;
   height: 100%;
   overflow: auto;
   padding: 0 4px;

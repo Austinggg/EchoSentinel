@@ -35,6 +35,105 @@ const md = new MarkdownIt({
   typographer: true,
 });
 
+// 高亮功能相关
+const enableHighlight = ref(true);
+const userHighlights = ref<string[]>([]);
+
+// 定义关键词列表（根据不同评估项）
+const getKeywords = (itemKey: string): string[] => {
+  const keywordMap = {
+    p1: ['背景信息', '充分', '完整', '详细', '具体', '全面'],
+    p2: ['准确', '客观', '事实', '证据', '数据', '研究', '科学', '误导', '夸大', '偏见'],
+    p3: ['完整性', '遗漏', '缺失', '表达', '逻辑'],
+    p4: ['意图', '目的', '动机', '正当', '合理'],
+    p5: ['信誉', '可信', '权威', '专业', '历史'],
+    p6: ['中立', '情感', '煽动', '极端', '偏激', '客观'],
+    p7: ['自主', '诱导', '强迫', '选择', '自由'],
+    p8: ['一致', '矛盾', '冲突', '统一', '协调']
+  };
+  return keywordMap[itemKey] || [];
+};
+
+// 高亮关键词的函数
+const highlightKeywords = (text: string, keywords: string[]): string => {
+  if (!enableHighlight.value || !keywords.length) return text;
+  
+  let result = text;
+  keywords.forEach(keyword => {
+    const regex = new RegExp(`(${keyword})`, 'gi');
+    result = result.replace(regex, '<mark class="keyword-highlight">$1</mark>');
+  });
+  
+  return result;
+};
+
+// 高亮用户选择的文本
+const highlightUserSelection = (text: string): string => {
+  if (!userHighlights.value.length) return text;
+  
+  let result = text;
+  userHighlights.value.forEach(highlight => {
+    const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    result = result.replace(regex, '<mark class="user-highlight">$1</mark>');
+  });
+  
+  return result;
+};
+
+// 处理文本选择
+const handleTextSelection = () => {
+  const selection = window.getSelection();
+  if (selection && selection.toString().trim()) {
+    const selectedText = selection.toString().trim();
+    if (!userHighlights.value.includes(selectedText)) {
+      userHighlights.value.push(selectedText);
+      ElMessage.success(`已高亮: ${selectedText}`);
+    }
+    selection.removeAllRanges();
+  }
+};
+
+// 清除所有用户高亮
+const clearUserHighlights = () => {
+  userHighlights.value = [];
+  ElMessage.info('已清除所有用户高亮');
+};
+
+// 切换高亮功能
+const toggleHighlight = () => {
+  enableHighlight.value = !enableHighlight.value;
+  // 重新渲染内容
+  if (reasoningData.value && reasoningData.value.reasoning) {
+    renderReasoningContent();
+  }
+};
+
+// 渲染推理内容
+const renderReasoningContent = () => {
+  if (!reasoningData.value || !reasoningData.value.reasoning) return;
+  
+  let content = reasoningData.value.reasoning;
+  
+  // 如果没有markdown格式，添加标题和段落结构
+  if (!content.includes('#')) {
+    content = `## 评估理由\n\n${content}`;
+  }
+  
+  // 先转换markdown
+  let renderedContent = md.render(content);
+  
+  // 应用关键词高亮
+  if (enableHighlight.value) {
+    const keywords = getKeywords(itemKey.value);
+    renderedContent = highlightKeywords(renderedContent, keywords);
+  }
+  
+  // 应用用户高亮
+  renderedContent = highlightUserSelection(renderedContent);
+  
+  reasoningData.value.renderedReasoning = renderedContent;
+};
+
 // 定义评估项的语义映射
 const assessmentNames = {
   p1: '背景信息充分性',
@@ -94,23 +193,16 @@ const loadReasoningData = async () => {
     if (data.analysis && data.analysis.assessments && data.analysis.assessments[itemKey.value]) {
       const assessmentItem = data.analysis.assessments[itemKey.value];
       
-      // 使用markdown渲染理由内容
-      let renderedReasoning = '';
-      if (assessmentItem.reasoning) {
-        // 如果没有markdown格式，添加标题和段落结构
-        const content = assessmentItem.reasoning.includes('#') 
-          ? assessmentItem.reasoning 
-          : `## 评估理由\n\n${assessmentItem.reasoning}`;
-        renderedReasoning = md.render(content);
-      }
-      
       reasoningData.value = {
         key: itemKey.value,
         name: assessmentNames[itemKey.value] || itemKey.value,
         score: assessmentItem.score,
         reasoning: assessmentItem.reasoning,
-        renderedReasoning: renderedReasoning,
+        renderedReasoning: '',
       };
+      
+      // 渲染内容
+      renderReasoningContent();
     } else {
       ElMessage.warning(`未找到评估项 ${itemKey.value} 的理由数据`);
     }
@@ -160,6 +252,25 @@ onMounted(() => {
         <el-icon class="mr-1"><ArrowLeft /></el-icon>
         返回
       </el-button>
+      
+      <!-- 高亮控制按钮 -->
+      <div class="flex items-center gap-2">
+        <el-button 
+          :type="enableHighlight ? 'primary' : 'default'" 
+          size="small" 
+          @click="toggleHighlight"
+        >
+          {{ enableHighlight ? '关闭高亮' : '开启高亮' }}
+        </el-button>
+        <el-button 
+          v-if="userHighlights.length > 0"
+          type="warning" 
+          size="small" 
+          @click="clearUserHighlights"
+        >
+          清除标记 ({{ userHighlights.length }})
+        </el-button>
+      </div>
     </div>
 
     <!-- 加载状态 -->
@@ -251,6 +362,25 @@ onMounted(() => {
         </div>
       </el-alert>
 
+      <!-- 高亮使用说明 -->
+      <el-alert
+        v-if="enableHighlight"
+        type="success"
+        :closable="false"
+        class="mb-4"
+        show-icon
+      >
+        <template #title>
+          <span>文本高亮已启用</span>
+        </template>
+        <div class="text-sm">
+          <p class="mb-2">
+            <span class="keyword-highlight px-1">关键词</span> 会自动高亮显示
+          </p>
+          <p>选中文本可以手动标记重点内容</p>
+        </div>
+      </el-alert>
+
       <el-divider>详细评估理由</el-divider>
       
       <!-- 使用v-html渲染Markdown转换后的HTML -->
@@ -258,6 +388,7 @@ onMounted(() => {
         v-if="reasoningData.renderedReasoning" 
         class="markdown-body reasoning-content"
         v-html="reasoningData.renderedReasoning"
+        @mouseup="handleTextSelection"
       ></div>
       
       <!-- 如果没有理由内容 -->
@@ -284,7 +415,31 @@ onMounted(() => {
   padding: 16px;
 }
 
-/* Markdown样式 */
+/* 高亮样式 */
+:deep(.keyword-highlight) {
+  background: linear-gradient(120deg, #a8e6cf 0%, #dcedc8 100%);
+  color: #2e7d32;
+  font-weight: 500;
+  padding: 1px 3px;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(46, 125, 50, 0.2);
+}
+
+:deep(.user-highlight) {
+  background: linear-gradient(120deg, #ffecb3 0%, #fff3c4 100%);
+  color: #e65100;
+  font-weight: 500;
+  padding: 1px 3px;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(230, 81, 0, 0.2);
+  cursor: pointer;
+}
+
+:deep(.user-highlight:hover) {
+  background: linear-gradient(120deg, #ffe082 0%, #ffecb3 100%);
+}
+
+/* Markdown样式增强 */
 :deep(.markdown-body) {
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -292,6 +447,7 @@ onMounted(() => {
   line-height: 1.6;
   color: #24292e;
   word-break: break-word;
+  user-select: text;
 }
 
 :deep(.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4) {
@@ -299,41 +455,94 @@ onMounted(() => {
   margin-bottom: 16px;
   font-weight: 600;
   line-height: 1.25;
+  color: #1976d2;
 }
 
-:deep(.markdown-body h1) { font-size: 2em; }
+:deep(.markdown-body h1) { 
+  font-size: 2em;
+  border-bottom: 2px solid #1976d2;
+  padding-bottom: 0.3em;
+}
 :deep(.markdown-body h2) {
   font-size: 1.5em;
   padding-bottom: 0.3em;
   border-bottom: 1px solid #eaecef;
 }
-:deep(.markdown-body h3) { font-size: 1.25em; }
-:deep(.markdown-body p) { margin-bottom: 16px; }
+:deep(.markdown-body h3) { 
+  font-size: 1.25em;
+  color: #1565c0;
+}
+
+:deep(.markdown-body p) { 
+  margin-bottom: 16px;
+  text-align: justify;
+}
+
 :deep(.markdown-body ul, .markdown-body ol) {
   padding-left: 2em;
   margin-bottom: 16px;
 }
-:deep(.markdown-body li) { margin-bottom: 0.25em; }
+
+:deep(.markdown-body li) { 
+  margin-bottom: 0.5em;
+  line-height: 1.6;
+}
+
 :deep(.markdown-body pre) {
   padding: 16px;
   overflow: auto;
   font-size: 85%;
   line-height: 1.45;
   background-color: #f6f8fa;
-  border-radius: 3px;
+  border-radius: 6px;
+  border-left: 4px solid #1976d2;
 }
+
 :deep(.markdown-body code) {
   padding: 0.2em 0.4em;
   margin: 0;
   font-size: 85%;
   background-color: rgba(27, 31, 35, 0.05);
   border-radius: 3px;
+  font-weight: 500;
+}
+
+:deep(.markdown-body strong) {
+  font-weight: 600;
+  color: #d32f2f;
+}
+
+:deep(.markdown-body em) {
+  font-style: italic;
+  color: #1976d2;
 }
 
 .reasoning-content {
-  padding: 16px;
-  background-color: #fafafa;
-  border-radius: 4px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+  border-radius: 8px;
   border-left: 4px solid #1890ff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.reasoning-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #1890ff, #52c41a, #faad14);
+  border-radius: 8px 8px 0 0;
+}
+
+/* 选择文本时的样式 */
+.reasoning-content::selection {
+  background: rgba(24, 144, 255, 0.2);
+}
+
+.reasoning-content :deep(*::selection) {
+  background: rgba(24, 144, 255, 0.2);
 }
 </style>

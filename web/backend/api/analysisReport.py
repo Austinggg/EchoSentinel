@@ -4,7 +4,7 @@ import requests
 from pathlib import Path
 from flask import Blueprint, request
 from services.content_analysis.analysis_reporter import AnalysisReporter
-from utils.database import ContentAnalysis, VideoFile, db
+from utils.database import ContentAnalysis, VideoFile, VideoTranscript, DigitalHumanDetection, db
 from utils.HttpResponse import success_response, error_response
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,8 @@ def get_reporter():
 @report_api.route('/api/videos/<video_id>/generate-report', methods=['POST'])
 def generate_video_analysis_report(video_id):
     """
-    根据视频ID生成分析报告并保存到数据库
+    根据视频ID生成综合威胁分析报告
+    整合内容分析、数字人检测、事实核查等多维度数据
     
     Args:
         video_id: 视频ID
@@ -49,7 +50,7 @@ def generate_video_analysis_report(video_id):
         生成的分析报告
     """
     try:
-        # 查询数据库获取内容分析记录
+        # 查询内容分析数据
         content_analysis = ContentAnalysis.query.filter_by(video_id=video_id).first()
         if not content_analysis:
             return error_response(404, f"未找到视频ID为 {video_id} 的内容分析")
@@ -59,23 +60,79 @@ def generate_video_analysis_report(video_id):
         if not video_file:
             return error_response(404, f"未找到视频ID为 {video_id} 的视频文件记录")
         
+        # 获取数字人检测数据（可选）
+        digital_human_data = None
+        try:
+            digital_human = DigitalHumanDetection.query.filter_by(video_id=video_id).first()
+            if digital_human and digital_human.status == "completed":
+                digital_human_data = {
+                    "status": "completed",
+                    "detection": digital_human.to_dict(),
+                    "summary": {
+                        "final_prediction": None,
+                        "confidence": None,
+                        "ai_probability": None,
+                        "human_probability": None
+                    }
+                }
+                
+                # 确定最终结果优先级：comprehensive > overall > face
+                if digital_human.comprehensive_ai_probability is not None:
+                    digital_human_data["summary"].update({
+                        "final_prediction": digital_human.comprehensive_prediction,
+                        "confidence": digital_human.comprehensive_confidence,
+                        "ai_probability": digital_human.comprehensive_ai_probability,
+                        "human_probability": digital_human.comprehensive_human_probability
+                    })
+                elif digital_human.overall_ai_probability is not None:
+                    digital_human_data["summary"].update({
+                        "final_prediction": digital_human.overall_prediction,
+                        "confidence": digital_human.overall_confidence,
+                        "ai_probability": digital_human.overall_ai_probability,
+                        "human_probability": digital_human.overall_human_probability
+                    })
+                elif digital_human.face_ai_probability is not None:
+                    digital_human_data["summary"].update({
+                        "final_prediction": digital_human.face_prediction,
+                        "confidence": digital_human.face_confidence,
+                        "ai_probability": digital_human.face_ai_probability,
+                        "human_probability": digital_human.face_human_probability
+                    })
+                
+                logger.info(f"获取到数字人检测数据 - 视频ID: {video_id}")
+        except Exception as e:
+            logger.warning(f"获取数字人检测数据失败: {str(e)}")
+        
+        # 获取事实核查数据（可选）
+        fact_check_data = None
+        try:
+            transcript = VideoTranscript.query.filter_by(video_id=video_id).first()
+            if transcript and transcript.fact_check_status == "completed":
+                fact_check_data = {
+                    "status": "completed",
+                    "worth_checking": transcript.worth_checking,
+                    "reason": transcript.worth_checking_reason,
+                    "claims": transcript.claims,
+                    "fact_check_results": transcript.fact_check_results,
+                    "search_summary": transcript.search_summary
+                }
+                logger.info(f"获取到事实核查数据 - 视频ID: {video_id}")
+        except Exception as e:
+            logger.warning(f"获取事实核查数据失败: {str(e)}")
+        
         # 获取规则解释
         try:
             rules_response = requests.get(f"{CLASSIFICATION_SERVICE_URL}/explain?format=raw", timeout=10)
             if rules_response.status_code != 200:
                 logger.warning(f"获取规则解释失败: {rules_response.status_code}")
-                return error_response(rules_response.status_code, "获取规则解释失败")
-            
-            dnf_rules = rules_response.json().get("data", {})
-            if not dnf_rules:
-                logger.warning("获取的规则解释为空")
                 dnf_rules = {"disjuncts": {}, "conjuncts": []}
-                
+            else:
+                dnf_rules = rules_response.json().get("data", {"disjuncts": {}, "conjuncts": []})
         except Exception as e:
-            logger.exception("获取规则解释时出错")
+            logger.warning(f"获取规则解释时出错: {str(e)}")
             dnf_rules = {"disjuncts": {}, "conjuncts": []}
         
-        # 准备数据实例
+        # 准备内容分析数据
         data_instance = {
             "message": content_analysis.summary or "",
             "general": {
@@ -93,27 +150,34 @@ def generate_video_analysis_report(video_id):
         # 获取报告生成器实例
         reporter = get_reporter()
         
-        # 生成报告
-        analysis_report = reporter.generate_report(data_instance, dnf_rules)
+        # 生成综合威胁分析报告
+        analysis_report = reporter.generate_comprehensive_report(
+            video_id, data_instance, dnf_rules, digital_human_data, fact_check_data
+        )
         
         if analysis_report:
             # 保存报告到数据库
             content_analysis.analysis_report = analysis_report
             db.session.commit()
-            logger.info(f"成功生成并保存视频 {video_id} 的分析报告")
+            logger.info(f"成功生成并保存综合威胁分析报告 - 视频ID: {video_id}")
             
             return success_response({
                 "video_id": video_id,
                 "report": analysis_report,
-                "updated": True
+                "updated": True,
+                "data_sources": {
+                    "content_analysis": True,
+                    "digital_human_detection": digital_human_data is not None,
+                    "fact_checking": fact_check_data is not None
+                }
             })
         else:
-            logger.error(f"报告生成服务未返回有效内容: {video_id}")
-            return error_response(500, "报告生成失败")
+            logger.error(f"综合威胁分析报告生成失败: {video_id}")
+            return error_response(500, "威胁分析报告生成失败")
             
     except Exception as e:
         db.session.rollback()
-        logger.exception(f"生成分析报告时发生错误: {str(e)}")
+        logger.exception(f"生成综合威胁分析报告时发生错误: {str(e)}")
         return error_response(500, f"服务器内部错误: {str(e)}")
 
 @report_api.route('/api/videos/<video_id>/report', methods=['GET'])

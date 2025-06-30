@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, nextTick, watch, onUnmounted } from 'vue';
 import axios from 'axios';
 import { useRoute, useRouter } from 'vue-router';
 import MarkdownIt from 'markdown-it';
@@ -25,6 +25,7 @@ import {
   VideoCamera,
   Warning,
   TrendCharts,
+  Loading,
 } from '@element-plus/icons-vue';
 
 // 创建markdown-it实例
@@ -47,10 +48,19 @@ const router = useRouter();
 const route = useRoute();
 const activeTab = ref('summary');
 
+// 新增：强制激活指定tab，防止状态被子组件干扰
+const forceActiveTab = ref('summary');
+
+// 新增：tab切换锁，防止频繁切换
+const tabSwitching = ref(false);
+
 // 新增：视频面板收起状态
 const isVideoCollapsed = ref(false);
 const videoDuration = ref(0);
 const videoPlayer = ref(null);
+
+// 新增：视频播放时间状态
+const currentVideoTime = ref(0);
 
 // 数据状态
 const loading = ref(true);
@@ -154,6 +164,21 @@ const toggleVideoPanel = () => {
 const onVideoLoaded = () => {
   if (videoPlayer.value) {
     videoDuration.value = videoPlayer.value.duration;
+  }
+};
+
+// 新增：视频时间更新事件
+const onVideoTimeUpdate = () => {
+  if (videoPlayer.value) {
+    currentVideoTime.value = videoPlayer.value.currentTime;
+  }
+};
+
+// 新增：跳转到指定时间
+const seekToTime = (time) => {
+  if (videoPlayer.value) {
+    videoPlayer.value.currentTime = time;
+    videoPlayer.value.play();
   }
 };
 
@@ -417,24 +442,102 @@ const loadReportDataOnly = async (videoId) => {
   }
 };
 
-// 处理标签页切换
-const handleTabChange = (key) => {
-  activeTab.value = key;
+// 修改：处理标签页切换 - 增加更好的错误处理
+const handleTabChange = async (key) => {
+  // 防止重复切换和无效切换
+  if (tabSwitching.value || key === activeTab.value) {
+    console.log(`跳过重复切换: ${key}`);
+    return;
+  }
 
-  // 按需加载数据
-  if (key === 'threat' && !reportData.value && route.query.id) {
-    loadReportDataOnly(route.query.id);
-  } else if (key === 'factcheck' && !factCheckData.value && route.query.id) {
-    loadFactCheckData();
-  } else if (key === 'digitalhuman' && !digitalHumanData.value && route.query.id) {
-    loadDigitalHumanData();
+  try {
+    tabSwitching.value = true;
+    
+    console.log(`切换到tab: ${key}, 当前tab: ${activeTab.value}`);
+    
+    // 强制更新状态
+    activeTab.value = key;
+    forceActiveTab.value = key;
+    
+    // 添加延迟，确保DOM更新完成
+    await nextTick();
+
+    // 按需加载数据 - 添加错误处理
+    try {
+      if (key === 'threat' && !reportData.value && route.query.id) {
+        await loadReportDataOnly(route.query.id);
+      } else if (key === 'factcheck' && !factCheckData.value && route.query.id) {
+        await loadFactCheckData();
+      } else if (key === 'digitalhuman' && !digitalHumanData.value && route.query.id) {
+        await loadDigitalHumanData();
+      }
+    } catch (loadError) {
+      console.warn(`加载${key}数据时出错:`, loadError);
+      // 不阻止tab切换，只是数据加载失败
+    }
+    
+    console.log(`Tab切换完成: ${activeTab.value}`);
+  } catch (error) {
+    console.error('Tab切换失败:', error);
+    
+    // 恢复到之前的状态
+    const previousTab = activeTab.value;
+    activeTab.value = forceActiveTab.value;
+    
+    ElMessage.error(`切换到${key}失败: ${error.message || '未知错误'}`);
+  } finally {
+    // 延迟释放锁，防止快速切换
+    setTimeout(() => {
+      tabSwitching.value = false;
+    }, 200);
   }
 };
 
-// 点击统计项跳转到对应tab
-const clickStatItem = (tabKey) => {
-  handleTabChange(tabKey);
+// 修改：监听activeTab变化，检测异常切换 - 减少频率
+watch(activeTab, (newTab, oldTab) => {
+  console.log(`ActiveTab changed: ${oldTab} -> ${newTab}`);
+  
+  // 只在明显异常时才修复
+  if (!tabSwitching.value && newTab !== forceActiveTab.value && Math.abs(Date.now() - lastTabChangeTime) > 1000) {
+    console.warn(`检测到异常tab切换，恢复到: ${forceActiveTab.value}`);
+    nextTick(() => {
+      activeTab.value = forceActiveTab.value;
+    });
+  }
+}, { immediate: false });
+
+// 新增：记录最后切换时间
+let lastTabChangeTime = Date.now();
+
+// 修改：点击统计项跳转到对应tab - 增加防护
+const clickStatItem = async (tabKey) => {
+  console.log(`点击统计项切换到: ${tabKey}`);
+  lastTabChangeTime = Date.now();
+  await handleTabChange(tabKey);
 };
+
+// 新增：定期检查tab状态一致性 - 降低频率
+let stateCheckInterval = null;
+
+onMounted(() => {
+  loadVideoData();
+  
+  // 启动状态检查 - 降低频率
+  stateCheckInterval = setInterval(() => {
+    if (!tabSwitching.value && activeTab.value !== forceActiveTab.value) {
+      console.warn('检测到tab状态不一致，自动修复');
+      resetTabState();
+    }
+  }, 3000); // 改为3秒检查一次
+});
+
+onUnmounted(() => {
+  // 清理状态检查
+  if (stateCheckInterval) {
+    clearInterval(stateCheckInterval);
+    stateCheckInterval = null;
+  }
+});
 
 // 加载视频数据
 const loadVideoData = async () => {
@@ -573,6 +676,7 @@ onMounted(() => {
                   :src="videoSrc"
                   class="video-player"
                   @loadedmetadata="onVideoLoaded"
+                  @timeupdate="onVideoTimeUpdate"
                 >
                   您的浏览器不支持视频播放
                 </video>
@@ -746,26 +850,35 @@ onMounted(() => {
             </template>
 
             <div class="card-content">
-              <!-- 顶部导航菜单 -->
+              <!-- 顶部导航菜单 - 修改：增加key属性强制重渲染，添加点击事件防护 -->
               <el-menu
-                :default-active="activeTab"
+                :key="`menu-${forceActiveTab}`"
+                :default-active="forceActiveTab"
+                :active-text-color="'#409EFF'"
                 class="analysis-tabs"
                 mode="horizontal"
                 @select="handleTabChange"
+                :disabled="tabSwitching"
               >
-                <el-menu-item index="summary">总结摘要</el-menu-item>
-                <el-menu-item index="subtitles">字幕列表</el-menu-item>
-                <el-menu-item index="digitalhuman">数字人检测</el-menu-item>
-                <el-menu-item index="process">分析过程</el-menu-item>
-                <el-menu-item index="factcheck">事实核查</el-menu-item>
-                <el-menu-item index="threat">威胁报告</el-menu-item>
+                <el-menu-item index="summary" :disabled="tabSwitching">总结摘要</el-menu-item>
+                <el-menu-item index="subtitles" :disabled="tabSwitching">字幕列表</el-menu-item>
+                <el-menu-item index="digitalhuman" :disabled="tabSwitching">数字人检测</el-menu-item>
+                <el-menu-item index="process" :disabled="tabSwitching">分析过程</el-menu-item>
+                <el-menu-item index="factcheck" :disabled="tabSwitching">事实核查</el-menu-item>
+                <el-menu-item index="threat" :disabled="tabSwitching">威胁报告</el-menu-item>
               </el-menu>
 
-              <!-- 内容区域，可滚动 -->
-              <div class="content-area">
+              <!-- 切换状态指示器 -->
+              <div v-if="tabSwitching" class="tab-switching-indicator">
+                <el-icon class="is-loading"><Loading /></el-icon>
+                <span>切换中...</span>
+              </div>
+
+              <!-- 内容区域，可滚动 - 修改：使用forceActiveTab确保正确显示 -->
+              <div class="content-area" v-show="!tabSwitching">
                 <!-- 总结摘要内容 -->
                 <SummaryTab
-                  v-if="activeTab === 'summary'"
+                  v-if="forceActiveTab === 'summary'"
                   :summary="summary"
                   :loading="summaryLoading"
                   :video-title="videoData?.video?.title"
@@ -774,27 +887,35 @@ onMounted(() => {
 
                 <!-- 字幕列表内容 -->
                 <SubtitlesTab
-                  v-else-if="activeTab === 'subtitles'"
+                  v-else-if="forceActiveTab === 'subtitles'"
                   :subtitles-data="subtitlesData"
+                  :current-time="currentVideoTime"
                   @copy-text="copySubtitleText"
+                  @seek-to-time="seekToTime"
                 />
 
-                <!-- 数字人检测内容 -->
-                <DigitalHumanTab
-                  v-else-if="activeTab === 'digitalhuman'"
-                  :video-data="videoData"
-                />
+                <!-- 数字人检测内容 - 修改：简化事件处理 -->
+                <div
+                  v-else-if="forceActiveTab === 'digitalhuman'"
+                  class="digital-human-wrapper"
+                >
+                  <DigitalHumanTab
+                    :key="`digital-human-${route.query.id || 'default'}`"
+                    :video-data="videoData"
+                    @update:activeTab="(newTab) => console.log('数字人组件tab变化:', newTab)"
+                  />
+                </div>
 
                 <!-- 分析过程内容 -->
                 <ProcessTab
-                  v-else-if="activeTab === 'process'"
+                  v-else-if="forceActiveTab === 'process'"
                   :assessment-data="assessmentData"
                   @view-reasoning="goToReasoning"
                 />
 
                 <!-- 事实核查内容 -->
                 <FactCheckTab
-                  v-else-if="activeTab === 'factcheck'"
+                  v-else-if="forceActiveTab === 'factcheck'"
                   :fact-check-data="factCheckData"
                   :loading="factCheckLoading"
                   :error="factCheckError"
@@ -805,7 +926,7 @@ onMounted(() => {
 
                 <!-- 威胁报告内容 -->
                 <ThreatReportTab
-                  v-else-if="activeTab === 'threat'"
+                  v-else-if="forceActiveTab === 'threat'"
                   :report-data="reportData"
                   :loading="reportLoading"
                   :error="reportError"
@@ -1185,6 +1306,33 @@ onMounted(() => {
 
 :deep(.el-menu--horizontal) {
   border-bottom: 1px solid #e4e7ed;
+}
+
+/* 新增：tab切换指示器样式 */
+.tab-switching-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: #909399;
+  font-size: 14px;
+}
+
+.tab-switching-indicator .el-icon {
+  font-size: 16px;
+}
+
+/* 新增：数字人组件包装器，防止事件冲突但不过度阻止 */
+.digital-human-wrapper {
+  position: relative;
+  z-index: 1;
+}
+
+/* 新增：菜单禁用状态样式 */
+:deep(.el-menu-item.is-disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* 响应式设计 */

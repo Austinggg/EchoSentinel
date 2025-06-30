@@ -142,6 +142,8 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                 'overall': ('aigc/detect/overall', 'overall_detection')
             }
             
+            completed_detections = 0  # 记录完成的检测数量
+            
             for detection_type in detection_types:
                 if detection_type not in detection_methods:
                     continue
@@ -174,9 +176,10 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                     setattr(detection, f'{detection_type}_error_message', None)
                     
                     new_results[detection_type] = result
+                    completed_detections += 1  # 增加完成计数
                     
                     # 更新进度
-                    progress = int(current_step / total_steps * 90)
+                    progress = int(current_step / total_steps * (90 if comprehensive else 100))
                     detection.progress = progress
                     detection.current_step = f"{detection_type}_completed"
                     db.session.commit()
@@ -195,8 +198,15 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                     # 继续其他检测，不中断整个流程
                     continue
             
-            # 综合评估 - 修复：基于数据库中所有可用的检测结果
-            if comprehensive:
+            # 检查是否所有请求的检测都已完成或失败
+            requested_completed = 0
+            for detection_type in detection_types:
+                status = getattr(detection, f'{detection_type}_status', 'not_started')
+                if status in ['completed', 'failed']:
+                    requested_completed += 1
+            
+            # 综合评估逻辑 - 修复：只有在需要且有结果时才执行
+            if comprehensive and completed_detections > 0:
                 logger.info(f"开始综合评估 - 视频ID: {video_id}")
                 update_task_progress_redis(video_id, 95, "comprehensive_analysis")
                 
@@ -303,14 +313,57 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                         
                 except Exception as comprehensive_error:
                     logger.error(f"综合评估失败 - 视频ID: {video_id}, 错误: {str(comprehensive_error)}")
-                    
-                    # 更新综合评估状态为失败
-                    detection.comprehensive_status = 'failed'
-                    detection.comprehensive_error_message = str(comprehensive_error)
-                    db.session.commit()
-                    
                     # 即使综合评估失败，也继续使用新检测结果
                     final_results = new_results
+            else:
+                final_results = new_results
+            
+            # 修复：正确判断任务完成条件
+            if requested_completed == len(detection_types):
+                if completed_detections > 0:
+                    # 至少有一个检测成功完成，标记为完成
+                    detection.status = "completed"
+                    detection.completed_at = datetime.datetime.utcnow()
+                    detection.progress = 100
+                    detection.current_step = "completed"
+                    detection.error_message = None
+                    
+                    # 更新Redis状态为完成
+                    completed_status = {
+                        "video_id": video_id,
+                        "status": "completed",
+                        "progress": 100,
+                        "current_step": "completed",
+                        "completed_at": datetime.datetime.utcnow().isoformat(),
+                        "detection_types": detection_types,
+                        "comprehensive": comprehensive,
+                        "results": final_results if 'final_results' in locals() else new_results
+                    }
+                    update_task_status_redis(video_id, completed_status)
+                    
+                    db.session.commit()
+                    logger.info(f"数字人检测全部完成 - 视频ID: {video_id}, 完成检测: {completed_detections}/{len(detection_types)}")
+                else:
+                    # 所有检测都失败
+                    detection.status = "failed"
+                    detection.error_message = "所有检测模块都失败"
+                    detection.progress = 0
+                    detection.current_step = "failed"
+                    
+                    # 更新Redis状态为失败
+                    failed_status = {
+                        "video_id": video_id,
+                        "status": "failed",
+                        "progress": 0,
+                        "current_step": "failed",
+                        "error_message": "所有检测模块都失败",
+                        "failed_at": datetime.datetime.utcnow().isoformat()
+                    }
+                    update_task_status_redis(video_id, failed_status)
+                    
+                    db.session.commit()
+                    logger.error(f"数字人检测全部失败 - 视频ID: {video_id}")
+                    
         except Exception as e:
             # 更新数据库状态为失败
             try:
@@ -530,7 +583,7 @@ def reset_detection_status(video_id):
 
 @digital_human_api.route('/api/videos/<video_id>/digital-human/result', methods=['GET'])
 def get_digital_human_result(video_id):
-    """获取视频的数字人检测结果"""
+    """获取视频的数字人检测结果 - 支持部分完成状态"""
     try:
         # 查询视频是否存在
         video = VideoFile.query.filter_by(id=video_id).first()
@@ -542,12 +595,32 @@ def get_digital_human_result(video_id):
         if not detection:
             return error_response(404, f"视频ID为 {video_id} 的数字人检测结果不存在")
         
-        # 检查状态
+        # 修改状态检查逻辑：支持部分完成
         if detection.status == "processing":
-            return error_response(400, "检测任务仍在进行中，请等待完成后再获取结果")
+            # 检查是否有任何模块已完成
+            has_completed_modules = any([
+                detection.face_status == 'completed',
+                detection.body_status == 'completed', 
+                detection.overall_status == 'completed',
+                detection.comprehensive_status == 'completed'
+            ])
+            
+            if not has_completed_modules:
+                return error_response(400, "检测任务仍在进行中，请等待完成后再获取结果")
+                
         elif detection.status == "failed":
-            return error_response(400, f"检测任务失败: {detection.error_message}")
-        elif detection.status != "completed":
+            # 检查是否有任何模块成功完成
+            has_completed_modules = any([
+                detection.face_status == 'completed',
+                detection.body_status == 'completed', 
+                detection.overall_status == 'completed',
+                detection.comprehensive_status == 'completed'
+            ])
+            
+            if not has_completed_modules:
+                return error_response(400, f"检测任务失败: {detection.error_message}")
+                
+        elif detection.status not in ["completed", "processing"]:
             return error_response(400, f"检测任务未完成，当前状态: {detection.status}")
         
         # 构建响应数据

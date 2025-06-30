@@ -13,6 +13,7 @@ from api.analytics import analytics_api  # 导入分析API蓝图
 from api.AISearch import search_api  # 导入搜索API蓝图
 from api.digitalHumanDetection import digital_human_api
 from api.systemSettings import system_api
+from api.factCheck import fact_check_api  # 导入事实核查API蓝图
 from utils.database import init_dataset
 from utils.redis_client import init_redis
 from utils.extensions import app
@@ -25,7 +26,6 @@ def index():
     return send_from_directory("dist", "index.html")
 
 
-
 app.register_blueprint(transcribe_api)  # 注册转录API蓝图
 app.register_blueprint(extract_api)  # 注册提取API蓝图
 app.register_blueprint(assessment_api)  # 注册评估API蓝图
@@ -36,6 +36,7 @@ app.register_blueprint(douyin_api)  # 注册抖音API蓝图
 app.register_blueprint(account_api)  # 注册测试API蓝图
 app.register_blueprint(analytics_api)  # 注册分析API蓝图
 app.register_blueprint(search_api)  # 注册搜索API蓝图
+app.register_blueprint(fact_check_api)  # 注册事实核查API蓝图
 app.register_blueprint(auth.bp)
 app.register_blueprint(menu.bp)
 app.register_blueprint(system_api)

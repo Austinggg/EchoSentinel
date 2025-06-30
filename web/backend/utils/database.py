@@ -152,25 +152,29 @@ class VideoTranscript(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     video_id = db.Column(db.String(36), db.ForeignKey("video_files.id"), nullable=False)
     transcript = db.Column(db.Text, nullable=True)  # 完整转录文本
-    chunks = db.Column(db.JSON, default=[])  # 带时间戳的分段文本
+    chunks = db.Column(db.JSON, nullable=True)  # 带时间戳的分段文本
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
 
-    # 事实核查相关字段
-    fact_check_status = db.Column(db.String(20), default="pending")  # pending, processing, completed, failed
+    # 事实核查相关字段 - 修复默认值设置
+    fact_check_status = db.Column(db.String(20), default="pending", nullable=False)  # 确保不为空
     fact_check_timestamp = db.Column(db.DateTime, nullable=True)  # 事实核查执行时间
     worth_checking = db.Column(db.Boolean, nullable=True)  # 是否值得核查
     worth_checking_reason = db.Column(db.Text, nullable=True)  # 判断原因
-    claims = db.Column(db.JSON, default=[])  # 提取的断言列表
-    fact_check_results = db.Column(db.JSON, default=[])  # 核查结果列表
+    claims = db.Column(db.JSON, nullable=True)  # 提取的断言列表 - 修复默认值
+    fact_check_results = db.Column(db.JSON, nullable=True)  # 核查结果列表 - 修复默认值
     fact_check_context = db.Column(db.Text, nullable=True)  # 核查时的上下文信息
     fact_check_error = db.Column(db.Text, nullable=True)  # 如果有错误，记录错误信息
-    # 添加新字段用于存储搜索结果
-    search_summary = db.Column(db.JSON, default={})  # 存储搜索摘要（true_claims, false_claims, keywords等）
+    
+    # 添加新字段用于存储搜索结果 - 修复默认值
+    search_summary = db.Column(db.JSON, nullable=True)  # 存储搜索摘要
     total_search_duration = db.Column(db.Float, nullable=True)  # 事实核查总耗时
-    search_metadata = db.Column(db.JSON, default={})  # 存储元数据（timestamp等）
+    search_metadata = db.Column(db.JSON, nullable=True)  # 存储元数据
+    search_keywords = db.Column(db.Text, nullable=True)  # 添加搜索关键词字段
+    search_grade = db.Column(db.Float, nullable=True)  # 添加搜索评分字段
+    
     # 关联的视频
     video = db.relationship(
         "VideoFile", backref=db.backref("transcript_data", uselist=False)
@@ -178,14 +182,27 @@ class VideoTranscript(db.Model):
 
     def to_dict(self):
         """转换为字典，方便API返回，增加新字段"""
-        base_dict = super().to_dict()  # 保留原有基础结构
-        
-        # 添加新的事实核查字段
-        base_dict["fact_check"]["search_summary"] = self.search_summary
-        base_dict["fact_check"]["total_duration"] = self.total_search_duration
-        base_dict["fact_check"]["metadata"] = self.search_metadata
-        
-        return base_dict
+        return {
+            "id": self.id,
+            "video_id": self.video_id,
+            "transcript": self.transcript,
+            "chunks": self.chunks or [],
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "fact_check": {
+                "status": self.fact_check_status or "pending",
+                "timestamp": self.fact_check_timestamp.isoformat() if self.fact_check_timestamp else None,
+                "worth_checking": self.worth_checking,
+                "reason": self.worth_checking_reason,
+                "claims": self.claims or [],
+                "results": self.fact_check_results or [],
+                "context": self.fact_check_context,
+                "error": self.fact_check_error,
+                "search_summary": self.search_summary or {},
+                "total_duration": self.total_search_duration,
+                "metadata": self.search_metadata or {}
+            }
+        }
 
 # 添加新表：单个断言核查结果（可选，用于细粒度跟踪）
 class FactCheckResult(db.Model):
