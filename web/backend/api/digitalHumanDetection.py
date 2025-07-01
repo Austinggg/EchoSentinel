@@ -328,6 +328,27 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                     detection.current_step = "completed"
                     detection.error_message = None
                     
+                    # 新增：同步更新VideoFile表的digital_human_probability字段
+                    final_probability = 0.0
+                    
+                    # 确定最终概率值的优先级：comprehensive > overall > face > body
+                    if detection.comprehensive_ai_probability is not None:
+                        final_probability = detection.comprehensive_ai_probability
+                        logger.info(f"使用综合评估概率: {final_probability}")
+                    elif detection.overall_ai_probability is not None:
+                        final_probability = detection.overall_ai_probability
+                        logger.info(f"使用整体检测概率: {final_probability}")
+                    elif detection.face_ai_probability is not None:
+                        final_probability = detection.face_ai_probability
+                        logger.info(f"使用面部检测概率: {final_probability}")
+                    elif detection.body_ai_probability is not None:
+                        final_probability = detection.body_ai_probability
+                        logger.info(f"使用躯体检测概率: {final_probability}")
+                    
+                    # 更新VideoFile表的digital_human_probability字段
+                    video.digital_human_probability = final_probability
+                    logger.info(f"更新视频 {video_id} 的数字人概率为: {final_probability}")
+                    
                     # 更新Redis状态为完成
                     completed_status = {
                         "video_id": video_id,
@@ -337,18 +358,22 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                         "completed_at": datetime.datetime.utcnow().isoformat(),
                         "detection_types": detection_types,
                         "comprehensive": comprehensive,
+                        "final_probability": final_probability,  # 添加最终概率到Redis状态
                         "results": final_results if 'final_results' in locals() else new_results
                     }
                     update_task_status_redis(video_id, completed_status)
                     
                     db.session.commit()
-                    logger.info(f"数字人检测全部完成 - 视频ID: {video_id}, 完成检测: {completed_detections}/{len(detection_types)}")
+                    logger.info(f"数字人检测全部完成 - 视频ID: {video_id}, 完成检测: {completed_detections}/{len(detection_types)}, 最终概率: {final_probability}")
                 else:
                     # 所有检测都失败
                     detection.status = "failed"
                     detection.error_message = "所有检测模块都失败"
                     detection.progress = 0
                     detection.current_step = "failed"
+                    
+                    # 检测失败时不更新概率，保持原值或设为0
+                    # video.digital_human_probability = 0.0  # 可选：失败时重置为0
                     
                     # 更新Redis状态为失败
                     failed_status = {
@@ -373,6 +398,7 @@ def async_detect_digital_human(app, video_id, detection_types, comprehensive):
                     detection.error_message = str(e)
                     detection.progress = 0
                     detection.current_step = "failed"
+                    # 异常时不更新VideoFile的概率字段
                     db.session.commit()
             except Exception as db_error:
                 logger.error(f"更新数据库失败状态时出错: {str(db_error)}")
@@ -630,6 +656,8 @@ def get_digital_human_result(video_id):
             "status": detection.status,
             "detection": detection.to_dict(),
             "completed_at": detection.completed_at.isoformat() if detection.completed_at else None,
+            # 新增：包含VideoFile表中的最终概率
+            "video_probability": video.digital_human_probability,  # 从VideoFile表获取
             "summary": {
                 "final_prediction": None,
                 "confidence": None,

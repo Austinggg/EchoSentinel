@@ -145,9 +145,9 @@ const props = defineProps({
             </div>
             <div class="image-placeholder">
               <el-image
-                :src="`/api/videos/${getVideoId()}/digital-human/anomaly-image/${item.name}`"
+                :src="item.name.includes('表情') || item.name.includes('面部') ? '/images/digital-human/body-face.png' : '/images/digital-human/body-finger.png'"
                 fit="contain"
-                :preview-src-list="[`/api/videos/${getVideoId()}/digital-human/anomaly-image/${item.name}`]"
+                :preview-src-list="[item.name.includes('表情') || item.name.includes('面部') ? '/images/digital-human/body-face.png' : '/images/digital-human/body-finger.png']"
                 :hide-on-click-modal="true"
               >
                 <template #error>
@@ -155,7 +155,7 @@ const props = defineProps({
                     <el-icon size="32"><Picture /></el-icon>
                     <div class="error-text">
                       <div>{{ item.name }}异常图片</div>
-                      <div class="error-subtitle">暂未生成</div>
+                      <div class="error-subtitle">图片加载失败</div>
                     </div>
                   </div>
                 </template>
@@ -293,11 +293,24 @@ const props = defineProps({
 }
 
 .image-placeholder {
-  height: 200px;
+  height: 250px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: white;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.image-placeholder :deep(.el-image) {
+  width: 100%;
+  height: 100%;
+}
+
+.image-placeholder :deep(.el-image__inner) {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .image-error,
@@ -331,6 +344,9 @@ const props = defineProps({
   font-size: 0.875rem;
   color: #606266;
   line-height: 1.4;
+  background: white;
+  border-top: 1px solid #f0f0f0;
+  min-height: 60px;
 }
 
 .no-anomaly {

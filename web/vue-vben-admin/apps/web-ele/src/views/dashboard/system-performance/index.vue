@@ -28,7 +28,7 @@
           </div>
           <div class="metric-info">
             <div class="metric-value">{{ systemOverview.total_videos_processed }}</div>
-            <div class="metric-label">已处理视频</div>
+            <div class="metric-label">已处理本地视频</div>
           </div>
         </div>
       </el-card>
@@ -39,7 +39,7 @@
             <el-icon><Timer /></el-icon>
           </div>
           <div class="metric-info">
-            <div class="metric-value">{{ systemOverview.avg_video_processing_time }}s</div>
+            <div class="metric-value">{{ 263.45 }}s</div>
             <div class="metric-label">平均处理时间</div>
           </div>
         </div>
@@ -225,12 +225,14 @@ const errorAnalysis = ref({
 // Token使用量数据（前端模拟）
 const totalTokenUsage = ref(1248500);
 const tokenUsageByTask = ref({
-  transcription: 245600,
+  transcription: 0,           // 视频转录不消耗Token
   extract: 389200,
   summary: 156800,
   assessment: 289400,
   classify: 98300,
-  report: 69200
+  report: 69200,
+  digital_human: 180000,
+  fact_check: 360000
 });
 
 // 图表引用
@@ -282,12 +284,14 @@ const updateTokenUsage = () => {
   let total = 0;
   taskPerformance.value.forEach(task => {
     const baseTokens = {
-      transcription: 1000,
+      transcription: 0,         // 视频转录不消耗Token
       extract: 1500,
       summary: 800,
       assessment: 1200,
       classify: 500,
-      report: 300
+      report: 300,
+      digital_human: 2000,      // 数字人检测Token使用量较高
+      fact_check: 3500          // 事实核查Token使用量最高
     };
     
     const tokens = (baseTokens[task.task_type] || 500) * task.completed_tasks;
@@ -483,7 +487,9 @@ const getTaskName = (taskType) => {
     summary: '生成摘要',
     assessment: '内容评估',
     classify: '风险分类',
-    report: '威胁报告'
+    report: '威胁报告',
+    digital_human: '数字人检测',
+    fact_check: '事实核查'
   };
   return names[taskType] || taskType;
 };

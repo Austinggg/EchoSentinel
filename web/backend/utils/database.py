@@ -120,12 +120,6 @@ class VideoFile(db.Model):
     source_url = mapped_column(String(500), nullable=True)  # 源视频URL
     source_platform = mapped_column(String(50), nullable=True)  # 源平台（douyin/tiktok）
     source_id = mapped_column(String(100), nullable=True)  # 平台上的原始ID
-
-    # 添加数字人检测字段
-    # aigc_use=mapped_column(String(50),nullable=True)
-    # aigc_face = mapped_column(String(50), nullable=True)
-    # aigc_body = mapped_column(String(50), nullable=True)
-    # aigc_whole = mapped_column(String(50), nullable=True)
     digital_human_probability = mapped_column(db.Float, default=0.0, nullable=False)
     def to_dict(self):
         tags_list = self.tags.split(",") if self.tags else []

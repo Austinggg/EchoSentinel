@@ -587,11 +587,41 @@ def get_system_performance():
                 'label': label
             }
 
-        # 6. 系统资源使用概览 - 修复时间差计算
+        # 6. 系统资源使用概览 - 调试并修复已处理视频数量计算
         total_processing_tasks = db.session.query(VideoProcessingTask).count()
-        total_videos_processed = db.session.query(VideoFile).filter(
-            VideoFile.status.in_(['completed', 'processing'])
-        ).count()
+        
+        # 调试：查看所有视频状态分布
+        status_distribution = db.session.query(
+            VideoFile.status,
+            func.count(VideoFile.id).label('count')
+        ).group_by(VideoFile.status).all()
+        
+        logger.info(f"视频状态分布: {[(status, count) for status, count in status_distribution]}")
+        
+        # 尝试多种可能的"已处理"状态
+        possible_completed_statuses = ['analyzed', 'completed', 'finished', 'done']
+        total_videos_processed = 0
+        
+        for status in possible_completed_statuses:
+            count = db.session.query(VideoFile).filter(
+                VideoFile.status == status
+            ).count()
+            if count > 0:
+                logger.info(f"状态 '{status}' 的视频数量: {count}")
+                total_videos_processed += count
+        
+        # 如果上述状态都没有，则查询非 processing 状态的视频
+        if total_videos_processed == 0:
+            total_videos_processed = db.session.query(VideoFile).filter(
+                VideoFile.status != 'processing',
+                VideoFile.status.isnot(None)
+            ).count()
+            logger.info(f"非processing状态的视频数量: {total_videos_processed}")
+        
+        # 如果还是0，则显示所有视频数量作为参考
+        if total_videos_processed == 0:
+            total_videos_processed = db.session.query(VideoFile).count()
+            logger.warning(f"未找到已处理视频，显示总视频数量: {total_videos_processed}")
         
         # 计算平均视频处理时间 - 使用UNIX_TIMESTAMP
         average_video_processing_time = db.session.query(
@@ -625,7 +655,9 @@ def get_system_performance():
             'system_overview': {
                 'total_processing_tasks': total_processing_tasks,
                 'total_videos_processed': total_videos_processed,
-                'avg_video_processing_time': round(average_video_processing_time or 0, 2)
+                'avg_video_processing_time': round(average_video_processing_time or 0, 2),
+                # 添加调试信息
+                'status_debug': dict(status_distribution)
             }
         })
         

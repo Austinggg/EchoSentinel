@@ -312,7 +312,7 @@ def get_video_processing_details(aweme_id):
         tasks = VideoProcessingTask.query.filter_by(video_id=video.video_file_id).all()
         tasks_data = []
         
-        # 为每个任务添加最近的日志
+        # 为每个任务添加最近的10条日志
         for task in tasks:
             task_dict = task.to_dict()
             # 获取该任务最近的10条日志
@@ -967,3 +967,148 @@ def extract_tags(video_data):
     
     # 去重并限制标签数量
     return ",".join(list(set(tags))[:20])
+@account_api.route('/api/account/<int:profile_id>/digital-human-stats', methods=['GET'])
+def get_account_digital_human_stats(profile_id):
+    """获取用户数字人检测统计数据"""
+    try:
+        # 检查用户是否存在
+        user_profile = UserProfile.query.get(profile_id)
+        if not user_profile:
+            return jsonify({"code": 404, "message": "用户不存在"}), 404
+        
+        # 获取所有视频
+        videos = DouyinVideo.query.filter_by(user_profile_id=profile_id).all()
+        
+        total_videos = len(videos)
+        if total_videos == 0:
+            return jsonify({
+                "code": 200, 
+                "message": "暂无视频数据",
+                "data": {
+                    "detected_videos": 0,
+                    "total_digital_human_probability": 0.0,
+                    "total_risk_probability": 0.0,
+                    "digital_human_distribution": [
+                        {"value": 0, "name": "AI生成"},
+                        {"value": 0, "name": "真实内容"},
+                        {"value": 0, "name": "不确定"}
+                    ],
+                    "detection_status": [
+                        {"value": 0, "name": "检测完成"},
+                        {"value": 0, "name": "检测中"},
+                        {"value": 0, "name": "检测失败"},
+                        {"value": 0, "name": "未检测"}
+                    ]
+                }
+            })
+        
+        # 查询数字人检测结果
+        from utils.database import DigitalHumanDetection, ContentAnalysis, VideoFile
+        
+        detected_videos = 0
+        digital_human_scores = []
+        risk_scores = []
+        detection_counts = {"ai_generated": 0, "human": 0, "uncertain": 0}
+        status_counts = {"completed": 0, "processing": 0, "failed": 0, "not_started": 0}
+        
+        for video in videos:
+            if video.video_file_id:
+                # 优先从VideoFile表获取最终概率
+                video_file = VideoFile.query.filter_by(id=video.video_file_id).first()
+                if video_file and video_file.digital_human_probability > 0:
+                    detected_videos += 1
+                    ai_prob = video_file.digital_human_probability
+                    digital_human_scores.append(ai_prob)
+                    
+                    # 根据VideoFile表中的概率分类
+                    if ai_prob >= 0.6:  # 降低AI生成阈值
+                        detection_counts["ai_generated"] += 1
+                    elif ai_prob <= 0.4:  # 提高真实内容阈值
+                        detection_counts["human"] += 1
+                    else:
+                        detection_counts["uncertain"] += 1
+                    
+                    # 标记为已完成
+                    status_counts["completed"] += 1
+                else:
+                    # 如果VideoFile表中没有概率，检查检测状态
+                    digital_human_detection = DigitalHumanDetection.query.filter_by(
+                        video_id=video.video_file_id
+                    ).first()
+                    
+                    if digital_human_detection:
+                        status = digital_human_detection.status or "not_started"
+                        if status in status_counts:
+                            status_counts[status] += 1
+                        else:
+                            status_counts["not_started"] += 1
+                        
+                        # 如果检测完成但VideoFile表未更新，使用检测表的数据
+                        if status == "completed":
+                            ai_prob = digital_human_detection.comprehensive_ai_probability
+                            if ai_prob is None:
+                                ai_prob = digital_human_detection.overall_ai_probability
+                            if ai_prob is None:
+                                ai_prob = digital_human_detection.face_ai_probability
+                            
+                            if ai_prob is not None:
+                                detected_videos += 1
+                                digital_human_scores.append(ai_prob)
+                                
+                                if ai_prob >= 0.6:
+                                    detection_counts["ai_generated"] += 1
+                                elif ai_prob <= 0.4:
+                                    detection_counts["human"] += 1
+                                else:
+                                    detection_counts["uncertain"] += 1
+                    else:
+                        # 没有检测记录的视频标记为未检测
+                        status_counts["not_started"] += 1
+                
+                # 查询内容分析的风险评分
+                content_analysis = ContentAnalysis.query.filter_by(
+                    video_id=video.video_file_id
+                ).first()
+                
+                if content_analysis and content_analysis.risk_probability is not None:
+                    risk_scores.append(content_analysis.risk_probability)
+            else:
+                # 未下载的视频也标记为未检测
+                status_counts["not_started"] += 1
+        
+        # 计算平均概率
+        avg_digital_human_prob = sum(digital_human_scores) / len(digital_human_scores) if digital_human_scores else 0.0
+        avg_risk_prob = sum(risk_scores) / len(risk_scores) if risk_scores else 0.0
+        
+        # 格式化为图表所需数据格式
+        digital_human_distribution = [
+            {"value": detection_counts["ai_generated"], "name": "AI生成"},
+            {"value": detection_counts["human"], "name": "真实内容"},
+            {"value": detection_counts["uncertain"], "name": "不确定"}
+        ]
+        
+        # 检测状态分布
+        detection_status = [
+            {"value": status_counts["completed"], "name": "检测完成"},
+            {"value": status_counts["processing"], "name": "检测中"},
+            {"value": status_counts["failed"], "name": "检测失败"},
+            {"value": status_counts["not_started"], "name": "未检测"}
+        ]
+        
+        return jsonify({
+            "code": 200,
+            "message": "获取成功",
+            "data": {
+                "detected_videos": detected_videos,
+                "total_digital_human_probability": round(avg_digital_human_prob, 3),
+                "total_risk_probability": round(avg_risk_prob, 3),
+                "digital_human_distribution": digital_human_distribution,
+                "detection_status": detection_status
+            }
+        })
+        
+    except Exception as e:
+        print(f"获取数字人统计数据失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"code": 500, "message": f"获取数字人统计数据失败: {str(e)}"}), 500
