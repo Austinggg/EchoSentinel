@@ -1,0 +1,116 @@
+<!-- filepath: /home/wangl/EchoSentinel/web/backend/.dockerignore -->
+# Python 相关
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 虚拟环境
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# IDE 相关
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 日志文件
+*.log
+logs/
+log/
+
+# 测试相关
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 临时文件
+*.tmp
+*.temp
+temp/
+tmp/
+
+# 开发和测试文件
+test.py
+*_test.py
+test_*.py
+simple_test.py
+step_test_function.py
+test_useranalyse.py
+debug_imports.py
+
+# Git 相关
+.git/
+.gitignore
+
+# Docker 相关
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# 文档
+README.md
+*.md
+
+# 配置文件（可选，如果包含敏感信息）
+# settings.toml
+
+# 备份文件
+*.bak
+*.backup
+
+# 缓存目录
+.cache/
+__pycache__/
+
+# 模型文件（如果很大的话）
+# *.pkl
+# *.model
+# models/
+
+# 数据文件（如果不需要的话）
+# data/
+# *.csv
+# *.json

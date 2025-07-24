@@ -1,0 +1,61 @@
+# 构建阶段
+FROM node:22-alpine AS builder
+
+# 设置工作目录
+WORKDIR /app
+
+# 先复制包管理文件，利用 Docker 缓存
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web-ele/package.json ./apps/web-ele/
+COPY packages ./packages/
+COPY internal ./internal/
+
+# 安装 pnpm 并安装依赖
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+# 复制源代码
+COPY . .
+
+# 构建项目
+RUN pnpm build:ele
+
+# 生产阶段
+FROM nginx:alpine
+
+# 创建 nginx 配置文件
+RUN echo 'events { worker_connections 1024; } \
+http { \
+    include /etc/nginx/mime.types; \
+    default_type application/octet-stream; \
+    \
+    server { \
+        listen 80; \
+        server_name localhost; \
+        root /usr/share/nginx/html; \
+        index index.html; \
+        \
+        location / { \
+            try_files $uri $uri/ /index.html; \
+        } \
+        \
+        location /api/ { \
+            proxy_pass http://backend:8000/; \
+            proxy_set_header Host $host; \
+            proxy_set_header X-Real-IP $remote_addr; \
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
+        } \
+        \
+        location /model/ { \
+            proxy_pass http://model-server:8001/; \
+            proxy_set_header Host $host; \
+            proxy_set_header X-Real-IP $remote_addr; \
+        } \
+    } \
+}' > /etc/nginx/nginx.conf
+
+# 拷贝构建产物到 nginx 目录
+COPY --from=builder /app/apps/web-ele/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

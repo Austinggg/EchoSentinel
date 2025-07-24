@@ -1,0 +1,78 @@
+<!-- filepath: /home/wangl/EchoSentinel/docker-compose.yml -->
+version: '3.8'
+
+services:
+  # 前端服务
+  frontend:
+    build:
+      context: ./web/vue-vben-admin
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - echosentinel-network
+
+  # 后端服务
+  backend:
+    build:
+      context: ./web/backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=${MYSQL_HOST:-localhost}
+      - PORT=${MYSQL_PORT:-3306}
+      - USER=${MYSQL_USER:-root}
+      - PASSWORD=${MYSQL_PASSWORD}
+      - DB_NAME=${MYSQL_DB:-echo_sentinel_web}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    depends_on:
+      - redis
+      - model-server
+    volumes:
+      - ./web/backend/logs:/app/logs
+    networks:
+      - echosentinel-network
+
+  # 模型服务
+  model-server:
+    build:
+      context: ./model-server
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - MODEL_PATH=/app/models
+    networks:
+      - echosentinel-network
+
+  # Redis 服务
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - echosentinel-network
+
+  # 抖音下载服务
+  douyin-api:
+    image: evil0ctal/douyin_tiktok_download_api:latest
+    ports:
+      - "8080:80"
+    networks:
+      - echosentinel-network
+
+volumes:
+  redis_data:
+
+networks:
+  echosentinel-network:
+    driver: bridge
