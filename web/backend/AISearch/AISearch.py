@@ -1,8 +1,8 @@
 import sys
-from utils.search_web import Search
-from utils.response import generate,search_generate
-from utils.crawl_web import Crawl
-from utils.rrf import Retrieval
+from app.utils.search_web import Search
+from app.utils.response import generate,search_generate
+from app.utils.crawl_web import Crawl
+from app.utils.rrf import Retrieval
 import json
 import time
 

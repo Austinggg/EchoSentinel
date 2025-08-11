@@ -3,10 +3,10 @@ import json
 import sys
 import time
 from tqdm import tqdm
-from utils.search_web import Search
-from utils.response import search_generate, generate
-from utils.crawl_web import Crawl
-from utils.rrf import Retrieval
+from app.utils.search_web import Search
+from app.utils.response import search_generate, generate
+from app.utils.crawl_web import Crawl
+from app.utils.rrf import Retrieval
 
 def process_query(query, date):
     """

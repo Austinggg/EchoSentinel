@@ -1,7 +1,7 @@
 import os
 from typing import List, Dict, Any, Tuple
 from smolagents import LiteLLMModel, ToolCallingAgent
-from web.backend.services.fact_checking.AISearchTool import AISearchTool
+from web.backend.app.services.fact_checking.AISearchTool import AISearchTool
 
 # 设置API密钥
 os.environ['DEEPSEEK_API_KEY'] = "sk-0f87344ec4d74b9ebf4e8dad6b7dbb47"

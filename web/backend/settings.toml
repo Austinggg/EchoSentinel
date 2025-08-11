@@ -1,5 +1,5 @@
 [default]
-HOST = "rm-bp1qb26410y2q0le8ao.mysql.rds.aliyuncs.com"
+HOST = "115.190.126.232"
 PORT = 3306
 USER = "root"
 DB_NAME = "echo_sentinel_web"
