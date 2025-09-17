@@ -1,0 +1,2424 @@
+{
+	"info": {
+		"_postman_id": "d9f4b198-ed86-4c37-adfa-51ea3f8d91f0",
+		"name": "API documentation",
+		"description": "# 📄 Get started here\n\nThis template contains a boilerplate for documentation that you can quickly customize and reuse.\n\n## 🔖 How to use this template\n\n- Replace the content given brackets (()) with your API's details.\n    \n- Tips are formatted in `codespan` - feel free to read and remove them.\n    \n\n---\n\n`Start with a brief overview of what your API offers.`\n\nThe ((product name)) provides many API products, tools, and resources that enable you to ((add product value here)).\n\n`You can also list the APIs you offer, link to the relevant pages, or do both in this section.`\n\n## **Getting started guide**\n\n`List the steps or points required to start using your APIs. Make sure to cover everything required to reach success with your API as quickly as possible.`\n\nTo start using the ((add APIs here)), you need to -\n\n`The points given below are from The Postman API's documentation. You can reference it to write your own getting started guide.`\n\n- You must use a valid API Key to send requests to the API endpoints. You can get your API key from Postman's [integrations dashboard](https://go.postman.co/settings/me/api-keys).\n    \n- The API has [rate and usage limits](https://learning.postman.com/docs/developer/postman-api/postman-api-rate-limits/).\n    \n- The API only responds to HTTPS-secured communications. Any requests sent via HTTP return an HTTP 301 redirect to the corresponding HTTPS resources.\n    \n- The API returns request responses in JSON format. When an API request returns an error, it is sent in the JSON response as an error key.\n    \n\n## Authentication\n\n`Add details on the authorization keys/tokens required, steps that cover how to get them, and the relevant error codes.`\n\nThe ((product name)) API uses ((add your API's authorization type)) for authentication.\n\n`The details given below are from the Postman API's documentation. You can reference it to write your own authentication section.`\n\nPostman uses API keys for authentication. You can generate a Postman API key in the [API keys](https://postman.postman.co/settings/me/api-keys) section of your Postman account settings.\n\nYou must include an API key in each request to the Postman API with the X-Api-Key request header.\n\n### Authentication error response\n\nIf an API key is missing, malformed, or invalid, you will receive an HTTP 401 Unauthorized response code.\n\n## Rate and usage limits\n\n`Use this section to cover your APIs' terms of use. Include API limits, constraints, and relevant error codes, so consumers understand the permitted API usage and practices.`\n\n`The example given below is from The Postman API's documentation. Use it as a reference to write your APIs' terms of use.`\n\nAPI access rate limits apply at a per-API key basis in unit time. The limit is 300 requests per minute. Also, depending on your plan, you may have usage limits. If you exceed either limit, your request will return an HTTP 429 Too Many Requests status code.\n\nEach API response returns the following set of headers to help you identify your use status:\n\n| Header | Description |\n| --- | --- |\n| `X-RateLimit-Limit` | The maximum number of requests that the consumer is permitted to make per minute. |\n| `X-RateLimit-Remaining` | The number of requests remaining in the current rate limit window. |\n| `X-RateLimit-Reset` | The time at which the current rate limit window resets in UTC epoch seconds. |\n\n### 503 response\n\nAn HTTP `503` response from our servers indicates there is an unexpected spike in API access traffic. The server is usually operational within the next five minutes. If the outage persists or you receive any other form of an HTTP `5XX` error, [contact support](https://support.postman.com/hc/en-us/requests/new/).\n\n### **Need some help?**\n\n`Add links that customers can refer to whenever they need help.`\n\nIn case you have questions, go through our tutorials ((link to your video or help documentation here)). Or visit our FAQ page ((link to the relevant page)).\n\nOr you can check out our community forum, there’s a good chance our community has an answer for you. Visit our developer forum ((link to developer forum)) to review topics, ask questions, and learn from others.\n\n`You can also document or add links to libraries, code examples, and other resources needed to make a request.`",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "34114645",
+		"_collection_link": "https://echosentinel.postman.co/workspace/EchoSentinel-Workspace~769726c4-59b2-4b34-8fea-19808969310a/collection/34114645-d9f4b198-ed86-4c37-adfa-51ea3f8d91f0?action=share&source=collection_link&creator=34114645"
+	},
+	"item": [
+		{
+			"name": "Collections",
+			"item": [
+				{
+					"name": "Create a collection",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"{{collectionName}}\",\n            \"schema\": \"{{collectionSchemaUrl}}\"\n        },\n        \"item\": [\n            {\n                \"request\": {}\n            }\n        ]\n    }\n}"
+						},
+						"url": {
+							"raw": "https://api.getpostman.com/collections",
+							"protocol": "https",
+							"host": [
+								"api",
+								"getpostman",
+								"com"
+							],
+							"path": [
+								"collections"
+							],
+							"query": [
+								{
+									"key": "workspace",
+									"value": "{{workspaceId}}",
+									"description": "Optional. A workspace ID in which to create the collection.\n\nIf you do not include this query parameter, the system creates the collection in your \"My Workspace\" workspace.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Creates a collection using the [Postman Collection v2 schema format](https://schema.postman.com/json/collection/v2.1.0/docs/index.html). Include a `collection` object in the request body that contains the following required properties:\n\n*   `info` — An **object** that contains the following properties:\n    *   `name` — A **string** value that contains the collection's name.\n    *   `schema` — A **string** that contains a URL to the collection's schema. For example, the `https://schema.getpostman.com/collection/v1` URL.\n*   `item` — An **object** that contains the HTTP request and response information.\n    *   `request` — An **object** that contains the collection's request information. For a complete list of values, refer to the `definitions.request` entry in the [collection.json schema file](https://schema.postman.com/json/collection/v2.1.0/collection.json). If you pass an empty object for this value, the system defaults to an untitled GET request.\n\n**Note:**\n\n*   For a complete list of available property values for this endpoint, use the following references available in the [collection.json schema file](https://schema.postman.com/json/collection/v2.1.0/collection.json):\n    *   `info` object — Use the `definitions.info` entry.\n    *   `item` object — Use the `definitions.items` entry.\n*   For all other possible values, refer to the [collection.json schema file](https://schema.postman.com/json/collection/v2.1.0/collection.json)."
+					},
+					"response": [
+						{
+							"name": "Successful Response",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This collection makes a request to the Postman Echo service to get a list of request headers sent by an HTTP client.\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.1.0/collection.json\"\n        },\n        \"item\": [\n            {\n                \"name\": \"Test GET Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"GET\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.getpostman.com/collections",
+									"protocol": "https",
+									"host": [
+										"api",
+										"getpostman",
+										"com"
+									],
+									"path": [
+										"collections"
+									],
+									"query": [
+										{
+											"key": "workspace",
+											"value": "1f0df51a-8658-4ee8-a2a1-d2567dfa09a9",
+											"description": "Optional. A workspace ID in which to create the collection.\n\nIf you do not include this query parameter, the system creates the collection in your \"My Workspace\" workspace.",
+											"disabled": true
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"collection\": {\n        \"id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\",\n        \"name\": \"Test Collection\",\n        \"uid\": \"12345678-12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n    }\n}"
+						},
+						{
+							"name": "Bad Request",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This collection makes a request to the Postman Echo service to get a list of request headers sent by an HTTP client.\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.1.0/collection.json\"\n        },\n        \"item\": [\n            {\n                \"name\": \"Test GET Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"GET\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.getpostman.com/collections",
+									"protocol": "https",
+									"host": [
+										"api",
+										"getpostman",
+										"com"
+									],
+									"path": [
+										"collections"
+									],
+									"query": [
+										{
+											"key": "workspace",
+											"value": "1f0df51a-8658-4ee8-a2a1-d2567dfa09a9",
+											"description": "Optional. A workspace ID in which to create the collection.\n\nIf you do not include this query parameter, the system creates the collection in your \"My Workspace\" workspace.",
+											"disabled": true
+										}
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": {\n        \"name\": \"instanceFoundError\",\n        \"message\": \"The specified item already exists.\",\n        \"details\": {\n            \"item\": \"collection\",\n            \"id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n        }\n    }\n}"
+						},
+						{
+							"name": "Malformed Request",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"name": "Content-Type",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"item\": [\n            {\n                \"name\": \"Test GET Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"GET\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.getpostman.com/collections",
+									"protocol": "https",
+									"host": [
+										"api",
+										"getpostman",
+										"com"
+									],
+									"path": [
+										"collections"
+									],
+									"query": [
+										{
+											"key": "workspace",
+											"value": "1f0df51a-8658-4ee8-a2a1-d2567dfa09a9",
+											"description": "Optional. A workspace ID in which to create the collection.\n\nIf you do not include this query parameter, the system creates the collection in your \"My Workspace\" workspace.",
+											"disabled": true
+										}
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": {\n        \"name\": \"malformedRequestError\",\n        \"message\": \"Found 1 errors with the supplied collection.\",\n        \"details\": [\n            \": must have required property 'info'\"\n        ]\n    }\n}"
+						},
+						{
+							"name": "Rate Limit Exceeded",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"item\": [\n            {\n                \"name\": \"Test GET Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"GET\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.getpostman.com/collections",
+									"protocol": "https",
+									"host": [
+										"api",
+										"getpostman",
+										"com"
+									],
+									"path": [
+										"collections"
+									],
+									"query": [
+										{
+											"key": "workspace",
+											"value": "1f0df51a-8658-4ee8-a2a1-d2567dfa09a9",
+											"description": "Optional. A workspace ID in which to create the collection.\n\nIf you do not include this query parameter, the system creates the collection in your \"My Workspace\" workspace.",
+											"disabled": true
+										}
+									]
+								}
+							},
+							"status": "Too Many Requests",
+							"code": 429,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": ""
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": \"rateLimited\",\n    \"message\": \"Rate limit exceeded. Please retry after 1669048687\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get a collection",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.getpostman.com/collections/{{collectionId}}",
+							"protocol": "https",
+							"host": [
+								"api",
+								"getpostman",
+								"com"
+							],
+							"path": [
+								"collections",
+								"{{collectionId}}"
+							],
+							"query": [
+								{
+									"key": "access_key",
+									"value": "{{accessKey}}",
+									"description": "Optional. A collection's read-only access key. Using this query parameter does not require an API key to call the endpoint.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Gets information about a collection. For a complete list of this endpoint's possible values, use the [collection.json schema file](https://schema.postman.com/json/collection/v2.1.0/collection.json)."
+					},
+					"response": [
+						{
+							"name": "Successful Response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This is a test collection that makes a tiny request to Postman Echo service to get the list of request headers sent by a HTTP client.\",\n            \"_postman_id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.0.0/collection.json\",\n            \"updatedAt\": \"2022-06-16T20:21:13.000Z\",\n            \"fork\": {\n                \"label\": \"Test Fork\",\n                \"createdAt\": \"2022-06-16T19:51:44.069Z\",\n                \"from\": \"12345678-12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n            }\n        },\n        \"item\": [\n            {\n                \"name\": \"Test GET Response\",\n                \"id\": \"82ee981b-e19f-962a-401e-ea34ebfb4848\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                            ],\n                            \"type\": \"text/javascript\"\n                        }\n                    }\n                ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"GET\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                },\n                \"response\": []\n            }\n        ]\n    }\n}"
+						},
+						{
+							"name": "Get Collection with Access Token",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2?access_key={{accessKey}}",
+									"protocol": "https",
+									"host": [
+										"api",
+										"getpostman",
+										"com"
+									],
+									"path": [
+										"collections",
+										"12ece9e1-2abf-4edc-8e34-de66e74114d2"
+									],
+									"query": [
+										{
+											"key": "access_key",
+											"value": "{{accessKey}}"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This is a test collection that makes a tiny request to Postman Echo service to get the list of request headers sent by a HTTP client.\",\n            \"_postman_id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.0.0/collection.json\",\n            \"updatedAt\": \"2022-06-16T20:21:13.000Z\",\n            \"fork\": {\n                \"label\": \"Test Fork\",\n                \"createdAt\": \"2022-06-16T19:51:44.069Z\",\n                \"from\": \"12345678-12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n            }\n        },\n        \"item\": [\n            {\n                \"name\": \"Test GET Response\",\n                \"id\": \"82ee981b-e19f-962a-401e-ea34ebfb4848\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                            ],\n                            \"type\": \"text/javascript\"\n                        }\n                    }\n                ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"GET\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                },\n                \"response\": []\n            }\n        ]\n    }\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [],
+							"cookie": [],
+							"body": "{\n    \"error\": {\n        \"name\": \"instanceNotFoundError\",\n        \"message\": \"We could not find the collection you are looking for\"\n    }\n}"
+						},
+						{
+							"name": "Rate Limit Exceeded",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Too Many Requests",
+							"code": 429,
+							"_postman_previewlanguage": "json",
+							"header": [],
+							"cookie": [],
+							"body": "{\n    \"error\": \"rateLimited\",\n    \"message\": \"Rate limit exceeded. Please retry after 1669048687\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Delete a collection",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": "https://api.getpostman.com/collections/{{collectionId}}",
+						"description": "Deletes a collection."
+					},
+					"response": [
+						{
+							"name": "Successful Response",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"collection\": {\n        \"id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\",\n        \"uid\": \"12345678-12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n    }\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": {\n        \"name\": \"instanceNotFoundError\",\n        \"message\": \"The specified item does not exist.\",\n        \"details\": {\n            \"item\": \"collection\",\n            \"id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n        }\n    }\n}"
+						},
+						{
+							"name": "Rate Limit Exceeded",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Too Many Requests",
+							"code": 429,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": \"rateLimited\",\n    \"message\": \"Rate limit exceeded. Please retry after 1669048687\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Update a collection",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"{{collectionName}}\",\n            \"schema\": \"{{collectionSchemaUrl}}\"\n        },\n        \"item\": [\n            {\n                \"request\": {}\n            }\n        ]\n    }\n}"
+						},
+						"url": "https://api.getpostman.com/collections/{{collectionId}}",
+						"description": "Updates a collection using the [Postman Collection v2 schema format](https://schema.postman.com/json/collection/v2.1.0/docs/index.html). Include a `collection` object in the request body that contains the following required properties:\n\n- `info` — An **object** that contains the following properties:\n    - `name` — A **string** value that contains the collection's name.\n    - `schema` — A **string** that contains a URL to the collection's schema. For example, the `https://schema.getpostman.com/collection/v1` URL.\n- `item` — An **object** that contains the HTTP request and response information.\n    - `request` — An **object** that contains the collection's request information. For a complete list of values, refer to the `definitions.request` entry in the [collection.json schema file](https://schema.postman.com/json/collection/v2.1.0/collection.json). If you pass an empty object for this value, the system defaults to an untitled GET request.\n\n**Note:**\n\n- For a complete list of available property values for this endpoint, use the following references available in the [collection.json schema file](https://schema.postman.com/json/collection/v2.1.0/collection.json):\n    - `info` object — Use the `definitions.info` entry.\n    - `item` object — Use the `definitions.items` entry.\n- For all other possible values, refer to the [collection.json schema file](https://schema.postman.com/json/collection/v2.1.0/collection.json).\n    \n\n### Important\n\nUse caution when using this endpoint. The system will replace the existing collection with the values passed in the request body."
+					},
+					"response": [
+						{
+							"name": "Successful Response",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This collection makes a request to the Postman Echo service to get a list of request headers sent by an HTTP client.\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.1.0/collection.json\"\n        },\n        \"item\": [\n            {\n                \"name\": \"Test POST Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"POST\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"collection\": {\n        \"id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\",\n        \"name\": \"Test Collection\",\n        \"uid\": \"12345678-12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n    }\n}"
+						},
+						{
+							"name": "Forbidden",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This collection makes a request to the Postman Echo service to get a list of request headers sent by an HTTP client.\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.1.0/collection.json\"\n        },\n        \"item\": [\n            {\n                \"name\": \"Test POST Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"POST\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Forbidden",
+							"code": 403,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": {\n        \"name\": \"forbiddenError\",\n        \"message\": \"You do not have enough permissions to perform this action.\"\n    }\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This collection makes a request to the Postman Echo service to get a list of request headers sent by an HTTP client.\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.1.0/collection.json\"\n        },\n        \"item\": [\n            {\n                \"name\": \"Test POST Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"POST\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": {\n        \"name\": \"instanceNotFoundError\",\n        \"message\": \"The specified item does not exist.\",\n        \"details\": {\n            \"item\": \"collection\",\n            \"id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n        }\n    }\n}"
+						},
+						{
+							"name": "Malformed Request",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\"\n        }\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": {\n        \"name\": \"malformedRequestError\",\n        \"message\": \"Found 2 errors with the supplied collection.\",\n        \"details\": [\n            \": must have required property 'item'\",\n            \"info: must have required property 'schema'\"\n        ]\n    }\n}"
+						},
+						{
+							"name": "Collection ID Mismatch",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This collection makes a request to the Postman Echo service to get a list of request headers sent by an HTTP client.\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.1.0/collection.json\"\n        },\n        \"item\": [\n            {\n                \"name\": \"Test POST Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"POST\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"name": "Content-Type",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": {\n        \"name\": \"collectionMismatchError\",\n        \"message\": \"The collection ID in the path does not match the collection ID in the request body.\"\n    }\n}"
+						},
+						{
+							"name": "Rate Limit Exceeded",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"collection\": {\n        \"info\": {\n            \"name\": \"Test Collection\",\n            \"description\": \"This collection makes a request to the Postman Echo service to get a list of request headers sent by an HTTP client.\",\n            \"schema\": \"https://schema.getpostman.com/json/collection/v2.1.0/collection.json\"\n        },\n        \"item\": [\n            {\n                \"name\": \"Test POST Response\",\n                \"event\": [\n                    {\n                        \"listen\": \"test\",\n                        \"script\": {\n                            \"id\": \"7d2334fc-a84a-4c3d-b26c-7529afa4c0ae\",\n                            \"exec\": [\n                                \"pm.test(\\\"Status code is 200\\\", function () {\",\n                                \"    pm.response.to.have.status(200);\",\n                                \"});\"\n                                ],\n                            \"type\": \"text/javascript\"\n                            }\n                        }\n                    ],\n                \"request\": {\n                    \"url\": \"https://echo.getpostman.com/headers\",\n                    \"method\": \"POST\",\n                    \"header\": [\n                        {\n                            \"key\": \"Content-Type\",\n                            \"value\": \"application/json\"\n                        }\n                    ]\n                }\n            }\n        ]\n    }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "https://api.getpostman.com/collections/12ece9e1-2abf-4edc-8e34-de66e74114d2"
+							},
+							"status": "Too Many Requests",
+							"code": 429,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": \"rateLimited\",\n    \"message\": \"Rate limit exceeded. Please retry after 1669048687\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get all collections",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.getpostman.com/collections",
+							"protocol": "https",
+							"host": [
+								"api",
+								"getpostman",
+								"com"
+							],
+							"path": [
+								"collections"
+							],
+							"query": [
+								{
+									"key": "workspace",
+									"value": "{{workspaceId}}",
+									"description": "Optional. A workspace ID.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Gets all of your [collections](https://www.getpostman.com/docs/collections). The response includes all of your subscribed collections."
+					},
+					"response": [
+						{
+							"name": "Successful Response",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.getpostman.com/collections",
+									"protocol": "https",
+									"host": [
+										"api",
+										"getpostman",
+										"com"
+									],
+									"path": [
+										"collections"
+									],
+									"query": [
+										{
+											"key": "workspace",
+											"value": "1f0df51a-8658-4ee8-a2a1-d2567dfa09a9",
+											"description": "Optional. A workspace ID.",
+											"disabled": true
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"collections\": [\n        {\n            \"id\": \"dac5eac9-148d-a32e-b76b-3edee9da28f7\",\n            \"name\": \"Cloud API\",\n            \"owner\": \"12345678\",\n            \"createdAt\": \"2022-04-12T10:29:46.000Z\",\n            \"updatedAt\": \"2022-04-12T10:29:56.000Z\",\n            \"uid\": \"12345678-dac5eac9-148d-a32e-b76b-3edee9da28f7\",\n            \"isPublic\": true\n        },\n        {\n            \"id\": \"12ece9e1-2abf-4edc-8e34-de66e74114d2\",\n            \"name\": \"Test Collection\",\n            \"owner\": \"12345678\",\n            \"createdAt\": \"2022-01-13T10:21:46.000Z\",\n            \"updatedAt\": \"2022-02-12T11:29:56.000Z\",\n            \"uid\": \"12345678-12ece9e1-2abf-4edc-8e34-de66e74114d2\",\n            \"isPublic\": false,\n            \"fork\": {\n                \"label\": \"Test Fork\",\n                \"createdAt\": \"2022-06-16T19:51:44.069Z\",\n                \"from\": \"12345678-12ece9e1-2abf-4edc-8e34-de66e74114d2\"\n            }\n        },\n        {\n            \"id\": \"f695cab7-6878-eb55-7943-ad88e1ccfd65\",\n            \"name\": \"Postman Echo\",\n            \"owner\": \"12345678\",\n            \"createdAt\": \"2021-04-11T09:18:26.000Z\",\n            \"updatedAt\": \"2022-05-01T15:29:32.000Z\",\n            \"uid\": \"12345678-f695cab7-6878-eb55-7943-ad88e1ccfd65\",\n            \"isPublic\": true\n        }\n    ]\n}"
+						},
+						{
+							"name": "Filter by Workspace",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.getpostman.com/collections?workspace=1f0df51a-8658-4ee8-a2a1-d2567dfa09a9",
+									"protocol": "https",
+									"host": [
+										"api",
+										"getpostman",
+										"com"
+									],
+									"path": [
+										"collections"
+									],
+									"query": [
+										{
+											"key": "workspace",
+											"value": "1f0df51a-8658-4ee8-a2a1-d2567dfa09a9",
+											"description": "Optional. A workspace ID."
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"collections\": [\n        {\n            \"id\": \"dac5eac9-148d-a32e-b76b-3edee9da28f7\",\n            \"name\": \"Cloud API\",\n            \"owner\": \"12345678\",\n            \"createdAt\": \"2022-04-12T10:29:46.000Z\",\n            \"updatedAt\": \"2022-04-12T10:29:56.000Z\",\n            \"uid\": \"12345678-dac5eac9-148d-a32e-b76b-3edee9da28f7\",\n            \"isPublic\": true\n        }\n    ]\n}"
+						},
+						{
+							"name": "Rate Limit Exceeded",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.getpostman.com/collections",
+									"protocol": "https",
+									"host": [
+										"api",
+										"getpostman",
+										"com"
+									],
+									"path": [
+										"collections"
+									],
+									"query": [
+										{
+											"key": "workspace",
+											"value": "1f0df51a-8658-4ee8-a2a1-d2567dfa09a9",
+											"description": "Optional. A workspace ID.",
+											"disabled": true
+										}
+									]
+								}
+							},
+							"status": "Too Many Requests",
+							"code": 429,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json",
+									"description": {
+										"content": "",
+										"type": "text/plain"
+									}
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": \"rateLimited\",\n    \"message\": \"Rate limit exceeded. Please retry after 1669048687\"\n}"
+						}
+					]
+				}
+			],
+			"description": "The `/collections` endpoints let you manage your [collections](https://learning.postman.com/docs/sending-requests/intro-to-collections/)."
+		},
+		{
+			"name": "services",
+			"item": [
+				{
+					"name": "知识图谱管理",
+					"item": [
+						{
+							"name": "知识库列举",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": "http://localhost:8888/api/openspg/v1/models"
+							},
+							"response": []
+						},
+						{
+							"name": "知识库查询",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": {
+										"token": ""
+									}
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"model\": \"openspg/TestKAG\",\r\n  \"messages\": [\r\n    {\r\n      \"role\": \"user\",\r\n      \"content\": \"量子计算机可瞬间破解所有密码，银行账户将集体“裸奔”\",\r\n      \"name\":\"owner\"\r\n    }\r\n  ],\r\n  \"temperature\": 0.8,\r\n  \"stream\":false\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "http://localhost:8888/api/openspg/v1/chat/completions"
+							},
+							"response": []
+						},
+						{
+							"name": "创建会话",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"projectId\": 1,\r\n  \"name\": \"阿里巴巴今年赚了多少钱？\",\r\n  \"userId\": 1\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "http://localhost:8887/public/v1/reasoner/session/create"
+							},
+							"response": []
+						},
+						{
+							"name": "推理回答",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "cookie",
+										"value": "OPEN_SPG_TOKEN=9rh2KRIbSE7K7dtcMZBDqSVfPKprlmWx2R1B6I+ZLVU5pe6I7XUPcMFNScdXfkkKrO/7WJoElGz2aUvL+td5uNYSf+h4cU4l; ctoken=bigfish_ctoken_19hk17a050; x-hng=lang=zh-CN; _CHIPS-x-hng=lang=zh-CN",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"sessionId\":5,\r\n    \"projectId\":1,\r\n    \"thinking_enabled\":\"true\",\r\n    \"prompt\": [\r\n    {\r\n      \"type\": \"text\",\r\n      \"content\": \"阿里巴巴今年赚了多少钱？\"\r\n    }\r\n  ]\r\n}\r\n",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "http://localhost:8887/v1/chat/completions"
+							},
+							"response": []
+						},
+						{
+							"name": "通过id事实核查",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"url": "http://127.0.0.1:8000/api/videos/e387ec2b-84d9-4dc3-883e-f5b3c4483387/factcheck"
+							},
+							"response": []
+						},
+						{
+							"name": "事实核查",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"claims\": [\r\n        \"俄罗斯贝利奶粉是适合三岁以上小孩和老年人的高钙奶粉\",\r\n        \"钙的流失从二三十岁开始，人体需要补充钙质\"\r\n    ],\r\n    \"context\": \"视频内容涉及健康产品宣传\",\r\n    \"original_text\": \"完整的原始文本，可选\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "http://127.0.0.1:8000/api/factcheck/claims"
+							},
+							"response": []
+						},
+						{
+							"name": "获取核查结果",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": "http://127.0.0.1:8000/api/videos/<file_id>/factcheck/result"
+							},
+							"response": []
+						},
+						{
+							"name": "de'bu'g",
+							"request": {
+								"method": "GET",
+								"header": []
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "爬虫api",
+					"item": [
+						{
+							"name": "用户主页信息",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "127.0.0.1:8000/api/douyin/web/handler_user_profile?sec_user_id=MS4wLjABAAAAWo0PSqzO1iCb7vAvcNm1xuf7jefYxgQb5ajsoLiiGBE",
+									"host": [
+										"127",
+										"0",
+										"0",
+										"1"
+									],
+									"port": "8000",
+									"path": [
+										"api",
+										"douyin",
+										"web",
+										"handler_user_profile"
+									],
+									"query": [
+										{
+											"key": "sec_user_id",
+											"value": "MS4wLjABAAAAWo0PSqzO1iCb7vAvcNm1xuf7jefYxgQb5ajsoLiiGBE"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "用户作品数据",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "accept",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "127.0.0.1:8000/api/douyin/web/fetch_user_post_videos?sec_user_id=MS4wLjABAAAAWo0PSqzO1iCb7vAvcNm1xuf7jefYxgQb5ajsoLiiGBE&max_cursor=0&count=20",
+									"host": [
+										"127",
+										"0",
+										"0",
+										"1"
+									],
+									"port": "8000",
+									"path": [
+										"api",
+										"douyin",
+										"web",
+										"fetch_user_post_videos"
+									],
+									"query": [
+										{
+											"key": "sec_user_id",
+											"value": "MS4wLjABAAAAWo0PSqzO1iCb7vAvcNm1xuf7jefYxgQb5ajsoLiiGBE"
+										},
+										{
+											"key": "max_cursor",
+											"value": "0"
+										},
+										{
+											"key": "count",
+											"value": "20"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "下载视频",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "127.0.0.1:8000/api/download?url=https://www.douyin.com/?enter_recommend_method=item_non_existent_recommend_auto&page_url=https%3A%2F%2Fwww.douyin.com%2Fvideo%2F7501229741304712488&vid=7533909545534377259&recommend=1",
+									"host": [
+										"127",
+										"0",
+										"0",
+										"1"
+									],
+									"port": "8000",
+									"path": [
+										"api",
+										"download"
+									],
+									"query": [
+										{
+											"key": "url",
+											"value": "https://www.douyin.com/?enter_recommend_method=item_non_existent_recommend_auto"
+										},
+										{
+											"key": "page_url",
+											"value": "https%3A%2F%2Fwww.douyin.com%2Fvideo%2F7501229741304712488"
+										},
+										{
+											"key": "vid",
+											"value": "7533909545534377259"
+										},
+										{
+											"key": "recommend",
+											"value": "1"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "下载视频并且启动分析工作流",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "127.0.0.1:8000/api/download_Analyze?url=https://www.iesdouyin.com/share/video/7501229741304712488/?region=CN&mid=7501229777328671525&u_code=0&did=MS4wLjABAAAANZpmC0H-rX05eFE9q-YYxyPzwmw-i0ViN1UmY2KvYFFyw0v9pV45T5tmc5kgNBxY&iid=MS4wLjABAAAANwkJuWIRFOzg5uCpDRpMj4OX-QryoDgn-yYlXQnRwQQ&with_sec_did=1&video_share_track_ver=&titleType=title&share_sign=yvntFH9_3gx9bgXlfvcJcZ0Fb4NsfUPianaFWHDgp2k-&share_version=190500&ts=1746698319&from_aid=6383&from_ssr=1",
+									"host": [
+										"127",
+										"0",
+										"0",
+										"1"
+									],
+									"port": "8000",
+									"path": [
+										"api",
+										"download_Analyze"
+									],
+									"query": [
+										{
+											"key": "url",
+											"value": "https://www.iesdouyin.com/share/video/7501229741304712488/?region=CN"
+										},
+										{
+											"key": "mid",
+											"value": "7501229777328671525"
+										},
+										{
+											"key": "u_code",
+											"value": "0"
+										},
+										{
+											"key": "did",
+											"value": "MS4wLjABAAAANZpmC0H-rX05eFE9q-YYxyPzwmw-i0ViN1UmY2KvYFFyw0v9pV45T5tmc5kgNBxY"
+										},
+										{
+											"key": "iid",
+											"value": "MS4wLjABAAAANwkJuWIRFOzg5uCpDRpMj4OX-QryoDgn-yYlXQnRwQQ"
+										},
+										{
+											"key": "with_sec_did",
+											"value": "1"
+										},
+										{
+											"key": "video_share_track_ver",
+											"value": ""
+										},
+										{
+											"key": "titleType",
+											"value": "title"
+										},
+										{
+											"key": "share_sign",
+											"value": "yvntFH9_3gx9bgXlfvcJcZ0Fb4NsfUPianaFWHDgp2k-"
+										},
+										{
+											"key": "share_version",
+											"value": "190500"
+										},
+										{
+											"key": "ts",
+											"value": "1746698319"
+										},
+										{
+											"key": "from_aid",
+											"value": "6383"
+										},
+										{
+											"key": "from_ssr",
+											"value": "1"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "获取作品详情信息",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": ""
+							},
+							"response": []
+						},
+						{
+							"name": "用户视频分析数据详情",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": "http://localhost:8000/api/account/6209/stats"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "关键信息提取",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json\n",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "",
+								"value": "",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"text\": \"【[lt赞]两名华人科学家入选《自然》十大科学人物】17日，《自然》杂志评选出2015年十大科学人物，两位华人科学家入选。黄军就，发表全球第一篇CRISPR技术修改人类胚胎基因的报告。鲍哲南，斯坦福大学华裔女科学家，开发有感知压力并可与大脑沟通的柔性人造皮肤。觉得自豪就点赞！http://t.cn/R4ygi2C\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "127.0.0.1:8000/api/extract/info"
+					},
+					"response": []
+				},
+				{
+					"name": "通过视频id键信息提取",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "127.0.0.1:8000/api/extract/video/200c1f02-6f4c-4138-bb29-0fa01be9ac91"
+					},
+					"response": []
+				},
+				{
+					"name": "通过id获得总结",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "127.0.0.1:8000/api/summary/video/200c1f02-6f4c-4138-bb29-0fa01be9ac91"
+					},
+					"response": []
+				},
+				{
+					"name": "通过id总体评估",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/200c1f02-6f4c-4138-bb29-0fa01be9ac91/assess"
+					},
+					"response": []
+				},
+				{
+					"name": "通过id单项评估",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/200c1f02-6f4c-4138-bb29-0fa01be9ac91/assess/p1"
+					},
+					"response": []
+				},
+				{
+					"name": "全体评估",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"text\": \"某品牌牛奶被检测出致癌物！转发超过10次可领取现金红包\",\r\n  \"intent\": [\"营销推广\", \"社会警示\"],\r\n  \"statements\": [\r\n    {\"id\": 1, \"content\": \"某品牌牛奶含有致癌物\"},\r\n    {\"id\": 2, \"content\": \"转发信息可获现金奖励\"}\r\n  ],\r\n  \"reputation\": 0.3\r\n  \"include_reasoning\": true\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "127.0.0.1:8000/api/assess-all"
+					},
+					"response": []
+				},
+				{
+					"name": "视频文件转录文本",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/C:/Users/17702/Desktop/2023-10-26 00-25-57_#上热门_猪到死都想不通拿着刀杀它的人和给它一日三餐的人是什么关系#认知_#智慧人生_#提升自己_#英语_video.mp4"
+								}
+							]
+						},
+						"url": "127.0.0.1:8000/api/transcribe/file"
+					},
+					"response": []
+				},
+				{
+					"name": "视频id转录文本",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/200c1f02-6f4c-4138-bb29-0fa01be9ac91/transcribe"
+					},
+					"response": []
+				},
+				{
+					"name": "上传视频",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "files[]",
+									"description": "多文件上传",
+									"type": "file",
+									"src": [
+										"///wsl.localhost/Ubuntu-22.04/home/wl/f2/Download/douyin/post/Alice认知/2023-09-04 11-13-21_#思维格局_#认知_#提升自己#财富_video.mp4",
+										"///wsl.localhost/Ubuntu-22.04/home/wl/f2/Download/douyin/post/Alice认知/2023-09-03 11-11-57_#思维格局_#认知_#为人处世_#读书_video.mp4"
+									]
+								},
+								{
+									"key": "file",
+									"description": "单文件上传",
+									"type": "file",
+									"src": "///wsl.localhost/Ubuntu-22.04/home/wl/f2/Download/douyin/post/Alice认知/2023-08-31 19-48-23_#思维_#为人处世_#认知_#提升自己_video.mp4",
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "127.0.0.1:8000/api/videos/upload?aigc=true",
+							"host": [
+								"127",
+								"0",
+								"0",
+								"1"
+							],
+							"port": "8000",
+							"path": [
+								"api",
+								"videos",
+								"upload"
+							],
+							"query": [
+								{
+									"key": "aigc",
+									"value": "true"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "通过id获取单个视频",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/f9707c38-9546-42b2-a75d-de908cac0e10"
+					},
+					"response": []
+				},
+				{
+					"name": "数据库获取视频列表",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/list"
+					},
+					"response": []
+				},
+				{
+					"name": "获取缩略图",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/6fbad8ca-8455-463b-ae71-bf64c0132b2d/thumbnail"
+					},
+					"response": []
+				},
+				{
+					"name": "特定评估",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"text\": \"某品牌牛奶被检测出致癌物！转发超过10次可领取现金红包\",\r\n  \"intent\": [\"营销推广\", \"社会警示\"],\r\n  \"statements\": [\r\n    {\"id\": 1, \"content\": \"某品牌牛奶含有致癌物\"},\r\n    {\"id\": 2, \"content\": \"转发信息可获现金奖励\"}\r\n  ],\r\n  \"reputation\": 0.3,\r\n  \"include_reasoning\": true\r\n  \r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "127.0.0.1:8000/api/assess/item/p1"
+					},
+					"response": []
+				},
+				{
+					"name": "获取单个视频的详细",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:8000/api/videos/200c1f02-6f4c-4138-bb29-0fa01be9ac91/analysis"
+					},
+					"response": []
+				},
+				{
+					"name": "工作流处理",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"steps\": [\"transcription\", \"extract\", \"summary\", \"assessment\"],\r\n  \"force\": false\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "127.0.0.1:8000/api/videos/d29ef779-46c4-473c-b875-d0ffce74ad2a/process"
+					},
+					"response": []
+				},
+				{
+					"name": "查询处理过程",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				},
+				{
+					"name": "查询评估理由",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/200c1f02-6f4c-4138-bb29-0fa01be9ac91/assessment/p1"
+					},
+					"response": []
+				},
+				{
+					"name": "分类请求",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"features\": [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "127.0.0.1:8000/api/decision/classify"
+					},
+					"response": []
+				},
+				{
+					"name": "通过id判断结果",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/6ca446eb-358c-4720-9a57-ebdce13aef87/classify-risk"
+					},
+					"response": []
+				},
+				{
+					"name": "查看规则",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "127.0.0.1:8000/api/decision/explain?format=raw",
+							"host": [
+								"127",
+								"0",
+								"0",
+								"1"
+							],
+							"port": "8000",
+							"path": [
+								"api",
+								"decision",
+								"explain"
+							],
+							"query": [
+								{
+									"key": "format",
+									"value": "raw"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "获取报告",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/<video_id>/report"
+					},
+					"response": []
+				},
+				{
+					"name": "生成报告",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "127.0.0.1:8000/api/videos/200c1f02-6f4c-4138-bb29-0fa01be9ac91/generate-report"
+					},
+					"response": []
+				},
+				{
+					"name": "搜索",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"query\": \"人工智能的发展历程\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:5000/search",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"search"
+							],
+							"query": [
+								{
+									"key": "query",
+									"value": null,
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "搜索api",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"query\": \"人工智能的发展历程\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://127.0.0.1:8000/api/search"
+					},
+					"response": []
+				},
+				{
+					"name": "搜索api(json)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"query\": \"人工智能的发展历程\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://127.0.0.1:8000/api/search/json"
+					},
+					"response": []
+				},
+				{
+					"name": "信号层检测",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"types\": [\"face\", \"body\", \"overall\"],\r\n    \"comprehensive\": true\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://127.0.0.1:8000/api/videos/{{video_id}}/digital-human/detect"
+					},
+					"response": []
+				},
+				{
+					"name": "信号层查询api",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "http://127.0.0.1:8000/api/videos/{{video_id}}/digital-human/status"
+					},
+					"response": []
+				}
+			],
+			"description": "算法模型等服务提供的api"
+		},
+		{
+			"name": "model",
+			"item": [
+				{
+					"name": "数字人检测",
+					"item": [
+						{
+							"name": "请求视频处理",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": "/C:/Users/24047/Desktop/test.mp4"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{model-service-remote}}/aigc-detection-service/startProcess?video_id=test_id",
+									"host": [
+										"{{model-service-remote}}"
+									],
+									"path": [
+										"aigc-detection-service",
+										"startProcess"
+									],
+									"query": [
+										{
+											"key": "video_id",
+											"value": "test_id"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "测试接口",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": "{{model-service-remote}}/aigc-detection-service/test"
+							},
+							"response": []
+						},
+						{
+							"name": "面部检测",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "video",
+											"type": "file",
+											"src": "/C:/Users/Administrator/Desktop/d29ef779-46c4-473c-b875-d0ffce74ad2a.mp4"
+										}
+									]
+								},
+								"url": "http://121.48.227.136:3000/aigc/detect/face"
+							},
+							"response": [
+								{
+									"name": "New Request",
+									"originalRequest": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "formdata",
+											"formdata": [
+												{
+													"key": "video",
+													"type": "file",
+													"src": "/C:/Users/Administrator/Desktop/d29ef779-46c4-473c-b875-d0ffce74ad2a.mp4"
+												}
+											]
+										},
+										"url": "http://121.48.227.136:3000/aigc/detect/face"
+									},
+									"status": "OK",
+									"code": 200,
+									"_postman_previewlanguage": "json",
+									"header": [
+										{
+											"key": "Server",
+											"value": "Werkzeug/3.1.3 Python/3.11.12"
+										},
+										{
+											"key": "Date",
+											"value": "Sun, 08 Jun 2025 12:03:53 GMT"
+										},
+										{
+											"key": "Content-Type",
+											"value": "application/json"
+										},
+										{
+											"key": "Content-Length",
+											"value": "730"
+										},
+										{
+											"key": "Connection",
+											"value": "close"
+										}
+									],
+									"cookie": [],
+									"body": "{\n    \"file_id\": \"5e14dcbe-4df9-44a9-9b6d-956188bbc25b\",\n    \"result\": {\n        \"ai_probability\": 0.5011221766471863,\n        \"confidence\": 0.5011221766471863,\n        \"human_probability\": 0.4988778233528137,\n        \"prediction\": \"AI-Generated\",\n        \"raw_results\": {\n            \"UADFV\": {\n                \"acc\": 0.4782608695652174,\n                \"pred_mean\": 0.5011221766471863,\n                \"pred_std\": 0.1859443485736847,\n                \"video_name\": \"aa292e84-ea3e-434e-b405-30c2cfb6581f\"\n            },\n            \"metadata\": {\n                \"model_name\": \"xception\",\n                \"test_datasets\": [\n                    \"UADFV\"\n                ],\n                \"timestamp\": \"2025-06-08-12-03-52\",\n                \"weights_path\": \"./training/weights/xception_best.pth\"\n            }\n        },\n        \"region\": \"face\"\n    },\n    \"success\": true\n}"
+								}
+							]
+						},
+						{
+							"name": "躯干检测",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "video",
+											"type": "file",
+											"src": "/C:/Users/Administrator/Desktop/2023-08-31 19-48-23_#思维_#为人处世_#认知_#提升自己_video.mp4"
+										}
+									]
+								},
+								"url": "http://121.48.227.136:3000/aigc/detect/body"
+							},
+							"response": [
+								{
+									"name": "New Request",
+									"originalRequest": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "formdata",
+											"formdata": [
+												{
+													"key": "video",
+													"type": "file",
+													"src": "/C:/Users/Administrator/Desktop/2023-08-31 19-48-23_#思维_#为人处世_#认知_#提升自己_video.mp4"
+												}
+											]
+										},
+										"url": "http://121.48.227.136:3000/aigc/detect/body"
+									},
+									"status": "OK",
+									"code": 200,
+									"_postman_previewlanguage": "json",
+									"header": [
+										{
+											"key": "Server",
+											"value": "Werkzeug/3.1.3 Python/3.11.12"
+										},
+										{
+											"key": "Date",
+											"value": "Sun, 08 Jun 2025 11:31:49 GMT"
+										},
+										{
+											"key": "Content-Type",
+											"value": "application/json"
+										},
+										{
+											"key": "Content-Length",
+											"value": "5828"
+										},
+										{
+											"key": "Connection",
+											"value": "close"
+										}
+									],
+									"cookie": [],
+									"body": "{\n    \"file_id\": \"4e263752-ef9d-42a2-92d8-6623eef4b096\",\n    \"result\": {\n        \"ai_probability\": 0.7968749999999999,\n        \"confidence\": 0.7968749999999999,\n        \"human_probability\": 0.2031250000000001,\n        \"prediction\": \"AI-Generated\",\n        \"raw_results\": {\n            \"criteria\": [\n                {\n                    \"name\": \"关节位置\",\n                    \"prompt\": \"请仔细分析图片中人物的关节位置是否自然合理。特别关注颈部、肩部、肘部、手腕、髋部、膝盖和脚踝的弯曲角度和相对位置。如果所有关节位置都符合人体解剖学原理且看起来自然，请回答'是'；如果发现任何关节位置不自然、扭曲或变形，请回答'否'并简要说明原因。\",\n                    \"response\": \"是\",\n                    \"score\": 1,\n                    \"weight\": 1.5,\n                    \"weighted_score\": 1.5\n                },\n                {\n                    \"name\": \"手指数量\",\n                    \"prompt\": \"请详细检查图片中人物的手部，确认每只手是否都有正确数量的手指（通常每只手应有5根手指）。请注意观察手指是否完整可见，是否存在多余或缺失的手指。如果手指数量正确且形态自然，请回答'是'；如果发现任何异常（如手指数量不正确、手指畸形或融合等），请回答'否'并简要描述问题。\",\n                    \"response\": \"是\",\n                    \"score\": 1,\n                    \"weight\": 1,\n                    \"weighted_score\": 1\n                },\n                {\n                    \"name\": \"面部表情\",\n                    \"prompt\": \"请分析图片中人物的面部表情是否自然协调。观察眼睛、眉毛、嘴巴和面部肌肉的状态，判断表情是否符合正常人类情感表达。特别注意面部各部分是否协调一致（如微笑时眼角是否上扬）。如果面部表情看起来自然、协调且符合情境，请回答'是'；如果表情僵硬、不协调或存在扭曲变形，请回答'否'并简要说明问题所在。\",\n                    \"response\": \"是\",\n                    \"score\": 1,\n                    \"weight\": 1.2,\n                    \"weighted_score\": 1.2\n                },\n                {\n                    \"name\": \"身体比例\",\n                    \"prompt\": \"请评估图片中人物的身体比例是否协调合理。关注头部与身体的比例、四肢与躯干的长度关系、上半身与下半身的平衡等。参考正常人体比例（如成人头长约为身高的1/8）进行判断。如果身体各部分比例协调且符合人体美学标准，请回答'是'；如果发现任何明显不协调（如手臂过长、腿部过短等），请回答'否'并简要指出不协调之处。\",\n                    \"response\": \"否\\n不协调之处：手臂过长，腿部过短。\",\n                    \"score\": 0,\n                    \"weight\": 1.3,\n                    \"weighted_score\": 0\n                },\n                {\n                    \"name\": \"动作流畅度\",\n                    \"prompt\": \"请评价图片中人物的动作姿态是否流畅自然。考虑人物当前动作的平衡性、重心分布、肌肉张力以及与物理规律的符合程度。判断该动作是否是人类能够自然完成的，以及是否符合人体运动力学原理。如果动作看起来流畅、自然且符合物理规律，请回答'是'；如果动作看起来僵硬、不自然或违反物理规律（如不可能的扭曲或平衡状态），请回答'否'并简要解释原因。\",\n                    \"response\": \"是\",\n                    \"score\": 1,\n                    \"weight\": 1.4,\n                    \"weighted_score\": 1.4\n                }\n            ],\n            \"image_path\": \"/tmp/tmp3ngi2o7w/4e263752-ef9d-42a2-92d8-6623eef4b096/4e263752-ef9d-42a2-92d8-6623eef4b096.jpg\",\n            \"timestamp\": \"20250608_113144\",\n            \"total_score\": 0.7968749999999999\n        },\n        \"region\": \"body\"\n    },\n    \"success\": true\n}"
+								}
+							]
+						},
+						{
+							"name": "整体检测",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "video",
+											"type": "file",
+											"src": "/C:/Users/Administrator/Desktop/2023-08-31 19-48-23_#思维_#为人处世_#认知_#提升自己_video.mp4"
+										}
+									]
+								},
+								"url": "http://121.48.227.136:3000/aigc/detect/overall"
+							},
+							"response": [
+								{
+									"name": "New Request",
+									"originalRequest": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "formdata",
+											"formdata": [
+												{
+													"key": "video",
+													"type": "file",
+													"src": "/C:/Users/Administrator/Desktop/2023-08-31 19-48-23_#思维_#为人处世_#认知_#提升自己_video.mp4"
+												}
+											]
+										},
+										"url": "http://121.48.227.136:3000/aigc/detect/overall"
+									},
+									"status": "OK",
+									"code": 200,
+									"_postman_previewlanguage": "json",
+									"header": [
+										{
+											"key": "Server",
+											"value": "Werkzeug/3.1.3 Python/3.11.12"
+										},
+										{
+											"key": "Date",
+											"value": "Sun, 08 Jun 2025 11:51:50 GMT"
+										},
+										{
+											"key": "Content-Type",
+											"value": "application/json"
+										},
+										{
+											"key": "Content-Length",
+											"value": "339"
+										},
+										{
+											"key": "Connection",
+											"value": "close"
+										}
+									],
+									"cookie": [],
+									"body": "{\n    \"file_id\": \"2db0e8ae-3f37-4cb3-84be-ce9da09021a1\",\n    \"result\": {\n        \"ai_probability\": 0.0000027887608666787855,\n        \"confidence\": 0.9999972112391333,\n        \"human_probability\": 0.9999972112391333,\n        \"prediction\": \"Human\",\n        \"raw_results\": {\n            \"prob\": 0.0000027887608666787855\n        },\n        \"region\": \"overall\"\n    },\n    \"success\": true\n}"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "model-health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "121.48.227.136:3000/health"
+					},
+					"response": []
+				},
+				{
+					"name": "whisper-server",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "audio",
+									"type": "file",
+									"src": "///wsl.localhost/Ubuntu-22.04/home/wl/f2/Download/douyin/post/Alice认知/2023-09-03 18-58-22_#思维格局_#认知_#读书_#财富_video.mp4"
+								}
+							]
+						},
+						"url": "121.48.227.136:3000/transcribe"
+					},
+					"response": []
+				},
+				{
+					"name": "decision-server",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"features\": [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0],\n  \"explain\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://121.48.227.136:3000/classify"
+					},
+					"response": []
+				},
+				{
+					"name": "rules查看",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:3000/explain?threshold0.5=&format=raw",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "3000",
+							"path": [
+								"explain"
+							],
+							"query": [
+								{
+									"key": "threshold0.5",
+									"value": ""
+								},
+								{
+									"key": "format",
+									"value": "raw",
+									"description": "raw,text,默认endanced"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "New Request",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": ""
+							}
+						},
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"model\": \"deepseek/deepseek-chat-v3-0324:free\",\r\n  \"messages\": [\r\n    {\r\n      \"role\": \"user\",\r\n      \"content\": \"What is the meaning of life?\"\r\n    }\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "https://openrouter.ai/api/v1/chat/completions"
+					},
+					"response": []
+				},
+				{
+					"name": "训练模型",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"num_epochs\": 10,\r\n  \"patience\": 15\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://121.48.227.136:3000/train/start"
+					},
+					"response": []
+				},
+				{
+					"name": "查看训练状态",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://121.48.227.136:3000/train/status"
+					},
+					"response": []
+				},
+				{
+					"name": "可视化rules",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "api",
+			"item": [
+				{
+					"name": "登录",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/auth/login"
+					},
+					"response": []
+				},
+				{
+					"name": "登出",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/auth/logout"
+					},
+					"response": []
+				},
+				{
+					"name": "返回用户分析demo数据",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/userAnalyse/demo",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"userAnalyse",
+								"demo"
+							],
+							"query": [
+								{
+									"key": "base",
+									"value": null,
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "返回用户信息",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"sec_uid\": \"MS4wLjABAAAASyQqOy_OTsYmQ9-0hAMku1Sfm_rNtpyBdUlEkZTSDLHaRC9dzO55u-0iLwgdAfxJ\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{baseUrl}}/api/userAnalyse/getProfile"
+					},
+					"response": []
+				},
+				{
+					"name": "返回封面图片",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/userAnalyse/getCover/{{filename}}"
+					},
+					"response": []
+				},
+				{
+					"name": "返回用户分析数据",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"sec_uid\": \"MS4wLjABAAAASyQqOy_OTsYmQ9-0hAMku1Sfm_rNtpyBdUlEkZTSDLHaRC9dzO55u-0iLwgdAfxJ\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{baseUrl}}/api/userAnalyse/getRank"
+					},
+					"response": []
+				},
+				{
+					"name": "相似集群",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"sec_uid\": \"MS4wLjABAAAAqtBQr20xuJwSjZvCd5Nq2mM8_ysxD-14rMsXSbj-ygE\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{baseUrl}}/api/userAnalyse/similarCluster"
+					},
+					"response": []
+				},
+				{
+					"name": "相似用户",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"sec_uid\": \"MS4wLjABAAAASyQqOy_OTsYmQ9-0hAMku1Sfm_rNtpyBdUlEkZTSDLHaRC9dzO55u-0iLwgdAfxJ\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "{{baseUrl}}/api/userAnalyse/similarUser"
+					},
+					"response": [
+						{
+							"name": "1",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"sec_uid\": \"MS4wLjABAAAAqtBQr20xuJwSjZvCd5Nq2mM8_ysxD-14rMsXSbj-ygE\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": "{{baseUrl}}/api/userAnalyse/similarUser"
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Server",
+									"value": "Werkzeug/3.1.3 Python/3.12.9"
+								},
+								{
+									"key": "Date",
+									"value": "Sun, 04 May 2025 08:12:21 GMT"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1669"
+								},
+								{
+									"key": "Connection",
+									"value": "close"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"code\": 0,\n    \"data\": {\n        \"similarUser\": [\n            {\n                \"hash_sec_uid\": \"1f06ff1958c8d63e7d042e8d614164f5\",\n                \"similarity\": 1,\n                \"avatar_medium\": \"https://p3-pc.douyinpic.com/aweme/720x720/aweme-avatar/mosaic-legacy_17189000256a2917d3199.jpeg?from=2956013662\",\n                \"nickname\": \"萧枭同学\",\n                \"sec_uid\": \"MS4wLjABAAAAqtBQr20xuJwSjZvCd5Nq2mM8_ysxD-14rMsXSbj-ygE\"\n            },\n            {\n                \"hash_sec_uid\": \"6e67de903a8e436b1b321632f2476b35\",\n                \"similarity\": 0.81,\n                \"avatar_medium\": \"https://p3-pc.douyinpic.com/aweme/720x720/aweme-avatar/mosaic-legacy_78a1008704bdcbfe416b.jpeg?from=2956013662\",\n                \"nickname\": \"张艳华937\",\n                \"sec_uid\": \"MS4wLjABAAAAASjBJ_knRYqgTrqsgp2C2SBwSUCgq9DAjXGRzieKQNc\"\n            },\n            {\n                \"hash_sec_uid\": \"c36cd82f73aa4becbcb856bb6ac9f96f\",\n                \"similarity\": 0.76,\n                \"avatar_medium\": \"https://p3-pc.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-avt-0015_70b9e34652ee8e6df8f4c6bf841ed4d0.jpeg?from=2956013662\",\n                \"nickname\": \"天空日记\",\n                \"sec_uid\": \"MS4wLjABAAAArEAnx0OwOfG-EK8NQggTn5LATAIWWXiAAChtiomD5vI\"\n            },\n            {\n                \"hash_sec_uid\": \"23c9b6210622a34e5781517cadacfd03\",\n                \"similarity\": 0.72,\n                \"avatar_medium\": \"https://p3-pc.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-avt-0015_6c7bf57a4a1b25fe1c4f267e288f0447.jpeg?from=2956013662\",\n                \"nickname\": \"ABC.\",\n                \"sec_uid\": \"MS4wLjABAAAAMbHgDel8yN2Pivp-pAzbe8hyDg-r27DL0zbaqQy8NNE\"\n            },\n            {\n                \"hash_sec_uid\": \"c0382684ad5785b8badc70ed500ef681\",\n                \"similarity\": 0.72,\n                \"avatar_medium\": \"https://p3-pc.douyinpic.com/aweme/720x720/aweme-avatar/tos-cn-avt-0015_b47167718a02fa0e6018a5f5a60b0b25.jpeg?from=2956013662\",\n                \"nickname\": \"杨子豪\",\n                \"sec_uid\": \"MS4wLjABAAAA3Dd7TUEUhXSOfQm6wa-ybCM39qjn8nmWowH_zRu0KJ1LoG-oXtLVHmJGmJpOxEKx\"\n            }\n        ]\n    },\n    \"message\": \"success\"\n}"
+						}
+					]
+				},
+				{
+					"name": "集群绘图数据",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/userAnalyse/clusterPlotData"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "测试",
+			"item": [
+				{
+					"name": "损失函数",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/findLoss"
+					},
+					"response": []
+				},
+				{
+					"name": "New Request",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": {
+								"token": ""
+							}
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer $DASHSCOPE_API_KEY",
+								"disabled": true
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"model\": \"deepseek-r1-distill-llama-70b\",\n    \"messages\": [\n        {\n            \"role\": \"user\", \n            \"content\": \"9.9和9.11谁大\"\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "数字人检测",
+			"item": [
+				{
+					"name": "获取检测结果表格数据",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "{{baseUrl}}/api/aigc-detection/tableData"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://121.48.227.136:3000/completion?prompt=巴黎的人口数量是多少？&temperature=0.7&n_predict=512",
+					"protocol": "http",
+					"host": [
+						"121",
+						"48",
+						"227",
+						"136"
+					],
+					"port": "3000",
+					"path": [
+						"completion"
+					],
+					"query": [
+						{
+							"key": "prompt",
+							"value": "巴黎的人口数量是多少？"
+						},
+						{
+							"key": "temperature",
+							"value": "0.7"
+						},
+						{
+							"key": "n_predict",
+							"value": "512"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://farming-simulator.pstmn.io"
+		},
+		{
+			"key": "model-service-url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "model-service-remote",
+			"value": "http://121.48.227.136:3000/",
+			"type": "string"
+		}
+	]
+}

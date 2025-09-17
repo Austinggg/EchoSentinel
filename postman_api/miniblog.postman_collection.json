@@ -1,0 +1,282 @@
+{
+	"info": {
+		"_postman_id": "5b11dceb-82ea-48d2-ada1-b3280d070843",
+		"name": "miniblog",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "34114645",
+		"_collection_link": "https://echosentinel.postman.co/workspace/EchoSentinel-Workspace~769726c4-59b2-4b34-8fea-19808969310a/collection/33078454-5b11dceb-82ea-48d2-ada1-b3280d070843?action=share&source=collection_link&creator=34114645"
+	},
+	"item": [
+		{
+			"name": "User Module",
+			"item": [
+				{
+					"name": "注册用户",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"username\": \"belm\",\r\n  \"password\": \"miniblog1234\",\r\n  \"nickname\": \"belm\",\r\n  \"email\": \"nosbelm@qq.com\",\r\n  \"phone\": \"18188888xxx\"\r\n}\r\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://127.0.0.1:8080/v1/users"
+					},
+					"response": []
+				},
+				{
+					"name": "用户登录",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"username\":\"belm\",\"password\":\"miniblog1234\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://127.0.0.1:8080/login"
+					},
+					"response": []
+				},
+				{
+					"name": "获取用户列表",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer <your_token_here>"
+							}
+						],
+						"url": "http://127.0.0.1:8080/v1/users"
+					},
+					"response": []
+				},
+				{
+					"name": "获取用户详情",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer <your_token_here>"
+							}
+						],
+						"url": "http://127.0.0.1:8080/v1/users/belm"
+					},
+					"response": []
+				},
+				{
+					"name": "更新用户信息",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer <your_token_here>"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"nickname\":\"belm(modified)\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://127.0.0.1:8080/v1/users/belm"
+					},
+					"response": []
+				},
+				{
+					"name": "修改用户密码",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"oldPassword\":\"miniblog1234\",\"newPassword\":\"miniblog12345\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://127.0.0.1:8080/v1/users/belm/change-password"
+					},
+					"response": []
+				},
+				{
+					"name": "注销用户",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer <your_token_here>"
+							}
+						],
+						"url": "http://127.0.0.1:8080/v1/users/belm"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Post Module",
+			"item": [
+				{
+					"name": "用户登录",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"belm\",\n  \"password\": \"miniblog1234\"\n}"
+						},
+						"url": "http://127.0.0.1:8080/login"
+					},
+					"response": []
+				},
+				{
+					"name": "创建博客",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"miniblog installation guide\",\n  \"content\": \"The installation method is coming.\"\n}"
+						},
+						"url": "http://127.0.0.1:8080/v1/posts"
+					},
+					"response": []
+				},
+				{
+					"name": "获取博客列表",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": "http://127.0.0.1:8080/v1/posts"
+					},
+					"response": []
+				},
+				{
+					"name": "获取博客详情",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer <your_token_here>"
+							}
+						],
+						"url": "http://127.0.0.1:8080/v1/posts/post-22vtll"
+					},
+					"response": []
+				},
+				{
+					"name": "更新博客内容",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"content\": \"The installation method is still on the way.\"\n}"
+						},
+						"url": "http://127.0.0.1:8080/v1/posts/{{postID}}"
+					},
+					"response": []
+				},
+				{
+					"name": "删除博客",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "http://127.0.0.1:8080/v1/posts?postID={{postID1}}&postID={{postID2}}",
+							"protocol": "http",
+							"host": [
+								"127",
+								"0",
+								"0",
+								"1"
+							],
+							"port": "8080",
+							"path": [
+								"v1",
+								"posts"
+							],
+							"query": [
+								{
+									"key": "postID",
+									"value": "{{postID1}}"
+								},
+								{
+									"key": "postID",
+									"value": "{{postID2}}"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
